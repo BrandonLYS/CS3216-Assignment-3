@@ -1,0 +1,10 @@
+node_modules
+.next
+drizzle
+storage
+.test-storage
+test-results
+playwright-report
+package-lock.json
+*.pdf
+skills-lock.json

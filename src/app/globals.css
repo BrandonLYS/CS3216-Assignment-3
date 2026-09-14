@@ -1,0 +1,126 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+/* Design tokens — see DESIGN.md (Linear-derived dark system). */
+@theme {
+  --color-*: initial;
+
+  --color-primary: #5e6ad2;
+  --color-primary-hover: #828fff;
+  --color-primary-focus: #5e69d1;
+  --color-on-primary: #ffffff;
+
+  --color-ink: #f7f8f8;
+  --color-ink-muted: #d0d6e0;
+  --color-ink-subtle: #8a8f98;
+  --color-ink-tertiary: #62666d;
+
+  --color-canvas: #010102;
+  --color-surface-1: #0f1011;
+  --color-surface-2: #141516;
+  --color-surface-3: #18191a;
+  --color-surface-4: #191a1b;
+
+  --color-hairline: #23252a;
+  --color-hairline-strong: #34343a;
+  --color-hairline-tertiary: #3e3e44;
+
+  --color-inverse-canvas: #ffffff;
+  --color-inverse-ink: #000000;
+
+  --color-success: #27a644;
+  --color-overlay: #000000;
+
+  /* In-product tag palette (DESIGN.md "Known Gaps": allowed for statuses/priorities). */
+  --color-tag-red: #eb5757;
+  --color-tag-orange: #f2994a;
+  --color-tag-yellow: #f2c94c;
+  --color-tag-green: #4cb782;
+  --color-tag-blue: #4ea7fc;
+  --color-tag-purple: #a68af7;
+  --color-tag-gray: #8a8f98;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-transparent: transparent;
+
+  --font-sans: var(--font-inter), "SF Pro Display", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  --text-display-xl: 80px;
+  --text-display-xl--line-height: 1.05;
+  --text-display-xl--letter-spacing: -3px;
+  --text-display-lg: 56px;
+  --text-display-lg--line-height: 1.1;
+  --text-display-lg--letter-spacing: -1.8px;
+  --text-display-md: 40px;
+  --text-display-md--line-height: 1.15;
+  --text-display-md--letter-spacing: -1px;
+  --text-headline: 28px;
+  --text-headline--line-height: 1.2;
+  --text-headline--letter-spacing: -0.6px;
+  --text-card-title: 22px;
+  --text-card-title--line-height: 1.25;
+  --text-card-title--letter-spacing: -0.4px;
+  --text-subhead: 20px;
+  --text-subhead--line-height: 1.4;
+  --text-subhead--letter-spacing: -0.2px;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 1.5;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.5;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.4;
+  --text-eyebrow: 13px;
+  --text-eyebrow--line-height: 1.3;
+  --text-eyebrow--letter-spacing: 0.4px;
+  --text-mono: 13px;
+  --text-mono--line-height: 1.5;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-canvas font-sans text-body-sm text-ink antialiased;
+    letter-spacing: -0.05px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+  *:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary-focus) 50%, transparent);
+    outline-offset: 1px;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-hairline-strong);
+    border-radius: 999px;
+    border: 3px solid var(--color-canvas);
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+  }
+}
+
+@utility panel {
+  @apply rounded-lg border border-hairline bg-surface-1;
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.03);
+}
+
+@utility hairline-b {
+  @apply border-b border-hairline;
+}

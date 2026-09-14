@@ -1,0 +1,16 @@
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { nextCookies } from "better-auth/next-js";
+import { db } from "@/server/db/client";
+import * as authSchema from "./schema";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
+  emailAndPassword: { enabled: true },
+  session: {
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
+  },
+  plugins: [nextCookies()],
+});
+
+export type Session = typeof auth.$Infer.Session;
