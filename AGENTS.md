@@ -14,7 +14,7 @@ Vocabulary lives in `CONTEXT.md`; use its terms (Task, not issue; Person, not as
 
 ## Setup and verification
 
-`cp .env.example .env`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed` (demo account only, see `.env.example`), `npm run dev`. Scripts are in `package.json`; `typecheck`, `lint`, `test` (Vitest, needs the `db_test` container), `test:e2e` (Playwright, needs a running dev server or lets the config start one). Pre-commit runs lint-staged + typecheck.
+`cp .env.example .env`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed` (demo account only, see `.env.example`), `npm run dev`. Scripts are in `package.json`; `typecheck`, `lint`, `test` (Vitest, needs the `db_test` container), `test:e2e` (Playwright, needs a running dev server or lets the config start one). Pre-commit runs lint-staged + typecheck. CI (`.github/workflows/ci.yml`, runs on Bun) checks `format:check`, `eslint --max-warnings=0` and `typecheck` on every PR. A Devin `PostToolUse` hook (`.devin/hooks.v1.json`) runs Prettier + `eslint --fix` on each file the agent edits.
 
 ## Architecture rules (ADR 0005)
 

@@ -1,0 +1,14 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "^(edit|write|apply_patch)$",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node .devin/hooks/format-file.mjs",
+          "timeout": 60
+        }
+      ]
+    }
+  ]
+}
