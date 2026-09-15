@@ -8,3 +8,4 @@ playwright-report
 package-lock.json
 *.pdf
 skills-lock.json
+.scratch

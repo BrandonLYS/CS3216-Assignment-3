@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint, format, typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        # No bun.lock yet; bun migrates package-lock.json on the fly.
+        run: bun install
+
+      - name: Prettier
+        run: bun run format:check
+
+      - name: ESLint
+        run: bunx eslint --max-warnings=0
+
+      - name: Typecheck
+        run: bun run typecheck
