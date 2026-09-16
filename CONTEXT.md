@@ -74,3 +74,29 @@ _Avoid_: Document, file, attachment, upload
 **Comment**:
 A short, plain-text, dated statement attached to one Task, Risk or Milestone, optionally attributed to the Person who said it ("said by") and dated to when it was said ("said on"). Immutable once posted; may be deleted, in which case the item's history keeps the body.
 _Avoid_: Message, note, remark, update
+
+### Assistant
+
+**Assistant**:
+The in-app agent a User converses with. It reads a Project through the same read models as the UI and changes it through the same services, acting on behalf of the User; every change it makes is an Activity Event marked as made via the Assistant.
+_Avoid_: Chatbot, bot, copilot, AI
+
+**Conversation**:
+The stored thread of Messages between one User and the Assistant about one Project (or, on the dashboard, about no Project).
+_Avoid_: Chat, thread, session
+
+**Message**:
+One turn in a Conversation: from the User, or from the Assistant (text plus any tool calls it made).
+_Avoid_: Prompt, reply, chat message
+
+**Profile**:
+A User's own Markdown description of how they work (tone, cadence, defaults, preferences). One per User, slow-changing, editable by the User and revised by Reflection. Every version is kept.
+_Avoid_: user.md, persona, settings
+
+**Working Memory**:
+The Assistant's Markdown notes on one User's situation in one Project (current priorities, recurring People, recent decisions). One per User per Project, fast-changing, editable by the User and revised by Reflection. Every version is kept.
+_Avoid_: context.md, memory file, notes, scratchpad
+
+**Reflection**:
+A background pass, run after an Assistant turn, that reads the recent Conversation and the changes made and rewrites the Profile and Working Memory. Must preserve what the User wrote.
+_Avoid_: Learning, training, background agent
