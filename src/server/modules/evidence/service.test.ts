@@ -145,6 +145,19 @@ describe("evidenceService links", () => {
     expect(await evidenceService.listForEntity(ctx, projectId, "task", t.id)).toEqual([]);
   });
 
+  it("tasksService.list reports linkedEvidenceCount per Task", async () => {
+    const a = await tasksService.create(ctx, { projectId, title: "Sourced", priority: "none" });
+    const b = await tasksService.create(ctx, { projectId, title: "Unsourced", priority: "none" });
+    const e1 = await mkEvidence("Plan v4");
+    const e2 = await mkEvidence("Status update");
+    await linkTo(e1.id, "task", a.id);
+    await linkTo(e2.id, "task", a.id);
+
+    const rows = await tasksService.list(ctx, projectId);
+    expect(rows.find((r) => r.task.id === a.id)?.linkedEvidenceCount).toBe(2);
+    expect(rows.find((r) => r.task.id === b.id)?.linkedEvidenceCount).toBe(0);
+  });
+
   it("refuses a foreign User", async () => {
     const stranger = await makeCtx();
     const ev = await mkEvidence("Owner only");

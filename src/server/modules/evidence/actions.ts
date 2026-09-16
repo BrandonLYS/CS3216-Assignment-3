@@ -4,7 +4,7 @@ import { z } from "zod";
 import { runAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
 import { evidenceService, type UploadedFile } from "./service";
-import { createEvidenceSchema, updateEvidenceSchema } from "./validation";
+import { createEvidenceSchema, evidenceLinkSchema, updateEvidenceSchema } from "./validation";
 
 export async function createEvidenceAction(fd: FormData) {
   const raw = fd.get("file");
@@ -33,5 +33,18 @@ export async function deleteEvidenceAction(fd: FormData) {
   const projectId = String(fd.get("projectId"));
   const res = await runAction(z.object({ id: z.string() }), fd, (ctx, { id }) => evidenceService.delete(ctx, id));
   if (res.ok) revalidateProject(projectId);
+  return res;
+}
+
+// The link pickers are not forms (they render inside the item ActionForm), so these take JSON.
+export async function linkEvidenceAction(input: z.input<typeof evidenceLinkSchema>) {
+  const res = await runAction(evidenceLinkSchema, input, (ctx, i) => evidenceService.link(ctx, i));
+  if (res.ok) revalidateProject(input.projectId);
+  return res;
+}
+
+export async function unlinkEvidenceAction(input: z.input<typeof evidenceLinkSchema>) {
+  const res = await runAction(evidenceLinkSchema, input, (ctx, i) => evidenceService.unlink(ctx, i));
+  if (res.ok) revalidateProject(input.projectId);
   return res;
 }
