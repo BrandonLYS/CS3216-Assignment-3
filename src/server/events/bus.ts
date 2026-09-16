@@ -1,12 +1,15 @@
 import type { ActivityAction, EntityType } from "@/shared/domain";
 import type { FieldChange } from "@/server/core/diff";
 
+/** Derived from the Activity Event, plus link signals that have no Activity Event of their own. */
+export type DomainEventName = `${EntityType}.${ActivityAction}` | "evidence.linked" | "evidence.unlinked";
+
 /**
  * Domain event published after every committed mutation (ADR 0005).
  * The future intelligence module subscribes here; nothing else should need to.
  */
 export interface DomainEvent {
-  name: `${EntityType}.${ActivityAction}`;
+  name: DomainEventName;
   projectId: string;
   actorId: string | null;
   entityType: EntityType;
@@ -25,7 +28,7 @@ class EventBus {
   private handlers = new Map<string, Set<EventHandler>>();
 
   /** Subscribe to a specific event name or `"*"` for everything. Returns an unsubscribe fn. */
-  subscribe(name: DomainEvent["name"] | "*", handler: EventHandler) {
+  subscribe(name: DomainEventName | "*", handler: EventHandler) {
     const set = this.handlers.get(name) ?? new Set();
     set.add(handler);
     this.handlers.set(name, set);

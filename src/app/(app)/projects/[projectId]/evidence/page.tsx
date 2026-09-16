@@ -9,10 +9,14 @@ export const metadata = { title: "Evidence" };
 export default async function EvidencePage({ params }: PageProps<"/projects/[projectId]/evidence">) {
   const { projectId } = await params;
   const ctx = await ctxForCurrentUser();
-  const [refs, items] = await Promise.all([loadProjectRefs(ctx, projectId), evidenceService.list(ctx, projectId)]);
+  const [refs, items, targets] = await Promise.all([
+    loadProjectRefs(ctx, projectId),
+    evidenceService.list(ctx, projectId),
+    evidenceService.listLinkTargets(ctx, projectId),
+  ]);
   return (
     <Suspense>
-      <EvidenceView refs={refs} items={items} />
+      <EvidenceView refs={refs} items={items} targets={targets} />
     </Suspense>
   );
 }

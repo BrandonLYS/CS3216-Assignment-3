@@ -5,6 +5,7 @@ import { mutate } from "@/server/core/mutation";
 import type { DbOrTx } from "@/server/db/client";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { dependenciesRepo } from "@/server/modules/dependencies/repository";
+import { evidenceLinksRepo } from "@/server/modules/evidence/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { statusesService } from "@/server/modules/statuses/service";
@@ -59,6 +60,7 @@ export const milestonesService = {
       const m = await getOwned(tx, ctx.userId, id);
       await dependenciesRepo.deleteForItem(tx, id);
       await commentsRepo.deleteForEntity(tx, "milestone", id);
+      await evidenceLinksRepo.deleteForEntity(tx, "milestone", id);
       await milestonesRepo.delete(tx, id);
       rec.deleted("milestone", m.projectId, id, m.name);
     }),

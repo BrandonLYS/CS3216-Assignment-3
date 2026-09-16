@@ -16,6 +16,7 @@ const HUMAN_FIELDS: Record<string, string> = {
   impactDescription: "impact",
   reviewDate: "review date",
   sourceDate: "source date",
+  evidence: "evidence",
 };
 
 const ID_FIELDS = new Set(["statusId", "assigneeId", "ownerId", "milestoneId", "teamId", "labelIds"]);

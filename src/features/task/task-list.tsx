@@ -10,6 +10,7 @@ import { dueLabel } from "@/shared/lib/dates";
 import { EmptyState } from "@/shared/ui";
 import { InlineSelect } from "@/shared/ui/inline-select";
 import { CommentCount } from "@/entities/comment/comment-count";
+import { LinkedEvidenceCount } from "@/entities/evidence/evidence-chip";
 import { Avatar } from "@/entities/person/avatar";
 import { StatusGlyph } from "@/entities/status/status-badge";
 import { PriorityIcon } from "@/entities/task/priority";
@@ -114,6 +115,7 @@ function TaskRow({ item, refs, onOpen }: { item: TaskListItem; refs: ProjectRefs
           </span>
         ))}
       </span>
+      <LinkedEvidenceCount count={item.linkedEvidenceCount} className="shrink-0" />
       <CommentCount n={item.commentCount} className="shrink-0" />
       {milestone && (
         <span className="flex shrink-0 items-center gap-1 text-caption text-ink-tertiary">

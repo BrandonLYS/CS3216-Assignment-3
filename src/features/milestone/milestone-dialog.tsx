@@ -14,6 +14,7 @@ import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField } from "@/shared/ui";
 import { CommentThread } from "@/features/comment/comment-thread";
 import { DependencyEditor } from "@/features/dependency/dependency-editor";
+import { LinkedEvidence } from "@/features/evidence/linked-evidence";
 import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 
 export function MilestoneDialog({
@@ -107,6 +108,7 @@ export function MilestoneDialog({
                   milestones={refs.milestones}
                   dependencies={dependencies}
                 />
+                <LinkedEvidence refs={refs} item={{ type: "milestone", id: m.id }} />
                 <CommentThread
                   projectId={refs.project.id}
                   entityType="milestone"

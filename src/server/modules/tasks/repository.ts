@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNotNull, notInArray, or, sql, type SQL } from 
 import type { DbOrTx } from "@/server/db/client";
 import { TERMINAL_CATEGORIES } from "@/shared/domain";
 import { comments } from "@/server/modules/comments/schema";
+import { evidenceLinks } from "@/server/modules/evidence/schema";
 import { labels } from "@/server/modules/labels/schema";
 import { milestones } from "@/server/modules/milestones/schema";
 import { people, teams } from "@/server/modules/people/schema";
@@ -21,6 +22,14 @@ const withJoins = (db: DbOrTx, commentScope: SQL) => {
     .where(and(eq(comments.entityType, "task"), commentScope))
     .groupBy(comments.entityId)
     .as("comment_counts");
+  // Same shape for linked Evidence. The alias must differ from "n" above: drizzle renders
+  // subquery columns unqualified inside sql`` templates, so equal names are ambiguous in Postgres.
+  const evidenceCounts = db
+    .select({ entityId: evidenceLinks.entityId, n: sql<number>`count(*)::int`.as("evidence_n") })
+    .from(evidenceLinks)
+    .where(eq(evidenceLinks.entityType, "task"))
+    .groupBy(evidenceLinks.entityId)
+    .as("evidence_counts");
   return db
     .select({
       task: tasks,
@@ -29,13 +38,15 @@ const withJoins = (db: DbOrTx, commentScope: SQL) => {
       team: teams,
       milestone: { id: milestones.id, name: milestones.name, dueDate: milestones.dueDate },
       commentCount: sql<number>`coalesce(${commentCounts.n}, 0)`.mapWith(Number),
+      linkedEvidenceCount: sql<number>`coalesce(${evidenceCounts.n}, 0)`.mapWith(Number),
     })
     .from(tasks)
     .innerJoin(statuses, eq(statuses.id, tasks.statusId))
     .leftJoin(people, eq(people.id, tasks.assigneeId))
     .leftJoin(teams, eq(teams.id, tasks.teamId))
     .leftJoin(milestones, eq(milestones.id, tasks.milestoneId))
-    .leftJoin(commentCounts, eq(commentCounts.entityId, tasks.id));
+    .leftJoin(commentCounts, eq(commentCounts.entityId, tasks.id))
+    .leftJoin(evidenceCounts, eq(evidenceCounts.entityId, tasks.id));
 };
 
 async function attachLabels<T extends { task: TaskRow }>(db: DbOrTx, rows: T[]) {

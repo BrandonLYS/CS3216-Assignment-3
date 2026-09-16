@@ -24,20 +24,25 @@ import {
   enumOptions,
 } from "@/shared/ui";
 import { useFieldError } from "@/shared/ui/action-form";
-
-const KIND_COLOR: Record<string, string> = {
-  plan: "var(--color-tag-blue)",
-  minutes: "var(--color-tag-purple)",
-  status_update: "var(--color-tag-green)",
-  task_export: "var(--color-tag-yellow)",
-  risk_register: "var(--color-tag-orange)",
-  other: "var(--color-tag-gray)",
-};
+import type { LinkTarget } from "@/server/modules/evidence/repository";
+import { EVIDENCE_KIND_COLOR, LinkedEvidenceCount } from "@/entities/evidence/evidence-chip";
+import { LinkedItemChip, keyTextFor } from "@/entities/evidence/linked-item-chip";
+import { LinkedItems } from "@/features/evidence/linked-items";
 
 const fmtBytes = (n: number) =>
   n > 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`;
 
-export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: EvidenceRow[] }) {
+export function EvidenceView({
+  refs,
+  items,
+  targets,
+}: {
+  refs: ProjectRefs;
+  items: EvidenceRow[];
+  /** Every linkable Task/Risk/Milestone in the project, for the "Link item" picker. */
+  targets: LinkTarget[];
+}) {
+  const linksFor = (evidenceId: string) => refs.evidenceLinks.filter((l) => l.evidenceId === evidenceId);
   const router = useRouter();
   const params = useSearchParams();
   const base = `/projects/${refs.project.id}/evidence`;
@@ -58,28 +63,35 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
           </Button>
         </div>
         <ul className="flex-1 overflow-y-auto border-t border-hairline">
-          {items.map((e) => (
-            <li key={e.id}>
-              <button
-                onClick={() => router.replace(`${base}?item=${e.id}`, { scroll: false })}
-                className={cn(
-                  "flex w-full flex-col gap-1 border-b border-hairline/60 px-4 py-2.5 text-left transition-colors hover:bg-surface-1",
-                  selected?.id === e.id && "bg-surface-2",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="size-1.5 rounded-full" style={{ background: KIND_COLOR[e.kind] }} />
-                  <span className="truncate text-body-sm text-ink">{e.title}</span>
-                </div>
-                <div className="flex items-center gap-2 pl-3.5 text-caption text-ink-tertiary">
-                  <span>{labelFor(e.kind)}</span>
-                  <span>·</span>
-                  <span>{e.sourceDate ? fmtDate(e.sourceDate, "d MMM yyyy") : relative(e.createdAt)}</span>
-                  {e.fileName && <FileText className="ml-auto size-3" />}
-                </div>
-              </button>
-            </li>
-          ))}
+          {items.map((e) => {
+            const links = linksFor(e.id);
+            return (
+              <li key={e.id} id={`evidence-${e.id}`}>
+                <button
+                  onClick={() => router.replace(`${base}?item=${e.id}`, { scroll: false })}
+                  className={cn(
+                    "flex w-full flex-col gap-1 border-b border-hairline/60 px-4 py-2.5 text-left transition-colors hover:bg-surface-1",
+                    selected?.id === e.id && "bg-surface-2",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="size-1.5 rounded-full" style={{ background: EVIDENCE_KIND_COLOR[e.kind] }} />
+                    <span className="truncate text-body-sm text-ink">{e.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pl-3.5 text-caption text-ink-tertiary">
+                    <span>{labelFor(e.kind)}</span>
+                    <span>·</span>
+                    <span>{e.sourceDate ? fmtDate(e.sourceDate, "d MMM yyyy") : relative(e.createdAt)}</span>
+                    <span className="ml-auto flex items-center gap-2">
+                      <LinkedEvidenceCount count={links.length} />
+                      {e.fileName && <FileText className="size-3" />}
+                    </span>
+                  </div>
+                  {links.length > 0 && <LinkedItemStrip projectKey={refs.project.key} links={links} />}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -100,7 +112,7 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
             <div className="flex items-start justify-between gap-4 border-b border-hairline px-6 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Badge color={KIND_COLOR[selected.kind]}>{labelFor(selected.kind)}</Badge>
+                  <Badge color={EVIDENCE_KIND_COLOR[selected.kind]}>{labelFor(selected.kind)}</Badge>
                   {selected.sourceDate && (
                     <span className="text-caption text-ink-subtle">
                       Source date {fmtDate(selected.sourceDate, "d MMM yyyy")}
@@ -127,6 +139,9 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
                   <Trash2 className="size-3.5 text-tag-red" />
                 </Button>
               </div>
+            </div>
+            <div className="border-b border-hairline px-6 py-3">
+              <LinkedItems key={selected.id} refs={refs} evidenceId={selected.id} targets={targets} />
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               {selected.body ? (
@@ -225,6 +240,32 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
           </ActionForm>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+const STRIP_MAX = 2;
+
+/**
+ * Compact "linked items as chips" for a list row (user story 13): the first two links as
+ * non-interactive chips (the row itself is a button; the detail pane has the real links and
+ * unlink controls), then "+N" for the rest.
+ */
+function LinkedItemStrip({ projectKey, links }: { projectKey: string; links: ProjectRefs["evidenceLinks"] }) {
+  const shown = links.slice(0, STRIP_MAX);
+  const rest = links.length - shown.length;
+  return (
+    <div className="flex max-w-full min-w-0 items-center gap-1 pl-3.5">
+      {shown.map((l) => (
+        <LinkedItemChip
+          key={`${l.entityType}:${l.entityId}`}
+          entityType={l.entityType}
+          label={l.entityLabel || labelFor(l.entityType)}
+          keyText={keyTextFor(projectKey, l.entityType, l.entityNumber)}
+          className="min-w-0 shrink"
+        />
+      ))}
+      {rest > 0 && <span className="shrink-0 text-caption text-ink-tertiary">+{rest}</span>}
     </div>
   );
 }

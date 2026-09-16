@@ -6,6 +6,7 @@ import { nextNumber } from "@/server/core/sequence";
 import type { DbOrTx } from "@/server/db/client";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { dependenciesRepo } from "@/server/modules/dependencies/repository";
+import { evidenceLinksRepo } from "@/server/modules/evidence/repository";
 import { assertLabelsInProject } from "@/server/modules/labels/service";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { assertPersonInProject, assertTeamInProject } from "@/server/modules/people/service";
@@ -145,6 +146,7 @@ export const tasksService = {
       const t = await getOwned(tx, ctx.userId, id);
       await dependenciesRepo.deleteForItem(tx, id);
       await commentsRepo.deleteForEntity(tx, "task", id);
+      await evidenceLinksRepo.deleteForEntity(tx, "task", id);
       await tasksRepo.delete(tx, id);
       rec.deleted("task", t.projectId, id, t.title);
     }),
