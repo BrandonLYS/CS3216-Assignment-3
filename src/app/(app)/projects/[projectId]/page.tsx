@@ -6,14 +6,15 @@ import { milestonesService } from "@/server/modules/milestones/service";
 import { projectsService } from "@/server/modules/projects/service";
 import { risksService } from "@/server/modules/risks/service";
 import { tasksService } from "@/server/modules/tasks/service";
-import { TERMINAL_CATEGORIES, labelFor, riskSeverity } from "@/shared/domain";
+import { projectAttention } from "@/server/modules/workspace/queries";
+import { RISK_MID_SEVERITY, RISK_TOP_SEVERITY, TERMINAL_CATEGORIES, labelFor, riskSeverity } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
-import { dueLabel, fmtDate, today } from "@/shared/lib/dates";
+import { dueLabel, fmtDate } from "@/shared/lib/dates";
 import { Badge, Panel, SectionTitle } from "@/shared/ui";
 import { ActivityRow } from "@/entities/activity/activity-item";
 import { HealthBadge } from "@/entities/project/health";
-import { StatusGlyph } from "@/entities/status/status-badge";
 import { Avatar } from "@/entities/person/avatar";
+import { AttentionList } from "@/widgets/attention/attention-list";
 
 export const metadata = { title: "Overview" };
 
@@ -28,14 +29,12 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
     activityService.recentForProject(ctx, projectId, 20),
     tasksService.countsByStatusCategory(ctx, projectId),
   ]);
+  // Reuse the collections above; only the dependency edges are fetched inside.
+  const attention = await projectAttention(ctx, projectId, { rows: { tasks, milestones, risks } });
   const base = `/projects/${projectId}`;
   const total = tasks.length;
   const done = counts.done ?? 0;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const t = today();
-  const open = tasks.filter((x) => !TERMINAL_CATEGORIES.has(x.status.category));
-  const overdue = open.filter((x) => x.task.dueDate && x.task.dueDate < t);
-  const blocked = open.filter((x) => x.status.category === "blocked");
   const openRisks = risks.filter((r) => !TERMINAL_CATEGORIES.has(r.status.category));
 
   return (
@@ -68,14 +67,35 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
         </Panel>
 
         <div className="grid grid-cols-4 gap-3">
-          <Stat label="Open tasks" value={open.length} />
-          <Stat label="Overdue" value={overdue.length} tone={overdue.length ? "danger" : "muted"} />
-          <Stat label="Blocked" value={blocked.length} tone={blocked.length ? "warn" : "muted"} />
-          <Stat label="Open risks" value={openRisks.length} />
+          <Stat
+            label="Overdue"
+            value={attention.counts.task_overdue}
+            tone={attention.counts.task_overdue ? "danger" : "muted"}
+          />
+          <Stat
+            label="Late dependencies"
+            value={attention.counts.dependency_late}
+            tone={attention.counts.dependency_late ? "warn" : "muted"}
+          />
+          <Stat
+            label="Blocked"
+            value={attention.counts.task_blocked}
+            tone={attention.counts.task_blocked ? "warn" : "muted"}
+          />
+          <Stat
+            label="Top risks"
+            value={attention.counts.risk_top}
+            tone={attention.counts.risk_top ? "danger" : "muted"}
+          />
         </div>
 
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 flex flex-col gap-6">
+            <section>
+              <SectionTitle className="mb-2">Needs attention</SectionTitle>
+              <AttentionList result={attention} />
+            </section>
+
             <section>
               <SectionTitle className="mb-2">Milestones</SectionTitle>
               <Panel className="divide-y divide-hairline">
@@ -119,44 +139,6 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
             </section>
 
             <section>
-              <SectionTitle className="mb-2">Needs attention</SectionTitle>
-              <Panel className="divide-y divide-hairline">
-                {overdue.length + blocked.length === 0 && (
-                  <p className="px-4 py-6 text-center text-caption text-ink-subtle">Nothing overdue or blocked.</p>
-                )}
-                {[...overdue, ...blocked.filter((b) => !overdue.includes(b))].slice(0, 8).map((x) => {
-                  const due = dueLabel(x.task.dueDate);
-                  return (
-                    <Link
-                      key={x.task.id}
-                      href={`${base}/tasks?task=${x.task.id}`}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-2"
-                    >
-                      <StatusGlyph status={x.status} />
-                      <span className="font-mono text-caption text-ink-tertiary">
-                        {project.key}-{x.task.number}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-body-sm text-ink">{x.task.title}</span>
-                      <Avatar name={x.assignee?.name} size="xs" />
-                      <span
-                        className={cn(
-                          "w-20 text-right text-caption",
-                          due.tone === "danger"
-                            ? "text-tag-red"
-                            : due.tone === "warn"
-                              ? "text-tag-orange"
-                              : "text-ink-subtle",
-                        )}
-                      >
-                        {due.text}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </Panel>
-            </section>
-
-            <section>
               <SectionTitle className="mb-2">Open risks</SectionTitle>
               <Panel className="divide-y divide-hairline">
                 {openRisks.length === 0 && (
@@ -176,7 +158,11 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
                         <AlertTriangle
                           className={cn(
                             "size-3.5",
-                            sev >= 6 ? "text-tag-red" : sev >= 3 ? "text-tag-orange" : "text-ink-subtle",
+                            sev >= RISK_TOP_SEVERITY
+                              ? "text-tag-red"
+                              : sev >= RISK_MID_SEVERITY
+                                ? "text-tag-orange"
+                                : "text-ink-subtle",
                           )}
                         />
                         <span className="font-mono text-caption text-ink-tertiary">R-{risk.number}</span>

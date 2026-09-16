@@ -56,6 +56,12 @@ export type ScaleLevel = (typeof SCALE_LEVELS)[number];
 export const RISK_SEVERITY_SCORE: Record<ScaleLevel, number> = { low: 1, medium: 2, high: 3 };
 export const riskSeverity = (r: { probability: ScaleLevel; impact: ScaleLevel }) =>
   RISK_SEVERITY_SCORE[r.probability] * RISK_SEVERITY_SCORE[r.impact];
+/**
+ * Severity bands. The top band starts at Medium x High (6) — the threshold the Risk Register and
+ * Project Overview already render red; the Attention rule `risk_top` uses the same constant.
+ */
+export const RISK_TOP_SEVERITY = RISK_SEVERITY_SCORE.medium * RISK_SEVERITY_SCORE.high;
+export const RISK_MID_SEVERITY = RISK_SEVERITY_SCORE.low * RISK_SEVERITY_SCORE.high;
 
 /** Endpoints a Dependency may connect. */
 export const DEPENDENCY_ITEM_TYPES = ["task", "milestone"] as const;
@@ -93,3 +99,18 @@ export const ACTIVITY_ACTIONS = ["created", "updated", "deleted"] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
+// ---------------------------------------------------------------------------
+// Attention (issue #7). Order IS severity order; adding a rule is a vocabulary change.
+// ---------------------------------------------------------------------------
+export const ATTENTION_RULES = [
+  "task_overdue",
+  "dependency_late",
+  "milestone_past_open",
+  "task_blocked",
+  "risk_top",
+  "task_due_soon",
+] as const;
+export type AttentionRule = (typeof ATTENTION_RULES)[number];
+/** `task_due_soon` window in calendar days, inclusive of today and today + N. */
+export const ATTENTION_DUE_SOON_DAYS = 7;
