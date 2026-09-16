@@ -18,7 +18,7 @@ export const comments = pgTable(
     entityId: text("entity_id").notNull(),
     body: text("body").notNull(),
     saidById: text("said_by_id").references(() => people.id, { onDelete: "set null" }),
-    /** Name of the Person at posting time so attribution survives their removal ("Unknown person"). */
+    /** Name of the Person at posting time so attribution survives their removal ("Unknown person"). See ADR 0006. */
     saidByName: text("said_by_name"),
     saidOn: date("said_on"),
     authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
