@@ -106,6 +106,10 @@ export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 export const VIA_ACTORS = ["assistant", "reflection"] as const;
 export type Via = (typeof VIA_ACTORS)[number];
 
+/** Who wrote a Message in a Conversation. */
+export const MESSAGE_ROLES = ["user", "assistant", "system"] as const;
+export type MessageRole = (typeof MESSAGE_ROLES)[number];
+
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 // ---------------------------------------------------------------------------

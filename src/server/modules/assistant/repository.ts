@@ -1,0 +1,48 @@
+import { and, asc, count, eq, gte, isNull, sql } from "drizzle-orm";
+import type { DbOrTx } from "@/server/db/client";
+import { conversations, messages, type ConversationRow } from "./schema";
+
+export const conversationsRepo = {
+  findOrCreate: async (db: DbOrTx, userId: string, projectId: string | null): Promise<ConversationRow> => {
+    const [existing] = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.userId, userId),
+          projectId ? eq(conversations.projectId, projectId) : isNull(conversations.projectId),
+        ),
+      );
+    if (existing) return existing;
+    const [row] = await db.insert(conversations).values({ userId, projectId }).returning();
+    return row!;
+  },
+
+  findById: async (db: DbOrTx, id: string): Promise<ConversationRow | undefined> => {
+    const [row] = await db.select().from(conversations).where(eq(conversations.id, id));
+    return row;
+  },
+};
+
+export const messagesRepo = {
+  listByConversation: (db: DbOrTx, conversationId: string) =>
+    db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)),
+
+  upsertMany: async (db: DbOrTx, rows: (typeof messages.$inferInsert)[]) => {
+    if (!rows.length) return;
+    await db
+      .insert(messages)
+      .values(rows)
+      .onConflictDoUpdate({ target: [messages.conversationId, messages.id], set: { parts: sql`excluded.parts` } });
+  },
+
+  /** User Messages this User sent since `since`, across all their Conversations. */
+  countUserMessagesSince: async (db: DbOrTx, userId: string, since: Date) => {
+    const [row] = await db
+      .select({ n: count() })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .where(and(eq(conversations.userId, userId), eq(messages.role, "user"), gte(messages.createdAt, since)));
+    return row?.n ?? 0;
+  },
+};
