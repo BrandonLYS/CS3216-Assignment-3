@@ -3,7 +3,7 @@ import type { Ctx } from "@/server/core/context";
 import { ForbiddenError } from "@/server/core/errors";
 import { activityRepo } from "@/server/modules/activity/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
-import { toAiTools } from "./ai-tools";
+import { toAiTools, toolApprovalFor } from "./ai-tools";
 import { ASSISTANT_TOOLS, findTool } from "./tools";
 
 let ctx: Ctx;
@@ -23,12 +23,40 @@ describe("assistant tool registry", () => {
     expect(ASSISTANT_TOOLS.map((t) => t.name).sort()).toEqual([
       "create_milestone",
       "create_task",
+      "delete_milestone",
+      "delete_task",
       "get_project_summary",
       "get_task",
       "list_tasks",
       "update_milestone",
+      "update_project",
       "update_task",
     ]);
+  });
+
+  it("flags the destructive and Project-level tools as requiring confirmation", () => {
+    const flagged = ASSISTANT_TOOLS.filter((t) => t.requiresConfirmation)
+      .map((t) => t.name)
+      .sort();
+    expect(flagged).toEqual(["delete_milestone", "delete_task", "update_project"]);
+  });
+
+  it("describes a delete_task call with the Task key and title", async () => {
+    const task = (await run("create_task", { projectId, title: "Doomed", dueDate: "2026-10-30" })) as {
+      id: string;
+      number: number;
+    };
+    const text = await findTool("delete_task").describe!(ctx, { id: task.id });
+    expect(text).toBe(`Delete Task AST-${task.number} “Doomed”?`);
+    await run("delete_task", { id: task.id });
+    await expect(run("get_task", { id: task.id })).rejects.toThrow("not found");
+  });
+
+  it("describes an update_project call with the concrete change and applies it", async () => {
+    const text = await findTool("update_project").describe!(ctx, { projectId, name: "Renamed" });
+    expect(text).toBe("Update Project AST: name → “Renamed”?");
+    const after = (await run("update_project", { projectId, name: "Renamed" })) as { name: string };
+    expect(after.name).toBe("Renamed");
   });
 
   it("summarises the Project with ids and Status categories", async () => {
@@ -85,5 +113,27 @@ describe("toAiTools", () => {
     const tools = toAiTools(ctx, ASSISTANT_TOOLS, { projectId });
     const out = await tools.update_task!.execute!({ id: "00000000-0000-0000-0000-000000000000", title: "Nope" }, opts);
     expect(out).toMatchObject({ error: expect.stringContaining("not found") });
+  });
+
+  it("asks for User approval only on the flagged tools", async () => {
+    const approval = toolApprovalFor(ctx, ASSISTANT_TOOLS, { projectId }) as Record<
+      string,
+      (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>
+    >;
+    expect(Object.keys(approval).sort()).toEqual(["delete_milestone", "delete_task", "update_project"]);
+    const status = await approval.update_project!({ key: "NEW", description: null }, {});
+    expect(status).toEqual({
+      type: "user-approval",
+      reason: "Update Project AST: key → “NEW”, description → cleared?",
+    });
+  });
+
+  it("denies instead of failing the turn when the target of a confirmation no longer exists", async () => {
+    const approval = toolApprovalFor(ctx, ASSISTANT_TOOLS) as Record<
+      string,
+      (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>
+    >;
+    const status = await approval.delete_task!({ id: "00000000-0000-0000-0000-000000000000" }, {});
+    expect(status).toEqual({ type: "denied", reason: "Task not found" });
   });
 });

@@ -1,4 +1,4 @@
-import { tool, type ToolSet } from "ai";
+import { tool, type ToolApprovalConfiguration, type ToolSet } from "ai";
 import type { Ctx } from "@/server/core/context";
 import { DomainError } from "@/server/core/errors";
 import type { ToolDef } from "./tools";
@@ -29,5 +29,33 @@ export function toAiTools(ctx: Ctx, defs: ToolDef[], scope?: { projectId: string
         }),
       ];
     }),
+  );
+}
+
+/**
+ * `streamText` approval policy: tools flagged `requiresConfirmation` stop at a card whose text
+ * comes from the tool's `describe`; everything else runs straight away.
+ */
+export function toolApprovalFor(
+  ctx: Ctx,
+  defs: ToolDef[],
+  scope?: { projectId: string },
+): ToolApprovalConfiguration<ToolSet, never> {
+  return Object.fromEntries(
+    defs
+      .filter((d) => d.requiresConfirmation)
+      .map((def) => [
+        def.name,
+        async (input: Record<string, unknown>) => {
+          const full = scope && "projectId" in def.input.shape ? { ...input, projectId: scope.projectId } : input;
+          try {
+            return { type: "user-approval" as const, reason: await def.describe?.(ctx, full) };
+          } catch (e) {
+            // e.g. the target no longer exists: deny with the reason instead of failing the turn.
+            if (e instanceof DomainError) return { type: "denied" as const, reason: e.message };
+            throw e;
+          }
+        },
+      ]),
   );
 }

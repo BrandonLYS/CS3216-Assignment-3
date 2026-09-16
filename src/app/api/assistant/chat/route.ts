@@ -10,7 +10,7 @@ import {
 import { z } from "zod";
 import { ctxForCurrentUser } from "@/server/core/action";
 import { DomainError } from "@/server/core/errors";
-import { toAiTools } from "@/server/modules/assistant/ai-tools";
+import { toAiTools, toolApprovalFor } from "@/server/modules/assistant/ai-tools";
 import { assistantConfig, getModel } from "@/server/modules/assistant/model";
 import { projectSystemPrompt } from "@/server/modules/assistant/prompt";
 import { assistantService } from "@/server/modules/assistant/service";
@@ -51,6 +51,9 @@ export async function POST(req: Request) {
       system: projectSystemPrompt(summary),
       messages: await convertToModelMessages(messages),
       tools,
+      toolApproval: toolApprovalFor(ctx, ASSISTANT_TOOLS, { projectId }),
+      // Signs approval requests so a client cannot forge an "approved" response.
+      experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
     });
     return createUIMessageStreamResponse({

@@ -1,7 +1,13 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai";
+import {
+  DefaultChatTransport,
+  getToolName,
+  isToolUIPart,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+  type UIMessage,
+} from "ai";
 import { ArrowUp, Loader2, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -23,7 +29,12 @@ const TOOL_LABEL: Record<string, string> = {
   update_task: "Updated Task",
   create_milestone: "Created Milestone",
   update_milestone: "Updated Milestone",
+  delete_task: "Deleted Task",
+  delete_milestone: "Deleted Milestone",
+  update_project: "Updated Project",
 };
+
+const isPendingCard = (part: UIMessage["parts"][number]) => isToolUIPart(part) && part.state === "approval-requested";
 
 /**
  * Right-side Assistant panel for one Project (ADR 0007). Mounted by the Project layout; the
@@ -43,21 +54,26 @@ export function AssistantDock({
   const { assistantOpen, toggleAssistant } = useShell();
   const router = useRouter();
   const [input, setInput] = React.useState("");
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, addToolApprovalResponse, status, error } = useChat({
     id: conversationId,
     messages: initialMessages,
     transport: new DefaultChatTransport({ api: "/api/assistant/chat", body: { projectId } }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onFinish: () => router.refresh(),
   });
   const busy = status === "submitted" || status === "streaming";
+  // A confirm card must be answered before the next message; a refresh brings the card back.
+  const pendingCard = messages.at(-1)?.parts.some(isPendingCard) ?? false;
   const bottom = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => bottom.current?.scrollIntoView({ block: "end" }), [messages, status]);
+  React.useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end" });
+  }, [messages, status]);
 
   if (!assistantOpen) return null;
 
   const submit = () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || pendingCard) return;
     void sendMessage({ text });
     setInput("");
   };
@@ -88,7 +104,11 @@ export function AssistantDock({
                 )}
               >
                 {m.parts.map((part, i) => (
-                  <Part key={i} part={part} />
+                  <Part
+                    key={i}
+                    part={part}
+                    onAnswer={(id, approved) => void addToolApprovalResponse({ id, approved })}
+                  />
                 ))}
               </div>
             </li>
@@ -122,13 +142,24 @@ export function AssistantDock({
               submit();
             }
           }}
-          placeholder={configured ? "Message the Assistant…" : "Assistant not configured"}
-          disabled={!configured}
+          placeholder={
+            !configured
+              ? "Assistant not configured"
+              : pendingCard
+                ? "Answer the card above first"
+                : "Message the Assistant…"
+          }
+          disabled={!configured || pendingCard}
           rows={2}
           className="min-h-0 resize-none"
           aria-label="Message"
         />
-        <Button type="submit" size="icon" variant="primary" disabled={!configured || busy || !input.trim()}>
+        <Button
+          type="submit"
+          size="icon"
+          variant="primary"
+          disabled={!configured || busy || pendingCard || !input.trim()}
+        >
           <ArrowUp className="size-3.5" />
         </Button>
       </form>
@@ -140,13 +171,25 @@ function friendly(error: Error) {
   return FRIENDLY[error.message] ?? "Something went wrong. Try again.";
 }
 
-function Part({ part }: { part: UIMessage["parts"][number] }) {
+function Part({
+  part,
+  onAnswer,
+}: {
+  part: UIMessage["parts"][number];
+  onAnswer: (approvalId: string, approved: boolean) => void;
+}) {
   if (part.type === "text") return <p className="whitespace-pre-wrap">{part.text}</p>;
   if (!isToolUIPart(part)) return null;
+  if (part.state === "approval-requested") {
+    return <ConfirmCard approvalId={part.approval.id} reason={part.approval.requestReason} onAnswer={onAnswer} />;
+  }
   const name = getToolName(part);
+  const label = TOOL_LABEL[name] ?? name;
+  if (part.state === "output-denied" || (part.state === "approval-responded" && !part.approval.approved)) {
+    return <p className="my-0.5 text-caption text-ink-subtle">Cancelled: {label.toLowerCase()}</p>;
+  }
   const done = part.state === "output-available";
   const failed = part.state === "output-error" || (done && isErrorResult(part.output));
-  const label = TOOL_LABEL[name] ?? name;
   const target = done ? entityLabel(part.output) : null;
   return (
     <p className="my-0.5 flex items-center gap-1.5 text-caption text-ink-subtle">
@@ -168,4 +211,29 @@ function entityLabel(v: unknown) {
   const o = v as { title?: string; name?: string; number?: number };
   const text = o.title ?? o.name;
   return text ? (o.number ? `#${o.number} ${text}` : text) : null;
+}
+
+/** Destructive or Project-level tool call waiting for the User (ADR 0007). Only Confirm runs it. */
+function ConfirmCard({
+  approvalId,
+  reason,
+  onAnswer,
+}: {
+  approvalId: string;
+  reason?: string;
+  onAnswer: (approvalId: string, approved: boolean) => void;
+}) {
+  return (
+    <div role="group" aria-label="Confirm" className="my-1 panel border-hairline-strong bg-surface-2 p-3">
+      <p className="text-body-sm text-ink">{reason ?? "Confirm this change?"}</p>
+      <div className="mt-3 flex justify-end gap-2">
+        <Button size="sm" onClick={() => onAnswer(approvalId, false)}>
+          Cancel
+        </Button>
+        <Button size="sm" variant="danger" onClick={() => onAnswer(approvalId, true)}>
+          Confirm
+        </Button>
+      </div>
+    </div>
+  );
 }
