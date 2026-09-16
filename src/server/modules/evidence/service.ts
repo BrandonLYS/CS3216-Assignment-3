@@ -11,6 +11,7 @@ import { risksRepo } from "@/server/modules/risks/repository";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { getStorage } from "@/server/storage";
 import { labelFor, type LinkableEntityType } from "@/shared/domain";
+import { extractText } from "./extract";
 import { evidenceLinksRepo, evidenceRepo } from "./repository";
 import type { CreateEvidenceInput, EvidenceLinkInput, UpdateEvidenceInput } from "./validation";
 
@@ -92,6 +93,7 @@ export const evidenceService = {
     const id = randomUUID();
     const storageKey = file ? storageKeyFor(input.projectId, id, file.name) : null;
     if (file && storageKey) await getStorage().put(storageKey, file.bytes, file.type);
+    const extractedText = file ? await extractText(file) : null;
     try {
       return await mutate(ctx, async (tx, rec) => {
         await assertOwnsProject(tx, ctx.userId, input.projectId);
@@ -102,6 +104,7 @@ export const evidenceService = {
           fileName: file?.name,
           mimeType: file?.type,
           sizeBytes: file?.size,
+          extractedText,
         });
         rec.created("evidence", input.projectId, row.id, row.title);
         return row;

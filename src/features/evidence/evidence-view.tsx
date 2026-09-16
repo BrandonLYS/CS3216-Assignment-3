@@ -148,10 +148,15 @@ export function EvidenceView({
                 <pre className="max-w-3xl font-mono text-mono leading-relaxed whitespace-pre-wrap text-ink-muted">
                   {selected.body}
                 </pre>
+              ) : selected.extractedText ? (
+                <details key={selected.id} className="max-w-3xl">
+                  <summary className="cursor-pointer text-caption text-ink-subtle select-none">Extracted text</summary>
+                  <pre className="mt-3 font-mono text-mono leading-relaxed whitespace-pre-wrap text-ink-muted">
+                    {selected.extractedText}
+                  </pre>
+                </details>
               ) : (
-                <p className="text-caption text-ink-tertiary">
-                  Stored as a file. Text extraction arrives with the intelligence layer.
-                </p>
+                <p className="text-caption text-ink-tertiary">Stored as a file. No text could be extracted.</p>
               )}
               <p className="mt-8 text-caption text-ink-tertiary">Added {relative(selected.createdAt)}</p>
             </div>

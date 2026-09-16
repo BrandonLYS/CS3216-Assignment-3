@@ -5,7 +5,7 @@ import { projects } from "@/server/modules/projects/schema";
 
 /**
  * A source artifact for a project. Either a stored file (`storageKey`) or pasted
- * text (`body`). `extractedText` is reserved for the AI layer and stays null for now.
+ * text (`body`). `extractedText` is the file's plain text when an extractor exists for its type.
  */
 export const evidence = pgTable(
   "evidence",
