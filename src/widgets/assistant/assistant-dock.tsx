@@ -46,13 +46,16 @@ const TOOL_LABEL: Record<string, string> = {
   list_evidence: "Listed Evidence",
   get_evidence: "Read Evidence",
   link_evidence: "Linked Evidence",
+  list_projects: "Listed Projects",
+  create_project: "Created Project",
 };
 
 const isPendingCard = (part: UIMessage["parts"][number]) => isToolUIPart(part) && part.state === "approval-requested";
 
 /**
- * Right-side Assistant panel for one Project (ADR 0007). Mounted by the Project layout; the
- * shell owns the open state so the header button and the command palette can toggle it.
+ * Right-side Assistant panel for one Project, or for the dashboard when `projectId` is null
+ * (ADR 0007). The shell owns the open state so header buttons and the command palette can
+ * toggle it, and it survives the navigation into a Project the Assistant just created.
  */
 export function AssistantDock({
   projectId,
@@ -60,7 +63,7 @@ export function AssistantDock({
   initialMessages,
   configured,
 }: {
-  projectId: string;
+  projectId: string | null;
   conversationId: string;
   initialMessages: UIMessage[];
   configured: boolean;
@@ -73,7 +76,14 @@ export function AssistantDock({
     messages: initialMessages,
     transport: new DefaultChatTransport({ api: "/api/assistant/chat", body: { projectId } }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-    onFinish: () => router.refresh(),
+    onFinish: ({ message }) => {
+      const created = message.parts.find(
+        (p): p is typeof p & { output: { id: string } } =>
+          isToolUIPart(p) && getToolName(p) === "create_project" && p.state === "output-available",
+      );
+      if (created) router.push(`/projects/${created.output.id}`);
+      else router.refresh();
+    },
   });
   const busy = status === "submitted" || status === "streaming";
   // A confirm card must be answered before the next message; a refresh brings the card back.
@@ -105,7 +115,9 @@ export function AssistantDock({
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {messages.length === 0 && !notice && (
           <p className="py-6 text-center text-caption text-ink-subtle">
-            Ask for a plan, a summary, or a change. Try “plan a two-month launch with UAT in week 6”.
+            {projectId
+              ? "Ask for a plan, a summary, or a change. Try “plan a two-month launch with UAT in week 6”."
+              : "Start from nothing. Try “create a project called Website Relaunch, key WEB”."}
           </p>
         )}
         <ol className="flex flex-col gap-3">

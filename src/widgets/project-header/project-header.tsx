@@ -1,19 +1,16 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ProjectRow } from "@/server/modules/projects/schema";
 import { labelFor } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
-import { useShell } from "@/shared/lib/shell-context";
-import { Button } from "@/shared/ui";
+import { AssistantToggle } from "@/widgets/assistant/assistant-toggle";
 import { HealthDot } from "@/entities/project/health";
 import { PROJECT_SECTIONS } from "@/widgets/command-palette/command-palette";
 
 export function ProjectHeader({ project }: { project: ProjectRow }) {
   const pathname = usePathname();
-  const { assistantOpen, toggleAssistant } = useShell();
   const base = `/projects/${project.id}`;
   return (
     <div className="shrink-0 border-b border-hairline">
@@ -24,15 +21,9 @@ export function ProjectHeader({ project }: { project: ProjectRow }) {
         <span className="rounded-full bg-surface-2 px-2 py-0.5 text-caption text-ink-subtle">
           {labelFor(project.status)}
         </span>
-        <Button
-          size="sm"
-          variant={assistantOpen ? "secondary" : "ghost"}
-          className="ml-auto"
-          onClick={toggleAssistant}
-          aria-pressed={assistantOpen}
-        >
-          <Sparkles className="size-3.5 text-primary" /> Assistant
-        </Button>
+        <span className="ml-auto">
+          <AssistantToggle />
+        </span>
       </div>
       <nav className="flex gap-1 px-4">
         {PROJECT_SECTIONS.map((s) => {

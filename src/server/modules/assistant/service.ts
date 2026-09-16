@@ -12,9 +12,12 @@ const startOfToday = () => new Date(new Date().toISOString().slice(0, 10));
  * Activity Event and no domain event (ADR 0007), so these writes do not go through `mutate`.
  */
 export const assistantService = {
-  /** The User's Conversation for a Project (created on first open) with its Messages, oldest first. */
-  conversation: async (ctx: Ctx, projectId: string) => {
-    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+  /**
+   * The User's Conversation for a Project, or their dashboard Conversation when `projectId` is
+   * null (created on first open), with its Messages oldest first.
+   */
+  conversation: async (ctx: Ctx, projectId: string | null) => {
+    if (projectId) await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const conversation = await conversationsRepo.findOrCreate(ctx.db, ctx.userId, projectId);
     const rows = await messagesRepo.listByConversation(ctx.db, conversation.id);
     return { conversation, messages: rows.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage) };
