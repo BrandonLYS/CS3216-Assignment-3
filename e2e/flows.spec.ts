@@ -651,6 +651,8 @@ test.describe("history", () => {
     await shot(page, "history-fresh");
 
     await dialog.getByRole("tab", { name: "Details" }).click();
+    // History groups events by actor and second; make sure the save lands in a later second than the create.
+    await page.waitForTimeout(1100);
     await dialog.getByLabel("Status").selectOption({ label: "In Progress" });
     await dialog.getByLabel("Owner").selectOption({ label: "Priya Nair" });
     await dialog.getByLabel("Due date").fill("2026-09-23");
