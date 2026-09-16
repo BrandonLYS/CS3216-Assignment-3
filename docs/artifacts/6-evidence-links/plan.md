@@ -52,11 +52,15 @@ async publish() {
 export const evidenceLinks = pgTable(
   "evidence_links",
   {
-    evidenceId: text("evidence_id").notNull().references(() => evidence.id, { onDelete: "cascade" }),
+    evidenceId: text("evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "cascade" }),
     entityType: entityTypeEnum("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
     /** Denormalised for cheap ownership checks and per-project listing. */
-    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -87,14 +91,24 @@ export type EvidenceLinkInput = z.infer<typeof evidenceLinkSchema>;
 
 ```ts
 const linkKey = (k: Pick<EvidenceLinkRow, "evidenceId" | "entityType" | "entityId">) =>
-  and(eq(evidenceLinks.evidenceId, k.evidenceId), eq(evidenceLinks.entityType, k.entityType), eq(evidenceLinks.entityId, k.entityId));
+  and(
+    eq(evidenceLinks.evidenceId, k.evidenceId),
+    eq(evidenceLinks.entityType, k.entityType),
+    eq(evidenceLinks.entityId, k.entityId),
+  );
 
 /** Links with both sides labelled in one query (polymorphic side via three left joins). */
 const withLabels = (db: DbOrTx) =>
-  db.select({
-      evidenceId: evidenceLinks.evidenceId, entityType: evidenceLinks.entityType, entityId: evidenceLinks.entityId,
-      projectId: evidenceLinks.projectId, createdAt: evidenceLinks.createdAt,
-      evidenceTitle: evidence.title, evidenceKind: evidence.kind, evidenceSourceDate: evidence.sourceDate,
+  db
+    .select({
+      evidenceId: evidenceLinks.evidenceId,
+      entityType: evidenceLinks.entityType,
+      entityId: evidenceLinks.entityId,
+      projectId: evidenceLinks.projectId,
+      createdAt: evidenceLinks.createdAt,
+      evidenceTitle: evidence.title,
+      evidenceKind: evidence.kind,
+      evidenceSourceDate: evidence.sourceDate,
       entityLabel: sql<string>`coalesce(${tasks.title}, ${risks.title}, ${milestones.name}, '')`,
       entityNumber: sql<number | null>`coalesce(${tasks.number}, ${risks.number})`,
     })
@@ -105,23 +119,44 @@ const withLabels = (db: DbOrTx) =>
     .leftJoin(milestones, and(eq(evidenceLinks.entityType, "milestone"), eq(milestones.id, evidenceLinks.entityId)));
 
 export const evidenceLinksRepo = {
-  listForProject: (db, projectId) => withLabels(db).where(eq(evidenceLinks.projectId, projectId)).orderBy(desc(evidence.sourceDate), asc(evidenceLinks.createdAt)),
-  listForEntity: (db, entityType: LinkableEntityType, entityId) => withLabels(db).where(and(eq(evidenceLinks.entityType, entityType), eq(evidenceLinks.entityId, entityId))).orderBy(desc(evidence.sourceDate), asc(evidenceLinks.createdAt)),
-  listForEvidence: (db, evidenceId) => withLabels(db).where(eq(evidenceLinks.evidenceId, evidenceId)).orderBy(asc(evidenceLinks.createdAt)),
+  listForProject: (db, projectId) =>
+    withLabels(db)
+      .where(eq(evidenceLinks.projectId, projectId))
+      .orderBy(desc(evidence.sourceDate), asc(evidenceLinks.createdAt)),
+  listForEntity: (db, entityType: LinkableEntityType, entityId) =>
+    withLabels(db)
+      .where(and(eq(evidenceLinks.entityType, entityType), eq(evidenceLinks.entityId, entityId)))
+      .orderBy(desc(evidence.sourceDate), asc(evidenceLinks.createdAt)),
+  listForEvidence: (db, evidenceId) =>
+    withLabels(db).where(eq(evidenceLinks.evidenceId, evidenceId)).orderBy(asc(evidenceLinks.createdAt)),
   find: async (db, key) => (await db.select().from(evidenceLinks).where(linkKey(key)))[0],
   /** Returns undefined when the pair already existed (composite PK conflict). */
-  insertIgnore: async (db, values: NewEvidenceLinkRow) => (await db.insert(evidenceLinks).values(values).onConflictDoNothing().returning())[0],
+  insertIgnore: async (db, values: NewEvidenceLinkRow) =>
+    (await db.insert(evidenceLinks).values(values).onConflictDoNothing().returning())[0],
   delete: (db, key) => db.delete(evidenceLinks).where(linkKey(key)).returning(),
   /** Called by the task/risk/milestone services inside their delete transaction. */
-  deleteForEntity: (db, entityType: LinkableEntityType, entityId) => db.delete(evidenceLinks).where(and(eq(evidenceLinks.entityType, entityType), eq(evidenceLinks.entityId, entityId))),
+  deleteForEntity: (db, entityType: LinkableEntityType, entityId) =>
+    db.delete(evidenceLinks).where(and(eq(evidenceLinks.entityType, entityType), eq(evidenceLinks.entityId, entityId))),
   /** Picker data for the Evidence page: every linkable item in the project, three cheap selects. */
-  listTargets: async (db, projectId): Promise<LinkTarget[]> => { /* select id,number,title from tasks; id,number,title from risks; id,name from milestones; map to { entityType, entityId, label, number } */ },
+  listTargets: async (db, projectId): Promise<LinkTarget[]> => {
+    /* select id,number,title from tasks; id,number,title from risks; id,name from milestones; map to { entityType, entityId, label, number } */
+  },
   /** Light rows for the item-dialog picker. */
-  listSummaries: (db, projectId) => db.select({ id: evidence.id, title: evidence.title, kind: evidence.kind, sourceDate: evidence.sourceDate }).from(evidence).where(eq(evidence.projectId, projectId)).orderBy(desc(evidence.sourceDate), desc(evidence.createdAt)),
+  listSummaries: (db, projectId) =>
+    db
+      .select({ id: evidence.id, title: evidence.title, kind: evidence.kind, sourceDate: evidence.sourceDate })
+      .from(evidence)
+      .where(eq(evidence.projectId, projectId))
+      .orderBy(desc(evidence.sourceDate), desc(evidence.createdAt)),
 };
 export type ProjectEvidenceLink = Awaited<ReturnType<typeof evidenceLinksRepo.listForProject>>[number];
 export type EvidenceSummary = Awaited<ReturnType<typeof evidenceLinksRepo.listSummaries>>[number];
-export interface LinkTarget { entityType: LinkableEntityType; entityId: string; label: string; number: number | null }
+export interface LinkTarget {
+  entityType: LinkableEntityType;
+  entityId: string;
+  label: string;
+  number: number | null;
+}
 ```
 
 (Check the real column names in `evidence/schema.ts` — `sourceDate`, `kind`, `title` — and adapt.)
@@ -185,14 +220,20 @@ export async function linkEvidenceAction(input: z.input<typeof evidenceLinkSchem
   if (res.ok) revalidateProject(input.projectId);
   return res;
 }
-export async function unlinkEvidenceAction(input: z.input<typeof evidenceLinkSchema>) { /* same with evidenceService.unlink */ }
+export async function unlinkEvidenceAction(input: z.input<typeof evidenceLinkSchema>) {
+  /* same with evidenceService.unlink */
+}
 ```
 
 **b. `src/server/modules/tasks/repository.ts`** — linked-Evidence count in `withJoins` (coexists with #4's comment-count join; add a second aliased subquery):
 
 ```ts
-const evidenceCounts = db.select({ entityId: evidenceLinks.entityId, n: sql<number>`count(*)::int`.as("n") })
-    .from(evidenceLinks).where(eq(evidenceLinks.entityType, "task")).groupBy(evidenceLinks.entityId).as("evidence_counts");
+const evidenceCounts = db
+  .select({ entityId: evidenceLinks.entityId, n: sql<number>`count(*)::int`.as("n") })
+  .from(evidenceLinks)
+  .where(eq(evidenceLinks.entityType, "task"))
+  .groupBy(evidenceLinks.entityId)
+  .as("evidence_counts");
 // in withJoins: …select({ …, linkedEvidenceCount: sql<number>`coalesce(${evidenceCounts.n}, 0)`.mapWith(Number) }) … .leftJoin(evidenceCounts, eq(evidenceCounts.entityId, tasks.id))
 ```
 
@@ -242,21 +283,51 @@ export function CommandPicker({ items, placeholder, emptyText = "No matches.", o
 export function LinkedEvidence({ refs, item }: { refs: ProjectRefs; item: { type: LinkableEntityType; id: string } }) {
   const links = refs.evidenceLinks.filter((l) => l.entityType === item.type && l.entityId === item.id);
   const linkedIds = new Set(links.map((l) => l.evidenceId));
-  const options = refs.evidence.filter((e) => !linkedIds.has(e.id));   // US 7: already linked hidden
-  const [adding, setAdding] = useState(false); const [pending, setPending] = useState(false); const [error, setError] = useState<string|null>(null);
-  async function call(action, evidenceId) { setPending(true); setError(null);
+  const options = refs.evidence.filter((e) => !linkedIds.has(e.id)); // US 7: already linked hidden
+  const [adding, setAdding] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function call(action, evidenceId) {
+    setPending(true);
+    setError(null);
     const res = await action({ projectId: refs.project.id, evidenceId, entityType: item.type, entityId: item.id });
-    setPending(false); if (!res.ok) setError(res.error); else setAdding(false); }
+    setPending(false);
+    if (!res.ok) setError(res.error);
+    else setAdding(false);
+  }
   // Not a <form>: rendered inside the item ActionForm (see dependency-editor.tsx).
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-hairline bg-surface-1 p-3">
-      <div className="flex items-center justify-between"><span className="text-caption font-medium text-ink-subtle">Linked evidence</span>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(true)} disabled={!options.length}><Plus className="size-3.5" /> Add evidence</Button></div>
+      <div className="flex items-center justify-between">
+        <span className="text-caption font-medium text-ink-subtle">Linked evidence</span>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(true)} disabled={!options.length}>
+          <Plus className="size-3.5" /> Add evidence
+        </Button>
+      </div>
       {links.length === 0 && !adding && <p className="px-1 text-caption text-ink-tertiary">No linked evidence</p>}
-      <div className="flex flex-wrap gap-1.5">{links.map((l) => <EvidenceChip key={l.evidenceId} title={l.evidenceTitle} kind={l.evidenceKind} href={evidenceHref(refs.project.id, l.evidenceId)} disabled={pending} onRemove={() => call(unlinkEvidenceAction, l.evidenceId)} />)}</div>
-      {adding && <CommandPicker placeholder="Search evidence…" items={options.map((e) => ({ id: e.id, label: e.title, hint: labelFor(e.kind), keywords: [e.kind] }))} onPick={(id) => call(linkEvidenceAction, id)} onCancel={() => setAdding(false)} />}
+      <div className="flex flex-wrap gap-1.5">
+        {links.map((l) => (
+          <EvidenceChip
+            key={l.evidenceId}
+            title={l.evidenceTitle}
+            kind={l.evidenceKind}
+            href={evidenceHref(refs.project.id, l.evidenceId)}
+            disabled={pending}
+            onRemove={() => call(unlinkEvidenceAction, l.evidenceId)}
+          />
+        ))}
+      </div>
+      {adding && (
+        <CommandPicker
+          placeholder="Search evidence…"
+          items={options.map((e) => ({ id: e.id, label: e.title, hint: labelFor(e.kind), keywords: [e.kind] }))}
+          onPick={(id) => call(linkEvidenceAction, id)}
+          onCancel={() => setAdding(false)}
+        />
+      )}
       {error && <p className="text-caption text-tag-red">{error}</p>}
-    </div>);
+    </div>
+  );
 }
 ```
 
@@ -272,9 +343,10 @@ export function LinkedEvidence({ refs, item }: { refs: ProjectRefs; item: { type
 
 ### Commit 4 — `feat(evidence): Linked-to chips and Link-item picker on the Evidence page`
 
-**a. `src/features/evidence/linked-items.tsx`** (new, `"use client"`) — `LinkedItems({ refs, evidenceId, targets }: { refs: ProjectRefs; evidenceId: string; targets: LinkTarget[] })`. Same skeleton as `LinkedEvidence`: `links = refs.evidenceLinks.filter(l => l.evidenceId === evidenceId)`; options = `targets` minus linked pairs; picker items `{ id: `${t.entityType}:${t.entityId}`, label: t.label, hint: keyText, keywords: [keyText, t.entityType] }` where `keyText = t.entityType === "task" ? `${refs.project.key}-${t.number}` : t.entityType === "risk" ? `R-${t.number}` : ""` (US 12: "ACME-12" and "UAT begins" both match). Header "Linked to", button "Link item", placeholder "Search tasks, risks, milestones…", empty text "Not linked to any item". Chips: `LinkedItemChip` with `href={itemHref(...)}` and `onRemove → unlinkEvidenceAction`.
+**a. `src/features/evidence/linked-items.tsx`** (new, `"use client"`) — `LinkedItems({ refs, evidenceId, targets }: { refs: ProjectRefs; evidenceId: string; targets: LinkTarget[] })`. Same skeleton as `LinkedEvidence`: `links = refs.evidenceLinks.filter(l => l.evidenceId === evidenceId)`; options = `targets` minus linked pairs; picker items `{ id: `${t.entityType}:${t.entityId}`, label: t.label, hint: keyText, keywords: [keyText, t.entityType] }` where `keyText = t.entityType === "task" ? `${refs.project.key}-${t.number}`: t.entityType === "risk" ?`R-${t.number}` : ""` (US 12: "ACME-12" and "UAT begins" both match). Header "Linked to", button "Link item", placeholder "Search tasks, risks, milestones…", empty text "Not linked to any item". Chips: `LinkedItemChip` with `href={itemHref(...)}` and `onRemove → unlinkEvidenceAction`.
 
 **b. `src/features/evidence/evidence-view.tsx`**:
+
 - signature gains `targets: LinkTarget[]`;
 - list `<li key={e.id} id={`evidence-${e.id}`}>` (anchor target) and in the row meta line add `<LinkedEvidenceCount count={refs.evidenceLinks.filter((l) => l.evidenceId === e.id).length} />` (US 13 coverage-at-a-glance in the narrow list);
 - detail pane: directly under the header, before the body, insert `<div className="border-b border-hairline px-6 py-3"><LinkedItems refs={refs} evidenceId={selected.id} targets={targets} /></div>`;
@@ -316,7 +388,7 @@ test("links evidence to a task from both sides and unlinks it", async ({ page })
   await shot(page, "task-dialog-linked");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
-  await expect(page.getByLabel("1 linked evidence")).toBeVisible();            // row count
+  await expect(page.getByLabel("1 linked evidence")).toBeVisible(); // row count
   await shot(page, "list-row-count");
 
   await page.getByRole("link", { name: "Evidence", exact: true }).click();
@@ -353,7 +425,7 @@ Chip `<Link>` accessible name = `keyText + " " + label` because both are text ch
 
 `docs/flows.md` — add after the `evidence` row:
 
-`| \`evidence-links\`  | Link Evidence to a Task from its dialog, see the chip and the row count, see the Task chip on the Evidence page, link a Risk by key, unlink from the Evidence side, chip opens the item | [evidence-links](./evidence-links/screenshots) |`
+`| \`evidence-links\` | Link Evidence to a Task from its dialog, see the chip and the row count, see the Task chip on the Evidence page, link a Risk by key, unlink from the Evidence side, chip opens the item | [evidence-links](./evidence-links/screenshots) |`
 
 ## 4. Screenshot evidence plan — `docs/artifacts/6-evidence-links/screenshots/`
 
