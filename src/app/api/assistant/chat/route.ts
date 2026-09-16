@@ -67,14 +67,23 @@ export async function POST(req: Request) {
       experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
     });
+    // Reflection runs once the response is out and the thread is saved; its failures never reach the User (ADR 0007).
+    const { promise: saved, resolve: markSaved } = Promise.withResolvers<boolean>();
+    after(async () => {
+      if (await saved) await reflect({ ...ctx, via: "reflection" }, conversation.id).catch((e) => console.error(e));
+    });
     return createUIMessageStreamResponse({
       stream: toUIMessageStream({
         stream: result.stream,
         originalMessages: messages,
         onEnd: async ({ messages: all }) => {
-          await assistantService.saveMessages(ctx, conversation.id, all);
-          // Reflection runs once the response is out; its failures never reach the User (ADR 0007).
-          after(() => reflect({ ...ctx, via: "reflection" }, conversation.id).catch((e) => console.error(e)));
+          await assistantService.saveMessages(ctx, conversation.id, all).then(
+            () => markSaved(true),
+            (e) => {
+              markSaved(false);
+              throw e;
+            },
+          );
         },
       }),
     });

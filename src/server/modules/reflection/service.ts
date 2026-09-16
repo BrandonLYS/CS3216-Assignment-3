@@ -129,7 +129,8 @@ export async function reflect(
   const trace = { conversationId, throughMessageId: rows.at(-1)!.id };
   const apply = async (docProjectId: string | null, body: string | null, keep: string[]): Promise<DocOutcome> => {
     if (body === null) return "unchanged";
-    const dropped = keep.filter((l) => !body.includes(l));
+    const present = new Set(lines(body));
+    const dropped = keep.filter((l) => !present.has(l));
     if (dropped.length) {
       console.warn("Reflection dropped User-written lines; output rejected", { conversationId, dropped });
       return "rejected";
