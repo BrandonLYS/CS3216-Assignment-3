@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { ctxForCurrentUser } from "@/server/core/action";
 import { apiTokensService } from "@/server/modules/api-tokens/service";
 import { memoryService } from "@/server/modules/memory/service";
@@ -10,12 +9,8 @@ export const metadata = { title: "Settings" };
 
 export default async function UserSettingsPage() {
   const ctx = await ctxForCurrentUser();
-  const [versions, tokens, h] = await Promise.all([
-    memoryService.versions(ctx, null),
-    apiTokensService.list(ctx),
-    headers(),
-  ]);
-  const endpoint = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}/api/mcp`;
+  const [versions, tokens] = await Promise.all([memoryService.versions(ctx, null), apiTokensService.list(ctx)]);
+  const endpoint = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/api/mcp`;
   return (
     <>
       <PageHeader title="Settings" />
