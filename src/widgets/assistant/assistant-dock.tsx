@@ -77,11 +77,11 @@ export function AssistantDock({
     transport: new DefaultChatTransport({ api: "/api/assistant/chat", body: { projectId } }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onFinish: ({ message }) => {
-      const created = message.parts.find(
-        (p): p is typeof p & { output: { id: string } } =>
-          isToolUIPart(p) && getToolName(p) === "create_project" && p.state === "output-available",
-      );
-      if (created) router.push(`/projects/${created.output.id}`);
+      const createdId = message.parts
+        .filter((p) => isToolUIPart(p) && getToolName(p) === "create_project" && p.state === "output-available")
+        .map((p) => (p as { output?: { id?: unknown } }).output?.id)
+        .findLast((id) => typeof id === "string");
+      if (createdId) router.push(`/projects/${createdId}`);
       else router.refresh();
     },
   });
