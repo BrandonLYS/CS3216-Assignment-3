@@ -24,12 +24,24 @@ import {
   enumOptions,
 } from "@/shared/ui";
 import { useFieldError } from "@/shared/ui/action-form";
-import { EVIDENCE_KIND_COLOR } from "@/entities/evidence/evidence-chip";
+import type { LinkTarget } from "@/server/modules/evidence/repository";
+import { EVIDENCE_KIND_COLOR, LinkedEvidenceCount } from "@/entities/evidence/evidence-chip";
+import { LinkedItems } from "@/features/evidence/linked-items";
 
 const fmtBytes = (n: number) =>
   n > 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`;
 
-export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: EvidenceRow[] }) {
+export function EvidenceView({
+  refs,
+  items,
+  targets,
+}: {
+  refs: ProjectRefs;
+  items: EvidenceRow[];
+  /** Every linkable Task/Risk/Milestone in the project, for the "Link item" picker. */
+  targets: LinkTarget[];
+}) {
+  const linkCount = (evidenceId: string) => refs.evidenceLinks.filter((l) => l.evidenceId === evidenceId).length;
   const router = useRouter();
   const params = useSearchParams();
   const base = `/projects/${refs.project.id}/evidence`;
@@ -51,7 +63,7 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
         </div>
         <ul className="flex-1 overflow-y-auto border-t border-hairline">
           {items.map((e) => (
-            <li key={e.id}>
+            <li key={e.id} id={`evidence-${e.id}`}>
               <button
                 onClick={() => router.replace(`${base}?item=${e.id}`, { scroll: false })}
                 className={cn(
@@ -67,7 +79,10 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
                   <span>{labelFor(e.kind)}</span>
                   <span>·</span>
                   <span>{e.sourceDate ? fmtDate(e.sourceDate, "d MMM yyyy") : relative(e.createdAt)}</span>
-                  {e.fileName && <FileText className="ml-auto size-3" />}
+                  <span className="ml-auto flex items-center gap-2">
+                    <LinkedEvidenceCount count={linkCount(e.id)} />
+                    {e.fileName && <FileText className="size-3" />}
+                  </span>
                 </div>
               </button>
             </li>
@@ -119,6 +134,9 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
                   <Trash2 className="size-3.5 text-tag-red" />
                 </Button>
               </div>
+            </div>
+            <div className="border-b border-hairline px-6 py-3">
+              <LinkedItems key={selected.id} refs={refs} evidenceId={selected.id} targets={targets} />
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               {selected.body ? (
