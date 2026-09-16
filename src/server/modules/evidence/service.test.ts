@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError, ValidationError } from "@/server/core/errors";
@@ -183,5 +185,42 @@ describe("evidenceService links", () => {
       ForbiddenError,
     );
     await expect(evidenceService.listForEvidence(stranger, ev.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe("evidenceService text extraction", () => {
+  const upload = (name: string, type: string, bytes: Buffer) =>
+    evidenceService.create(ctx, { projectId, title: name, kind: "minutes" }, { name, type, size: bytes.length, bytes });
+
+  it("stores the text of an uploaded Markdown file in extractedText", async () => {
+    const bytes = await readFile(path.join(__dirname, "../../../test/fixtures/minutes.md"));
+    const ev = await upload("minutes.md", "text/markdown", bytes);
+    expect(ev.extractedText).toContain("UAT begins in week 6.");
+    expect(ev.extractedText).toBe(bytes.toString("utf8").trim());
+  });
+
+  it("leaves extractedText null for a file type without an extractor", async () => {
+    const ev = await upload(
+      "sheet.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      Buffer.from("PK\u0003\u0004not really a sheet"),
+    );
+    expect(ev.extractedText).toBeNull();
+  });
+
+  it("does not fail the upload when extraction fails", async () => {
+    const ev = await upload("broken.pdf", "application/pdf", Buffer.from("%PDF-1.7 garbage"));
+    expect(ev.extractedText).toBeNull();
+    expect(ev.storageKey).toBeTruthy();
+  });
+
+  it("caps extractedText at EVIDENCE_EXTRACT_MAX_CHARS", async () => {
+    process.env.EVIDENCE_EXTRACT_MAX_CHARS = "10";
+    try {
+      const ev = await upload("long.txt", "text/plain", Buffer.from("abcdefghijklmnopqrstuvwxyz"));
+      expect(ev.extractedText).toBe("abcdefghij");
+    } finally {
+      delete process.env.EVIDENCE_EXTRACT_MAX_CHARS;
+    }
   });
 });
