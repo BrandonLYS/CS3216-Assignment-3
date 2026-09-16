@@ -6,6 +6,7 @@ import {
   ENTITY_TYPES,
   EVIDENCE_KINDS,
   HEALTH_LEVELS,
+  MEMORY_AUTHORS,
   MESSAGE_ROLES,
   PRIORITIES,
   PROJECT_STATUSES,
@@ -28,3 +29,4 @@ export const entityTypeEnum = pgEnum("entity_type", ENTITY_TYPES);
 export const activityActionEnum = pgEnum("activity_action", ACTIVITY_ACTIONS);
 export const viaActorEnum = pgEnum("via_actor", VIA_ACTORS);
 export const messageRoleEnum = pgEnum("message_role", MESSAGE_ROLES);
+export const memoryAuthorEnum = pgEnum("memory_author", MEMORY_AUTHORS);
