@@ -103,7 +103,16 @@ export default async function DashboardPage() {
               <section>
                 <SectionTitle className="mb-2">Projects</SectionTitle>
                 <Panel className="divide-y divide-hairline">
-                  {o.projects.map((p) => {
+                  {o.activeProjects.length === 0 && (
+                    <p className="px-4 py-6 text-center text-caption text-ink-subtle">
+                      No active projects. Archived and completed projects are in{" "}
+                      <Link href="/projects" className="text-ink underline-offset-2 hover:underline">
+                        Projects
+                      </Link>
+                      .
+                    </p>
+                  )}
+                  {o.activeProjects.map((p) => {
                     const attention = o.attention.byProject.get(p.id);
                     return (
                       <Link

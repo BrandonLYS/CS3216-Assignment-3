@@ -21,16 +21,33 @@ const UPCOMING_MILESTONE_DAYS = 14;
 const iso = (d: Date) => formatISO(d, { representation: "date" });
 
 /**
+ * Rows a caller has already loaded for the Project, so the Overview does not query the same
+ * collections twice. Anything omitted is fetched here.
+ */
+export interface ProjectAttentionRows {
+  tasks: Awaited<ReturnType<typeof tasksRepo.listByProject>>;
+  milestones: Awaited<ReturnType<typeof milestonesRepo.listByProject>>;
+  risks: Awaited<ReturnType<typeof risksRepo.listByProject>>;
+  dependencies?: Awaited<ReturnType<typeof dependenciesRepo.listByProject>>;
+}
+
+/**
  * One Project's attention items grouped by rule (issue #7). `opts.today` exists only so
  * tests are deterministic; production callers let it default to the server's calendar date.
+ * Pass `opts.rows` when the page already holds the collections (Project Overview).
  */
-export async function projectAttention(ctx: Ctx, projectId: string, opts: { today?: string } = {}) {
+export async function projectAttention(
+  ctx: Ctx,
+  projectId: string,
+  opts: { today?: string; rows?: ProjectAttentionRows } = {},
+) {
   const project = await assertOwnsProject(ctx.db, ctx.userId, projectId);
+  const { rows } = opts;
   const [tasks, milestones, risks, dependencies] = await Promise.all([
-    tasksRepo.listByProject(ctx.db, projectId),
-    milestonesRepo.listByProject(ctx.db, projectId),
-    risksRepo.listByProject(ctx.db, projectId),
-    dependenciesRepo.listByProject(ctx.db, projectId),
+    rows?.tasks ?? tasksRepo.listByProject(ctx.db, projectId),
+    rows?.milestones ?? milestonesRepo.listByProject(ctx.db, projectId),
+    rows?.risks ?? risksRepo.listByProject(ctx.db, projectId),
+    rows?.dependencies ?? dependenciesRepo.listByProject(ctx.db, projectId),
   ]);
   return evaluateAttention({ today: opts.today ?? today(), project, tasks, milestones, risks, dependencies });
 }
@@ -100,7 +117,10 @@ export async function workspaceOverview(ctx: Ctx, opts: { today?: string } = {})
     .sort((a, b) => a.milestone.dueDate.localeCompare(b.milestone.dueDate));
 
   return {
+    /** Every Project the User owns — for the empty state and `projectById` lookups. */
     projects,
+    /** The Dashboard roster (user story 18): archived/completed Projects are not shown. */
+    activeProjects: active,
     projectById: (id: string) => byId.get(id),
     stats,
     attention: { items: all.sort(compareAttention).slice(0, ATTENTION_DASHBOARD_LIMIT), byProject },

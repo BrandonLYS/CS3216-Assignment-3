@@ -138,6 +138,17 @@ describe("projectAttention", () => {
     }
   });
 
+  it("pre-fetched rows yield the same result as fetching", async () => {
+    const [tasks, milestones, risks] = await Promise.all([
+      tasksService.list(ctx, projectId),
+      milestonesService.list(ctx, projectId),
+      risksService.list(ctx, projectId),
+    ]);
+    const fetched = await projectAttention(ctx, projectId, { today: TODAY });
+    const reused = await projectAttention(ctx, projectId, { today: TODAY, rows: { tasks, milestones, risks } });
+    expect(reused).toEqual(fetched);
+  });
+
   it("rejects a foreign User", async () => {
     const stranger = await makeCtx();
     await expect(projectAttention(stranger, projectId, { today: TODAY })).rejects.toBeInstanceOf(ForbiddenError);
@@ -182,8 +193,11 @@ describe("workspaceOverview", () => {
       total: 12,
     });
     expect(o.stats).toEqual({ activeProjects: 1, overdue: 12, dueSoon: 0, blocked: 0, topRisks: 0 });
-    // The archived Project is still listed (roster), just not evaluated.
+    // The Dashboard roster hides the archived Project (user story 18) …
+    expect(o.activeProjects.map((p) => p.id)).toEqual([active.id]);
+    // … but it stays resolvable so attention/activity rows can still show its key.
     expect(o.projects.map((p) => p.id).sort()).toEqual([active.id, archived.id].sort());
+    expect(o.projectById(archived.id)?.key).toBe("OLD");
   });
 
   it("items are sorted by severity then urgency across projects", async () => {

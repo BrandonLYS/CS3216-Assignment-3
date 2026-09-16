@@ -21,15 +21,16 @@ export const metadata = { title: "Overview" };
 export default async function ProjectOverviewPage({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
   const ctx = await ctxForCurrentUser();
-  const [project, tasks, milestones, risks, activity, counts, attention] = await Promise.all([
+  const [project, tasks, milestones, risks, activity, counts] = await Promise.all([
     projectsService.get(ctx, projectId),
     tasksService.list(ctx, projectId),
     milestonesService.list(ctx, projectId),
     risksService.list(ctx, projectId),
     activityService.recentForProject(ctx, projectId, 20),
     tasksService.countsByStatusCategory(ctx, projectId),
-    projectAttention(ctx, projectId),
   ]);
+  // Reuse the collections above; only the dependency edges are fetched inside.
+  const attention = await projectAttention(ctx, projectId, { rows: { tasks, milestones, risks } });
   const base = `/projects/${projectId}`;
   const total = tasks.length;
   const done = counts.done ?? 0;
