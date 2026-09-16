@@ -12,6 +12,7 @@ import {
   Loader2,
   Plus,
   Settings,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -50,6 +51,7 @@ interface CommandPaletteProps {
   onClose: () => void;
   projects: ProjectRow[];
   onNewProject: () => void;
+  onToggleAssistant: () => void;
 }
 
 /**
@@ -63,7 +65,7 @@ export function CommandPalette({ open, ...props }: CommandPaletteProps) {
   return <CommandPaletteBody {...props} />;
 }
 
-function CommandPaletteBody({ onClose, projects, onNewProject }: Omit<CommandPaletteProps, "open">) {
+function CommandPaletteBody({ onClose, projects, onNewProject, onToggleAssistant }: Omit<CommandPaletteProps, "open">) {
   const router = useRouter();
   const pathname = usePathname();
   const currentProject = projects.find((p) => pathname.startsWith(`/projects/${p.id}`));
@@ -115,7 +117,10 @@ function CommandPaletteBody({ onClose, projects, onNewProject }: Omit<CommandPal
   const sectionHits = currentProject ? PROJECT_SECTIONS.filter((s) => hit(s.label)) : [];
   const goToHits = GO_TO.filter((g) => hit(g.label));
   const projectHits = projects.filter((p) => hit(p.name, p.key));
-  const actionHits = hit("New project") ? ["new-project"] : [];
+  const actionHits = [
+    ...(hit("New project") ? ["new-project"] : []),
+    ...(currentProject && hit("Toggle Assistant", "Assistant") ? ["assistant"] : []),
+  ];
   const staticCount = sectionHits.length + goToHits.length + projectHits.length + actionHits.length;
 
   return (
@@ -180,16 +185,30 @@ function CommandPaletteBody({ onClose, projects, onNewProject }: Omit<CommandPal
 
           {actionHits.length > 0 && (
             <Command.Group heading="Actions">
-              <Item
-                value="action:new-project"
-                icon={Plus}
-                onSelect={() => {
-                  onClose();
-                  onNewProject();
-                }}
-              >
-                New project
-              </Item>
+              {actionHits.includes("new-project") && (
+                <Item
+                  value="action:new-project"
+                  icon={Plus}
+                  onSelect={() => {
+                    onClose();
+                    onNewProject();
+                  }}
+                >
+                  New project
+                </Item>
+              )}
+              {actionHits.includes("assistant") && (
+                <Item
+                  value="action:assistant"
+                  icon={Sparkles}
+                  onSelect={() => {
+                    onClose();
+                    onToggleAssistant();
+                  }}
+                >
+                  Toggle Assistant
+                </Item>
+              )}
             </Command.Group>
           )}
 

@@ -9,6 +9,21 @@ import { Sidebar } from "./sidebar";
 
 export { useShell } from "@/shared/lib/shell-context";
 
+/** Dock open state lives in localStorage so a refresh mid-Conversation keeps the dock open. */
+const ASSISTANT_OPEN_KEY = "vantage.assistant-open";
+const listeners = new Set<() => void>();
+const assistantOpenStore = {
+  get: () => localStorage.getItem(ASSISTANT_OPEN_KEY) === "1",
+  set: (open: boolean) => {
+    localStorage.setItem(ASSISTANT_OPEN_KEY, open ? "1" : "0");
+    listeners.forEach((l) => l());
+  },
+  subscribe: (l: () => void) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  },
+};
+
 export function AppShell({
   projects,
   user,
@@ -20,6 +35,8 @@ export function AppShell({
 }) {
   const [palette, setPalette] = React.useState(false);
   const [newProject, setNewProject] = React.useState(false);
+  const assistantOpen = React.useSyncExternalStore(assistantOpenStore.subscribe, assistantOpenStore.get, () => false);
+  const toggleAssistant = React.useCallback(() => assistantOpenStore.set(!assistantOpenStore.get()), []);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -33,8 +50,13 @@ export function AppShell({
   }, []);
 
   const ctx = React.useMemo<ShellCtx>(
-    () => ({ openPalette: () => setPalette(true), openNewProject: () => setNewProject(true) }),
-    [],
+    () => ({
+      openPalette: () => setPalette(true),
+      openNewProject: () => setNewProject(true),
+      assistantOpen,
+      toggleAssistant,
+    }),
+    [assistantOpen, toggleAssistant],
   );
 
   return (
@@ -48,6 +70,7 @@ export function AppShell({
         onClose={() => setPalette(false)}
         projects={projects}
         onNewProject={ctx.openNewProject}
+        onToggleAssistant={ctx.toggleAssistant}
       />
       <CreateProjectDialog open={newProject} onClose={() => setNewProject(false)} />
     </ShellContext.Provider>
