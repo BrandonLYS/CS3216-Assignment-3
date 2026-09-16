@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ne, or, sql, type SQL } from "drizzle-orm";
 import type { Ctx } from "@/server/core/context";
 import type { DbOrTx } from "@/server/db/client";
 import type { StatusCategory } from "@/shared/domain";
@@ -30,7 +30,7 @@ export function parseTaskQuery(q: string, currentProjectId?: string): ParsedTask
   return { text };
 }
 
-/** Escape LIKE metacharacters so user input is matched literally (Postgres default escape is `\`). */
+/** Escape LIKE metacharacters so user input is matched literally; pair with an explicit `ESCAPE '\'` clause. */
 export const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export interface TaskSearchResult {
@@ -59,7 +59,9 @@ export async function searchTasksQuery(
   if (parsed.number !== undefined && input.currentProjectId)
     keyHits.push(and(eq(tasks.projectId, input.currentProjectId), eq(tasks.number, parsed.number))!);
   const keyHit: SQL = keyHits.length ? or(...keyHits)! : sql`false`;
-  const titleHit = ilike(tasks.title, `%${escapeLike(parsed.text)}%`);
+  // Explicit ESCAPE rather than relying on Postgres' non-standard default escape character.
+  const pattern = `%${escapeLike(parsed.text)}%`;
+  const titleHit: SQL = sql`${tasks.title} ilike ${pattern} escape '\\'`;
   const inCurrent: SQL = input.currentProjectId ? eq(tasks.projectId, input.currentProjectId) : sql`false`;
   const rank = sql<number>`case when ${keyHit} then 0 when ${inCurrent} then 1 else 2 end`;
 

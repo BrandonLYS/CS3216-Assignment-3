@@ -140,6 +140,14 @@ describe("searchTasks", () => {
     await add(ctx, beta.id, "Reach 100% coverage");
     expect(keys(await searchTasks(ctx, { q: "100%", limit: 10 }))).toHaveLength(1);
   });
+
+  it("treats an underscore as a literal character, not a single-char wildcard", async () => {
+    await add(ctx, beta.id, "Run load_test harness");
+    await add(ctx, beta.id, "Run load-test harness");
+    const rows = await searchTasks(ctx, { q: "load_test", limit: 10 });
+    expect(rows.map((r) => r.title)).toEqual(["Run load_test harness"]);
+    expect(await searchTasks(ctx, { q: "load\\test", limit: 10 })).toEqual([]);
+  });
 });
 
 describe("searchTasksSchema", () => {
