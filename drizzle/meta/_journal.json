@@ -29,6 +29,13 @@
       "when": 1789594860103,
       "tag": "0003_activity_via",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789596020173,
+      "tag": "0004_conversations",
+      "breakpoints": true
     }
   ]
 }

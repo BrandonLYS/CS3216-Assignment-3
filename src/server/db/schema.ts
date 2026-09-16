@@ -11,3 +11,4 @@ export * from "@/server/modules/risks/schema";
 export * from "@/server/modules/comments/schema";
 export * from "@/server/modules/evidence/schema";
 export * from "@/server/modules/activity/schema";
+export * from "@/server/modules/assistant/schema";

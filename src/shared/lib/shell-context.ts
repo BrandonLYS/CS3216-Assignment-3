@@ -6,7 +6,14 @@ import * as React from "react";
 export interface ShellCtx {
   openPalette: () => void;
   openNewProject: () => void;
+  assistantOpen: boolean;
+  toggleAssistant: () => void;
 }
 
-export const ShellContext = React.createContext<ShellCtx>({ openPalette: () => {}, openNewProject: () => {} });
+export const ShellContext = React.createContext<ShellCtx>({
+  openPalette: () => {},
+  openNewProject: () => {},
+  assistantOpen: false,
+  toggleAssistant: () => {},
+});
 export const useShell = () => React.useContext(ShellContext);
