@@ -4,6 +4,7 @@ import {
   stepCountIs,
   streamText,
   toUIMessageStream,
+  safeValidateUIMessages,
   type UIMessage,
 } from "ai";
 import { z } from "zod";
@@ -18,18 +19,28 @@ import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/
 
 export const maxDuration = 60;
 
-const bodySchema = z.object({ projectId: z.string(), messages: z.array(z.custom<UIMessage>()) });
+type ValidateTools = Parameters<typeof safeValidateUIMessages>[0]["tools"];
+
+// `messages` gets its real check from safeValidateUIMessages against the bound tools below.
+const bodySchema = z.object({ projectId: z.string(), messages: z.array(z.unknown()) });
 
 export async function POST(req: Request) {
   const model = getModel();
   if (!model) return new Response(ASSISTANT_NOT_CONFIGURED, { status: 503 });
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return new Response("Bad request", { status: 400 });
-  const { projectId, messages } = parsed.data;
+  const { projectId } = parsed.data;
 
   const ctx = { ...(await ctxForCurrentUser()), via: "assistant" as const };
   const { maxSteps, dailyTurnCap } = assistantConfig();
   try {
+    const tools = toAiTools(ctx, ASSISTANT_TOOLS, { projectId });
+    const valid = await safeValidateUIMessages<UIMessage>({
+      messages: parsed.data.messages,
+      tools: tools as ValidateTools,
+    });
+    if (!valid.success) return new Response("Bad request", { status: 400 });
+    const messages = valid.data;
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
     const { conversation } = await assistantService.conversation(ctx, projectId);
@@ -39,7 +50,7 @@ export async function POST(req: Request) {
       model,
       system: projectSystemPrompt(summary),
       messages: await convertToModelMessages(messages),
-      tools: toAiTools(ctx, ASSISTANT_TOOLS, { projectId }),
+      tools,
       stopWhen: stepCountIs(maxSteps),
     });
     return createUIMessageStreamResponse({

@@ -1,4 +1,4 @@
-import { tool, type Tool } from "ai";
+import { tool, type ToolSet } from "ai";
 import type { Ctx } from "@/server/core/context";
 import { DomainError } from "@/server/core/errors";
 import type { ToolDef } from "./tools";
@@ -8,7 +8,7 @@ import type { ToolDef } from "./tools";
  * is bound server-side and removed from the model-facing schema, so the model cannot point a
  * Project dock at another Project. Domain errors come back as `{ error }` so the model can recover.
  */
-export function toAiTools(ctx: Ctx, defs: ToolDef[], scope?: { projectId: string }): Record<string, Tool> {
+export function toAiTools(ctx: Ctx, defs: ToolDef[], scope?: { projectId: string }): ToolSet {
   return Object.fromEntries(
     defs.map((def) => {
       const scoped = scope && "projectId" in def.input.shape;
