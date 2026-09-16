@@ -1,10 +1,16 @@
-import { eq, or } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { dependencies, type DependencyRow, type NewDependencyRow } from "./schema";
 
 export const dependenciesRepo = {
   listByProject: (db: DbOrTx, projectId: string) =>
     db.select().from(dependencies).where(eq(dependencies.projectId, projectId)),
+
+  /** Every edge across many projects (workspace overview). */
+  listByProjects: (db: DbOrTx, projectIds: string[]) =>
+    projectIds.length
+      ? db.select().from(dependencies).where(inArray(dependencies.projectId, projectIds))
+      : Promise.resolve([]),
 
   findById: async (db: DbOrTx, id: string): Promise<DependencyRow | undefined> => {
     const [row] = await db.select().from(dependencies).where(eq(dependencies.id, id));

@@ -1,13 +1,34 @@
 import { addDays, formatISO } from "date-fns";
 import type { Ctx } from "@/server/core/context";
 import { activityRepo } from "@/server/modules/activity/service";
+import { dependenciesRepo } from "@/server/modules/dependencies/repository";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { projectsRepo } from "@/server/modules/projects/repository";
+import { assertOwnsProject } from "@/server/modules/projects/service";
 import { risksRepo } from "@/server/modules/risks/repository";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { TERMINAL_CATEGORIES, riskSeverity } from "@/shared/domain";
+import { today } from "@/shared/lib/dates";
+import { evaluateAttention } from "./attention";
+
+export type { AttentionGroup, AttentionItem, AttentionResult } from "./attention";
 
 const iso = (d: Date) => formatISO(d, { representation: "date" });
+
+/**
+ * One Project's attention items grouped by rule (issue #7). `opts.today` exists only so
+ * tests are deterministic; production callers let it default to the server's calendar date.
+ */
+export async function projectAttention(ctx: Ctx, projectId: string, opts: { today?: string } = {}) {
+  const project = await assertOwnsProject(ctx.db, ctx.userId, projectId);
+  const [tasks, milestones, risks, dependencies] = await Promise.all([
+    tasksRepo.listByProject(ctx.db, projectId),
+    milestonesRepo.listByProject(ctx.db, projectId),
+    risksRepo.listByProject(ctx.db, projectId),
+    dependenciesRepo.listByProject(ctx.db, projectId),
+  ]);
+  return evaluateAttention({ today: opts.today ?? today(), project, tasks, milestones, risks, dependencies });
+}
 
 /**
  * Cross-project read model for the Dashboard. Deliberately plain queries and
