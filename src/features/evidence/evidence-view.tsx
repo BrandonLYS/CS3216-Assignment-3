@@ -149,7 +149,7 @@ export function EvidenceView({
                   {selected.body}
                 </pre>
               ) : selected.extractedText ? (
-                <details className="max-w-3xl">
+                <details key={selected.id} className="max-w-3xl">
                   <summary className="cursor-pointer text-caption text-ink-subtle select-none">Extracted text</summary>
                   <pre className="mt-3 font-mono text-mono leading-relaxed whitespace-pre-wrap text-ink-muted">
                     {selected.extractedText}

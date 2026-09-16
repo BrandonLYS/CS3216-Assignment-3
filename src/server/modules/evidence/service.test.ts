@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError, ValidationError } from "@/server/core/errors";
 import { eventBus, type DomainEvent } from "@/server/events/bus";
@@ -215,12 +215,9 @@ describe("evidenceService text extraction", () => {
   });
 
   it("caps extractedText at EVIDENCE_EXTRACT_MAX_CHARS", async () => {
-    process.env.EVIDENCE_EXTRACT_MAX_CHARS = "10";
-    try {
-      const ev = await upload("long.txt", "text/plain", Buffer.from("abcdefghijklmnopqrstuvwxyz"));
-      expect(ev.extractedText).toBe("abcdefghij");
-    } finally {
-      delete process.env.EVIDENCE_EXTRACT_MAX_CHARS;
-    }
+    vi.stubEnv("EVIDENCE_EXTRACT_MAX_CHARS", "10");
+    const ev = await upload("long.txt", "text/plain", Buffer.from("abcdefghijklmnopqrstuvwxyz"));
+    expect(ev.extractedText).toBe("abcdefghij");
+    vi.unstubAllEnvs();
   });
 });
