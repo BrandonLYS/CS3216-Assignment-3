@@ -32,9 +32,17 @@ export class Recorder {
   /** Queue a domain event that has no Activity Event of its own (published after commit, not persisted). */
   signal(
     name: DomainEventName,
-    e: Pick<DomainEvent, "projectId" | "entityType" | "entityId" | "entityLabel" | "changes">,
+    e: Pick<DomainEvent, "projectId" | "entityType" | "entityId" | "entityLabel"> &
+      Partial<Pick<DomainEvent, "action" | "changes">>,
   ) {
-    this.signals.push({ ...e, name, action: "updated", actorId: this.actorId, occurredAt: new Date() });
+    this.signals.push({
+      ...e,
+      name,
+      action: e.action ?? "updated",
+      changes: e.changes ?? [],
+      actorId: this.actorId,
+      occurredAt: new Date(),
+    });
   }
 
   private push(
