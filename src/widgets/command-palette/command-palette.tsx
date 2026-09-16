@@ -37,6 +37,7 @@ const GO_TO = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 /** Task search kicks in at this many trimmed characters and waits this long after the last keystroke. */

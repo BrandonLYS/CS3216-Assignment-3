@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, FolderKanban, LayoutDashboard, LogOut, Plus, Search } from "lucide-react";
+import { CalendarDays, FolderKanban, LayoutDashboard, LogOut, Plus, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ProjectRow } from "@/server/modules/projects/schema";
@@ -13,6 +13,7 @@ const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar({
