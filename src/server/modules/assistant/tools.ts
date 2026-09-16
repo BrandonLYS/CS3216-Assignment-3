@@ -13,7 +13,7 @@ import { milestonesService } from "@/server/modules/milestones/service";
 import { createMilestoneSchema, updateMilestoneSchema } from "@/server/modules/milestones/validation";
 import { loadProjectRefs } from "@/server/modules/projects/refs";
 import { projectsService } from "@/server/modules/projects/service";
-import { updateProjectSchema } from "@/server/modules/projects/validation";
+import { createProjectSchema, updateProjectSchema } from "@/server/modules/projects/validation";
 import { peopleService } from "@/server/modules/people/service";
 import { createPersonSchema } from "@/server/modules/people/validation";
 import { risksService } from "@/server/modules/risks/service";
@@ -56,7 +56,8 @@ const changeList = (patch: Record<string, unknown>) =>
     .map(([k, v]) => `${k} → ${v === null || v === "" ? "cleared" : q(v)}`)
     .join(", ");
 
-export const ASSISTANT_TOOLS: ToolDef[] = [
+/** Tools that act inside one Project; the Project dock offers these. */
+export const PROJECT_TOOLS: ToolDef[] = [
   defineTool({
     name: "get_project_summary",
     description:
@@ -253,6 +254,39 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
     handler: (ctx, input) => evidenceService.link(ctx, input),
   }),
 ];
+
+/** Tools that need no Project; the dashboard dock offers only these. */
+export const WORKSPACE_TOOLS: ToolDef[] = [
+  defineTool({
+    name: "list_projects",
+    description: "The User's Projects with id, key, name, status and Task counts by Status category.",
+    input: z.object({}),
+    handler: async (ctx) => {
+      const [projects, counts] = await Promise.all([
+        projectsService.list(ctx),
+        tasksService.countsByStatusCategoryForOwnedProjects(ctx),
+      ]);
+      return projects.map((p) => ({
+        id: p.id,
+        key: p.key,
+        name: p.name,
+        status: p.status,
+        health: p.health,
+        taskCounts: counts[p.id] ?? {},
+      }));
+    },
+  }),
+  defineTool({
+    name: "create_project",
+    description:
+      "Create a Project. key is 2 to 6 letters or digits starting with a letter (e.g. WEB); dates are YYYY-MM-DD.",
+    input: createProjectSchema,
+    handler: (ctx, input) => projectsService.create(ctx, input),
+  }),
+];
+
+/** Every tool, for callers with no page scope (MCP). */
+export const ASSISTANT_TOOLS: ToolDef[] = [...PROJECT_TOOLS, ...WORKSPACE_TOOLS];
 
 function evidenceMeta(e: EvidenceRow) {
   return {

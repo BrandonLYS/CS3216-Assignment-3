@@ -55,6 +55,13 @@ describe("assistantService conversations", () => {
     expect(await assistantService.turnsToday(other)).toBe(0);
   });
 
+  it("keeps a separate dashboard Conversation with no Project", async () => {
+    const dash = await assistantService.conversation(ctx, null);
+    expect(dash.conversation.projectId).toBeNull();
+    expect(dash.conversation.id).not.toBe((await assistantService.conversation(ctx, projectId)).conversation.id);
+    expect((await assistantService.conversation(ctx, null)).conversation.id).toBe(dash.conversation.id);
+  });
+
   it("refuses a Project the User does not own", async () => {
     const stranger = await makeCtx();
     await expect(assistantService.conversation(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);

@@ -5,7 +5,7 @@ import { activityRepo } from "@/server/modules/activity/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { toAiTools, toolApprovalFor } from "./ai-tools";
-import { ASSISTANT_TOOLS, findTool } from "./tools";
+import { ASSISTANT_TOOLS, PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "./tools";
 
 let ctx: Ctx;
 let projectId: string;
@@ -21,7 +21,9 @@ const run = (name: string, input: Record<string, unknown>, c: Ctx = ctx) =>
 
 describe("assistant tool registry", () => {
   it("exposes the v1 tools by name", () => {
-    expect(ASSISTANT_TOOLS.map((t) => t.name).sort()).toEqual([
+    expect(WORKSPACE_TOOLS.map((t) => t.name).sort()).toEqual(["create_project", "list_projects"]);
+    expect(ASSISTANT_TOOLS).toHaveLength(PROJECT_TOOLS.length + WORKSPACE_TOOLS.length);
+    expect(PROJECT_TOOLS.map((t) => t.name).sort()).toEqual([
       "add_comment",
       "add_dependency",
       "create_label",
@@ -218,6 +220,26 @@ describe("assistant tools over the rest of the Project", () => {
     await expect(run("list_people", { projectId: foreignProject })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(run("set_task_labels", { id: theirTask.id, labelIds: [] })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(run("list_evidence", { projectId: foreignProject })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe("workspace tools", () => {
+  it("lists only the User's Projects with Task counts and creates a Project via Assistant", async () => {
+    const created = (await run("create_project", { name: "Website Relaunch", key: "WEB" })) as {
+      id: string;
+      key: string;
+    };
+    expect(created.key).toBe("WEB");
+    expect((await activityRepo.forEntity(ctx.db, created.id))[0]?.event.via).toBe("assistant");
+    const summary = (await run("get_project_summary", { projectId: created.id })) as { statuses: unknown[] };
+    expect(summary.statuses.length).toBeGreaterThan(0);
+
+    const stranger = await makeCtx();
+    await makeProject(stranger, "STR");
+    const mine = (await run("list_projects", {})) as { id: string; key: string; taskCounts: Record<string, number> }[];
+    expect(mine.map((p) => p.key)).toEqual(expect.arrayContaining(["AST", "WEB"]));
+    expect(mine.some((p) => p.key === "STR")).toBe(false);
+    expect(mine.find((p) => p.key === "AST")!.taskCounts).toMatchObject({ not_started: expect.any(Number) });
   });
 });
 
