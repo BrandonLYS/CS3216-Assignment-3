@@ -586,7 +586,10 @@ test.describe("attention", () => {
     await page.getByText("Run vendor smoke test").first().click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Add predecessor" }).click();
-    await dialog.getByRole("combobox").last().selectOption({ label: "Vendor delivers sandbox" });
+    await dialog
+      .getByRole("combobox")
+      .filter({ hasText: "Choose…" })
+      .selectOption({ label: "Vendor delivers sandbox" });
     await dialog.getByRole("button", { name: "Add", exact: true }).click();
     await expect(dialog.getByText("Vendor delivers sandbox").last()).toBeVisible();
     await dialog.getByRole("button", { name: "Save changes" }).click();
