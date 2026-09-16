@@ -285,8 +285,11 @@ export const WORKSPACE_TOOLS: ToolDef[] = [
   }),
 ];
 
-/** Every tool, for callers with no page scope (MCP). */
+/** Every tool, for callers with no page scope. */
 export const ASSISTANT_TOOLS: ToolDef[] = [...PROJECT_TOOLS, ...WORKSPACE_TOOLS];
+
+/** What MCP exposes: everything except tools that need a confirm card, since MCP has no UI for one. */
+export const MCP_TOOLS: ToolDef[] = ASSISTANT_TOOLS.filter((t) => !t.requiresConfirmation);
 
 function evidenceMeta(e: EvidenceRow) {
   return {

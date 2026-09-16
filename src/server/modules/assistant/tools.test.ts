@@ -5,7 +5,7 @@ import { activityRepo } from "@/server/modules/activity/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { toAiTools, toolApprovalFor } from "./ai-tools";
-import { ASSISTANT_TOOLS, PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "./tools";
+import { ASSISTANT_TOOLS, MCP_TOOLS, PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "./tools";
 
 let ctx: Ctx;
 let projectId: string;
@@ -56,6 +56,8 @@ describe("assistant tool registry", () => {
       .map((t) => t.name)
       .sort();
     expect(flagged).toEqual(["delete_milestone", "delete_task", "update_project"]);
+    expect(MCP_TOOLS.map((t) => t.name)).not.toEqual(expect.arrayContaining(flagged));
+    expect(MCP_TOOLS).toHaveLength(ASSISTANT_TOOLS.length - flagged.length);
   });
 
   it("describes a delete_task call with the Task key and title", async () => {
