@@ -25,6 +25,17 @@ Vocabulary lives in `CONTEXT.md`; use its terms (Task, not issue; Person, not as
 - **Status semantics come from `status.category`, never `status.name`** (ADR 0003). Fixed vocabularies live in `src/shared/domain/index.ts`; adding a value there needs a Drizzle enum migration (`npm run db:generate`).
 - **Forms**: `ActionForm` + `TextField/SelectField/TextareaField`. `className` styles the label wrapper; use `inputClassName` for the control.
 
+## Engineering standards
+
+- Use `-`, never an em dash (`—`).
+- Never auto-add an agent name as a commit co-author.
+- Do not manually modify `CHANGELOG.md` or files marked auto-generated.
+- In new or substantially edited long Markdown files, put each complete sentence on its own physical line. Preserve normal Markdown structure.
+- Prefer quality, simplicity, robustness, scalability, and long-term maintainability over development speed.
+- For bug fixes, first reproduce bug in an end-to-end setting that closely matches user behavior.
+- During end-to-end testing, fix visible UI defects relevant to the changed flow, even when not directly caused by current work.
+- Apply same standard to lint errors, test failures, and test flakiness: fix them when encountered.
+
 ## Where the AI layer plugs in
 
 Subscribe with `eventBus.subscribe("*" | "task.updated" | …)` in `src/server/events/bus.ts`; read through the module repositories; store extracted text in `evidence.extractedText` (nullable, reserved). `src/server/modules/workspace/queries.ts` is the deterministic read model the Health Briefing should enrich rather than replace.
