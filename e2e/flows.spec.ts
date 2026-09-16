@@ -556,6 +556,72 @@ test.describe("comments", () => {
   });
 });
 
+test.describe("evidence-links", () => {
+  const shot = shots("evidence-links");
+
+  test("links evidence to a task from both sides and unlinks it", async ({ page }) => {
+    // State from earlier flows: Task `${key}-1 Implement v2 endpoints`, Risk R-1, one Evidence record.
+    await openProject(page, "Tasks");
+    await page.getByText("Implement v2 endpoints").first().click();
+    const dialog = page.getByRole("dialog", { name: `${key}-1` });
+    await expect(dialog.getByText("No linked evidence")).toBeVisible();
+    await shot(page, "task-dialog-before-link");
+    await dialog.getByRole("button", { name: "Add evidence" }).click();
+    await dialog.getByPlaceholder("Search evidence…").fill("Weekly");
+    await dialog.getByRole("option", { name: /Weekly sync minutes/ }).click();
+    await expect(dialog.getByRole("link", { name: "Weekly sync minutes — 12 Sep" })).toBeVisible();
+    await expect(dialog).toBeVisible(); // picking never submits the parent form
+    await shot(page, "task-dialog-linked");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByLabel("1 linked evidence")).toBeVisible(); // row count
+    await shot(page, "list-row-count");
+
+    await page.getByRole("link", { name: "Evidence", exact: true }).click();
+    await expect(page).toHaveURL(/\/evidence$/);
+    await expect(page.getByRole("link", { name: `${key}-1 Implement v2 endpoints` })).toBeVisible();
+    await shot(page, "evidence-linked-to");
+
+    // Link a Risk from the Evidence side, found by key.
+    await page.getByRole("button", { name: "Link item" }).click();
+    await page.getByPlaceholder("Search tasks, risks, milestones…").fill("R-1");
+    await page.getByRole("option", { name: /Vendor access delay/ }).click();
+    await expect(page.getByRole("link", { name: "R-1 Vendor access delay blocks testing" })).toBeVisible();
+    await shot(page, "evidence-linked-risk");
+
+    // Unlink the Task from the Evidence side; the Evidence itself stays.
+    await page.getByRole("button", { name: `Unlink ${key}-1 Implement v2 endpoints` }).click();
+    await expect(page.getByRole("link", { name: `${key}-1 Implement v2 endpoints` })).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Weekly sync minutes — 12 Sep" })).toBeVisible();
+    await shot(page, "evidence-after-unlink");
+
+    // An item chip opens that item's dialog, which shows the Evidence chip.
+    await page.getByRole("link", { name: "R-1 Vendor access delay blocks testing" }).click();
+    await expect(page.getByRole("dialog", { name: "R-1" })).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("link", { name: "Weekly sync minutes — 12 Sep" })).toBeVisible();
+    await shot(page, "risk-dialog-from-chip");
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+    await page.getByRole("link", { name: "Tasks", exact: true }).click();
+    await expect(page.getByLabel("1 linked evidence")).toBeHidden();
+    await page.getByText("Implement v2 endpoints").first().click();
+    await expect(page.getByRole("dialog").getByText("No linked evidence")).toBeVisible();
+    await shot(page, "task-dialog-unlinked");
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+    // Link/unlink are recorded against the item, not the Evidence.
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(
+      page.getByText(/changed evidence on Task "Implement v2 endpoints": empty → Weekly sync minutes/),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/changed evidence on Task "Implement v2 endpoints": Weekly sync minutes — 12 Sep → empty/),
+    ).toBeVisible();
+    await expect(page.getByText(/changed evidence on Risk "Vendor access delay blocks testing"/)).toBeVisible();
+    await shot(page, "overview-feed");
+  });
+});
+
 test.describe("attention", () => {
   const shot = shots("attention");
   // Attention rules key on the server's calendar date, so the fixtures are dated relative to now.

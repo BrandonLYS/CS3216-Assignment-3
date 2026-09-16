@@ -47,7 +47,9 @@ export function LinkedItemChip({
     <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-hairline bg-surface-2 py-0.5 pr-1 pl-2 text-caption">
       <Icon className="size-3 shrink-0 text-ink-subtle" />
       <Link href={href} className="inline-flex min-w-0 items-center gap-1.5 text-ink hover:underline">
+        {/* The literal space keeps the accessible name "KEY label" whatever the flex layout does. */}
         {keyText && <span className="shrink-0 font-mono text-[10px] text-ink-subtle">{keyText}</span>}
+        {keyText && " "}
         <span className="truncate">{label}</span>
       </Link>
       {onRemove ? (
