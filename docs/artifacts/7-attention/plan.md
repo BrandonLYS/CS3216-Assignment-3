@@ -67,34 +67,48 @@ export const ATTENTION_DUE_SOON_DAYS = 7;
 
 ```ts
 export interface AttentionItem {
-  rule: AttentionRule;            // most severe matched rule (group it lives in)
-  matched: AttentionRule[];       // every matched rule, severity order (matched[0] === rule)
-  reasons: string[];              // one human sentence per matched rule, same order
+  rule: AttentionRule; // most severe matched rule (group it lives in)
+  matched: AttentionRule[]; // every matched rule, severity order (matched[0] === rule)
+  reasons: string[]; // one human sentence per matched rule, same order
   entityType: "task" | "milestone" | "risk";
   entityId: string;
-  label: string;                  // Task title / Milestone name / Risk title
-  code?: string;                  // "KEY-12" for Tasks, "R-3" for Risks (Dashboard shows this)
-  href: string;                   // deep link that opens the dialog (see §1)
-  date?: string;                  // yyyy-MM-dd the rule keyed on (due date / milestone date / dep anchor)
-  urgency: number;                // ascending = more urgent; used for cross-Project re-sort (see below)
+  label: string; // Task title / Milestone name / Risk title
+  code?: string; // "KEY-12" for Tasks, "R-3" for Risks (Dashboard shows this)
+  href: string; // deep link that opens the dialog (see §1)
+  date?: string; // yyyy-MM-dd the rule keyed on (due date / milestone date / dep anchor)
+  urgency: number; // ascending = more urgent; used for cross-Project re-sort (see below)
   projectId: string;
 }
-export interface AttentionGroup { rule: AttentionRule; items: AttentionItem[] }
-export interface AttentionResult { groups: AttentionGroup[]; counts: Record<AttentionRule, number> }
+export interface AttentionGroup {
+  rule: AttentionRule;
+  items: AttentionItem[];
+}
+export interface AttentionResult {
+  groups: AttentionGroup[];
+  counts: Record<AttentionRule, number>;
+}
 
 export interface AttentionInput {
-  today: string;                                  // yyyy-MM-dd, computed once per request by caller
+  today: string; // yyyy-MM-dd, computed once per request by caller
   project: { id: string; key: string };
-  tasks: Array<{ task: { id; number; title; startDate: string|null; dueDate: string|null; milestoneId: string|null };
-                 status: { name: string; category: StatusCategory } }>;
+  tasks: Array<{
+    task: { id; number; title; startDate: string | null; dueDate: string | null; milestoneId: string | null };
+    status: { name: string; category: StatusCategory };
+  }>;
   milestones: Array<{ milestone: { id; name; dueDate: string }; status: { category: StatusCategory } }>;
   risks: Array<{ risk: { id; number; title; probability: ScaleLevel; impact: ScaleLevel }; status: { category } }>;
-  dependencies: Array<{ predecessorType: DependencyItemType; predecessorId: string;
-                        successorType: DependencyItemType; successorId: string }>;
+  dependencies: Array<{
+    predecessorType: DependencyItemType;
+    predecessorId: string;
+    successorType: DependencyItemType;
+    successorId: string;
+  }>;
 }
 export function evaluateAttention(input: AttentionInput): AttentionResult;
 export const compareAttention = (a: AttentionItem, b: AttentionItem) =>
-  ATTENTION_RULES.indexOf(a.rule) - ATTENTION_RULES.indexOf(b.rule) || a.urgency - b.urgency || (a.code ?? a.label).localeCompare(b.code ?? b.label);
+  ATTENTION_RULES.indexOf(a.rule) - ATTENTION_RULES.indexOf(b.rule) ||
+  a.urgency - b.urgency ||
+  (a.code ?? a.label).localeCompare(b.code ?? b.label);
 ```
 
 Both `TaskListItem` (Overview) and `listOpenByProjects` rows (Dashboard) satisfy `tasks` structurally (verify field names against `dependencies/schema.ts` — the column names may be `fromType/fromId/toType/toId` or similar; adapt).
@@ -141,10 +155,12 @@ Verify: `npm run typecheck && npm run lint && npx vitest run src/server/modules/
 
 ```ts
 export async function projectAttention(ctx: Ctx, projectId: string, opts: { today?: string } = {}) {
-  const project = await assertOwnsProject(ctx.db, ctx.userId, projectId);   // first line, ADR 0002
+  const project = await assertOwnsProject(ctx.db, ctx.userId, projectId); // first line, ADR 0002
   const [tasks, milestones, risks, dependencies] = await Promise.all([
-    tasksRepo.listByProject(ctx.db, projectId), milestonesRepo.listByProject(ctx.db, projectId),
-    risksRepo.listByProject(ctx.db, projectId), dependenciesRepo.listByProject(ctx.db, projectId),
+    tasksRepo.listByProject(ctx.db, projectId),
+    milestonesRepo.listByProject(ctx.db, projectId),
+    risksRepo.listByProject(ctx.db, projectId),
+    dependenciesRepo.listByProject(ctx.db, projectId),
   ]);
   return evaluateAttention({ today: opts.today ?? today(), project, tasks, milestones, risks, dependencies });
 }
@@ -160,14 +176,24 @@ tests are deterministic. Re-export `type { AttentionItem, AttentionGroup, Attent
 
 ```ts
 export const ATTENTION_RULE_META: Record<AttentionRule, { label: string; plural: string; text: string; bg: string }> = {
-  task_overdue:        { label: "Overdue",          plural: "overdue",           text: "text-tag-red",    bg: "bg-tag-red/10" },
-  dependency_late:     { label: "Late dependency",  plural: "late dependencies", text: "text-tag-orange", bg: "bg-tag-orange/10" },
-  milestone_past_open: { label: "Milestone passed", plural: "milestones passed", text: "text-tag-purple", bg: "bg-tag-purple/10" },
-  task_blocked:        { label: "Blocked",          plural: "blocked",           text: "text-tag-yellow", bg: "bg-tag-yellow/10" },
-  risk_top:            { label: "Top risk",         plural: "top risks",         text: "text-tag-orange", bg: "bg-tag-orange/10" },
-  task_due_soon:       { label: "Due soon",         plural: "due soon",          text: "text-tag-blue",   bg: "bg-tag-blue/10" },
+  task_overdue: { label: "Overdue", plural: "overdue", text: "text-tag-red", bg: "bg-tag-red/10" },
+  dependency_late: {
+    label: "Late dependency",
+    plural: "late dependencies",
+    text: "text-tag-orange",
+    bg: "bg-tag-orange/10",
+  },
+  milestone_past_open: {
+    label: "Milestone passed",
+    plural: "milestones passed",
+    text: "text-tag-purple",
+    bg: "bg-tag-purple/10",
+  },
+  task_blocked: { label: "Blocked", plural: "blocked", text: "text-tag-yellow", bg: "bg-tag-yellow/10" },
+  risk_top: { label: "Top risk", plural: "top risks", text: "text-tag-orange", bg: "bg-tag-orange/10" },
+  task_due_soon: { label: "Due soon", plural: "due soon", text: "text-tag-blue", bg: "bg-tag-blue/10" },
 };
-export function AttentionBadge({ rule, count, className }: { rule: AttentionRule; count?: number; className?: string })
+export function AttentionBadge({ rule, count, className }: { rule: AttentionRule; count?: number; className?: string });
 ```
 
 Renders `<Badge className={cn(meta.bg, meta.text, className)}>{count !== undefined ? `${count} ${meta.plural}` : meta.label}</Badge>`
@@ -290,7 +316,9 @@ date, so the flow creates its own dated items relative to `new Date()` (`import 
 test.describe("attention", () => {
   const shot = shots("attention");
 
-  test("overview groups attention by rule, dashboard shows per-project counts, items open their dialog", async ({ page }) => {
+  test("overview groups attention by rule, dashboard shows per-project counts, items open their dialog", async ({
+    page,
+  }) => {
     await openProject(page, "Tasks");
     const create = async (title: string, o: { start?: string; due: string }) => {
       await page.getByRole("button", { name: "New task" }).click();
@@ -301,14 +329,14 @@ test.describe("attention", () => {
       await dialog.getByRole("button", { name: "Create task" }).click();
       await expect(dialog).toBeHidden();
     };
-    await create("Reconcile legacy ledger", { due: d(-3) });                       // -> task_overdue
-    await create("Rotate PSP credentials", { due: d(+20) });                       // -> task_blocked
+    await create("Reconcile legacy ledger", { due: d(-3) }); // -> task_overdue
+    await create("Rotate PSP credentials", { due: d(+20) }); // -> task_blocked
     await page.getByText("Rotate PSP credentials").click();
     await page.getByRole("dialog").getByLabel("Status").selectOption({ label: "Blocked" });
     await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    await create("Vendor delivers sandbox", { due: d(+10) });                      // upstream
-    await create("Run vendor smoke test", { start: d(+2), due: d(+6) });           // -> dependency_late
+    await create("Vendor delivers sandbox", { due: d(+10) }); // upstream
+    await create("Run vendor smoke test", { start: d(+2), due: d(+6) }); // -> dependency_late
     await page.getByText("Run vendor smoke test").click();
     const dialog = page.getByRole("dialog");
     // Follow the exact DependencyEditor interaction used by the existing `timeline` flow (lines ~301-317).
