@@ -47,6 +47,20 @@ describe("tasksService", () => {
     expect(received[0]!.changes.map((c) => c.field).sort()).toEqual(["dueDate", "priority"]);
   });
 
+  it("stamps via on the Activity Event and the domain event when the Ctx carries it", async () => {
+    const task = await tasksService.create(ctx, { projectId, title: "Planned by hand", priority: "none" });
+    const received: DomainEvent[] = [];
+    const unsub = eventBus.subscribe("task.updated", (e) => void received.push(e));
+
+    await tasksService.update({ ...ctx, via: "assistant" }, { id: task.id, title: "Planned by the Assistant" });
+    unsub();
+
+    const history = await activityRepo.forEntity(ctx.db, task.id);
+    expect(history.find((h) => h.event.action === "updated")?.event.via).toBe("assistant");
+    expect(history.find((h) => h.event.action === "created")?.event.via).toBeNull();
+    expect(received[0]?.via).toBe("assistant");
+  });
+
   it("sets completedAt when moved to a 'done' status and clears it when moved back", async () => {
     const statuses = await statusesService.list(ctx, projectId, "task");
     const done = statuses.find((s) => s.category === "done")!;

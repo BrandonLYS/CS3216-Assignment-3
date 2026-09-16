@@ -15,6 +15,7 @@ const row = (over: Partial<HistoryEntry> & { id: string }): HistoryEntry => ({
   newLabel: null,
   actorId: "u1",
   actorName: "Ana",
+  via: null,
   occurredAt: at,
   ...over,
 });
@@ -41,5 +42,17 @@ describe("groupHistory", () => {
     const groups = groupHistory(entries, "task");
     expect(groups.map((g) => g.entries.map((e) => e.id))).toEqual([["a"], ["b"], ["c"]]);
     expect(groups.at(-1)!.entries.at(-1)!.action).toBe("created");
+  });
+
+  it("keeps an Assistant change in its own group even at the same second as the User's own edit", () => {
+    const entries: HistoryEntry[] = [
+      row({ id: "bot", field: "dueDate", kind: "date", via: "assistant" }),
+      row({ id: "hand", field: "title", kind: "text" }),
+    ];
+    const groups = groupHistory(entries, "task");
+    expect(groups.map((g) => [g.via, g.entries.map((e) => e.id)])).toEqual([
+      ["assistant", ["bot"]],
+      [null, ["hand"]],
+    ]);
   });
 });

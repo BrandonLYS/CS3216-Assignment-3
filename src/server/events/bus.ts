@@ -1,4 +1,4 @@
-import type { ActivityAction, EntityType } from "@/shared/domain";
+import type { ActivityAction, EntityType, Via } from "@/shared/domain";
 import type { FieldChange } from "@/server/core/diff";
 
 /** Derived from the Activity Event, plus link signals that have no Activity Event of their own. */
@@ -12,6 +12,7 @@ export interface DomainEvent {
   name: DomainEventName;
   projectId: string;
   actorId: string | null;
+  via: Via | null;
   entityType: EntityType;
   entityId: string;
   entityLabel: string;

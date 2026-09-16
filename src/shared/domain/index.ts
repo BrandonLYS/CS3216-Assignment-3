@@ -102,6 +102,10 @@ export type LinkableEntityType = CommentableEntityType;
 export const ACTIVITY_ACTIONS = ["created", "updated", "deleted"] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
+/** Who acted on the User's behalf (ADR 0007); a normal UI action has no `via`. */
+export const VIA_ACTORS = ["assistant", "reflection"] as const;
+export type Via = (typeof VIA_ACTORS)[number];
+
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 // ---------------------------------------------------------------------------

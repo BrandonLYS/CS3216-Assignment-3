@@ -1,7 +1,7 @@
 import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { user } from "@/server/auth/schema";
 import { id } from "@/server/db/columns";
-import { activityActionEnum, entityTypeEnum } from "@/server/db/enums";
+import { activityActionEnum, entityTypeEnum, viaActorEnum } from "@/server/db/enums";
 import { projects } from "@/server/modules/projects/schema";
 
 /** Immutable record of one field change (ADR 0005). */
@@ -18,6 +18,8 @@ export const activityEvents = pgTable(
     /** Human-readable label of the entity at the time, so history survives deletion. */
     entityLabel: text("entity_label").notNull(),
     action: activityActionEnum("action").notNull(),
+    /** Set when the change was made on the User's behalf (ADR 0007); null for direct UI actions. */
+    via: viaActorEnum("via"),
     /** Null for created/deleted; set for updated. */
     field: text("field"),
     /**

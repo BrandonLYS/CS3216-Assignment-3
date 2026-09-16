@@ -1,7 +1,7 @@
 import type { Tx } from "@/server/db/client";
 import { activityEvents, type NewActivityEventRow } from "@/server/modules/activity/schema";
 import { eventBus, type DomainEvent, type DomainEventName } from "@/server/events/bus";
-import type { EntityType } from "@/shared/domain";
+import type { EntityType, Via } from "@/shared/domain";
 import type { Ctx } from "./context";
 import type { FieldChange } from "./diff";
 
@@ -13,7 +13,10 @@ export class Recorder {
   private pending: DomainEvent[] = [];
   private signals: DomainEvent[] = [];
 
-  constructor(private readonly actorId: string) {}
+  constructor(
+    private readonly actorId: string,
+    private readonly via: Via | null = null,
+  ) {}
 
   /** `snapshot`, when given, is stored as the Activity Event's `newValue` (e.g. a Comment body). */
   created(entityType: EntityType, projectId: string, entityId: string, entityLabel: string, snapshot?: unknown) {
@@ -32,15 +35,15 @@ export class Recorder {
   /** Queue a domain event that has no Activity Event of its own (published after commit, not persisted). */
   signal(
     name: DomainEventName,
-    e: Pick<DomainEvent, "projectId" | "entityType" | "entityId" | "entityLabel"> &
-      Partial<Pick<DomainEvent, "action" | "changes">>,
+    e: Pick<DomainEvent, "projectId" | "entityType" | "entityId" | "entityLabel" | "changes"> &
+      Partial<Pick<DomainEvent, "action">>,
   ) {
     this.signals.push({
       ...e,
       name,
       action: e.action ?? "updated",
-      changes: e.changes ?? [],
       actorId: this.actorId,
+      via: this.via,
       occurredAt: new Date(),
     });
   }
@@ -58,6 +61,7 @@ export class Recorder {
       name: `${entityType}.${action}`,
       projectId,
       actorId: this.actorId,
+      via: this.via,
       entityType,
       entityId,
       entityLabel,
@@ -73,6 +77,7 @@ export class Recorder {
       const base = {
         projectId: e.projectId,
         actorId: e.actorId,
+        via: e.via,
         entityType: e.entityType,
         entityId: e.entityId,
         entityLabel: e.entityLabel,
@@ -103,7 +108,7 @@ export class Recorder {
 
 /** Run `fn` in a transaction; activity is persisted with it and events published on commit. */
 export async function mutate<T>(ctx: Ctx, fn: (tx: Tx, rec: Recorder) => Promise<T>): Promise<T> {
-  const rec = new Recorder(ctx.userId);
+  const rec = new Recorder(ctx.userId, ctx.via ?? null);
   const result = await ctx.db.transaction(async (tx) => {
     const r = await fn(tx, rec);
     await rec.flush(tx);
