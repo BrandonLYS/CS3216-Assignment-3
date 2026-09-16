@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Diamond, ListTodo, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import * as React from "react";
 import type { ActionResult } from "@/server/core/action";
 import { linkEvidenceAction, unlinkEvidenceAction } from "@/server/modules/evidence/actions";
@@ -8,19 +8,9 @@ import type { LinkTarget } from "@/server/modules/evidence/repository";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { labelFor, type LinkableEntityType } from "@/shared/domain";
 import { Button, CommandPicker } from "@/shared/ui";
-import { LinkedItemChip, itemHref } from "@/entities/evidence/linked-item-chip";
+import { LINKED_ITEM_ICON, LinkedItemChip, itemHref, keyTextFor } from "@/entities/evidence/linked-item-chip";
 
 type LinkAction = (input: Parameters<typeof linkEvidenceAction>[0]) => Promise<ActionResult<unknown>>;
-
-const ICON: Record<LinkableEntityType, React.ComponentType<{ className?: string }>> = {
-  task: ListTodo,
-  risk: AlertTriangle,
-  milestone: Diamond,
-};
-
-/** `ACME-12` for Tasks, `R-3` for Risks, nothing for Milestones. */
-const keyTextFor = (projectKey: string, entityType: LinkableEntityType, number: number | null) =>
-  entityType === "task" ? `${projectKey}-${number}` : entityType === "risk" ? `R-${number}` : "";
 
 /**
  * "Linked to" section of the Evidence page: chips for every Task/Risk/Milestone this record is
@@ -90,7 +80,7 @@ export function LinkedItems({
             emptyText="No item matches."
             items={options.map((t) => {
               const keyText = keyTextFor(refs.project.key, t.entityType, t.number);
-              const Icon = ICON[t.entityType];
+              const Icon = LINKED_ITEM_ICON[t.entityType];
               return {
                 id: `${t.entityType}:${t.entityId}`,
                 label: t.label,

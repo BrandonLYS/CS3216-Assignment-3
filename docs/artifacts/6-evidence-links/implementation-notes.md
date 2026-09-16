@@ -35,3 +35,18 @@ Branch `feat/6-evidence-links` (on top of #4 Comments). Implemented commit by co
 - `evidence.linked` / `evidence.unlinked` domain events are published via `Recorder.signal()` with `action: "updated"` but are **not** persisted as Activity Events (by design — the item's `updated` event is the audit trail). Subscribers reading `action` alone cannot distinguish them from a real update; they should branch on `name`.
 - The Evidence-page chip for a Milestone navigates to `/timeline?milestone=<id>`; the Timeline page opens the dialog on load as verified in the plan, but the flow spec exercises the Risk chip only.
 - Deleting an item cascades its links (`deleteForEntity`) without emitting `evidence.unlinked` signals, matching #4's decision for Comments.
+
+## Review fixes
+
+Follow-up commits addressing the adversarial review on PR #14 (`review-14.md`, items marked **[fixing]**).
+
+- **HIGH — `evidenceService.listForEntity` could read links of a foreign item.** `assertOwnsProject` checked the `projectId` argument but `evidenceLinksRepo.listForEntity` filtered only by `(entityType, entityId)`, so a User owning Projects A and B could pass A's id with an item from B and read B's linked Evidence titles. Fixed TDD-first: a new test ("does not list links of an item from another Project the User also owns") failed with the foreign row returned, then `listForEntity` gained a `projectId` parameter and `eq(evidenceLinks.projectId, projectId)`. The same audit tightened `LinkKey` (used by `find` and `delete`) to include `projectId`, so `link`'s idempotent re-read and `unlink`'s delete are Project-scoped too; the service already passes `input.projectId`. `listForEvidence` is scoped by `getOwned` on the Evidence row and filters on the Evidence UUID PK, so it was already safe; `listForProject`/`listTargets`/`listSummaries` were already filtered by Project.
+- **MEDIUM — user story 13 ("show its linked items as chips") on the Evidence list.** Rows with links now render a compact strip under the meta line: the first two `LinkedItemChip`s (type icon, mono key, truncated label, `text-caption`) followed by a "+N" caption for the rest. The list row is a `<button>`, so `LinkedItemChip` gained an optional `href`: without it the chip body is a plain `<span>` instead of a `<Link>`, keeping the HTML valid (no `<a>` inside `<button>`) and leaving the e2e `getByRole("link", { name })` locators unambiguous — the flow spec needed no changes. Unlink controls remain in the detail pane only. `keyTextFor` and the type→icon map moved from `features/evidence/linked-items.tsx` into `entities/evidence/linked-item-chip.tsx` so both callers share them.
+- Not changed (documented in the review): `evidence_links.entity_type` reuses the wide `entity_type` enum without a CHECK (same as `comments`/`activity_events`; a shared constraint is a follow-up migration), and `Recorder.signal()` stamps `action: "updated"` on `evidence.linked/unlinked` (branch on `name`).
+
+### Verification
+
+- `npx vitest run src/server/modules/evidence/service.test.ts` — 9/9 (the new cross-Project test failed before the repository change and passes after).
+- `npm test` — 51/51 (7 files). `npm run typecheck`, `npm run lint` — clean.
+- `E2E_PORT=3106 E2E_NO_SERVER=1 npx playwright test e2e/flows.spec.ts` — 13/13; `docs/evidence-links/screenshots/04–06` (the Evidence page) were refreshed since the list rows now show the chip strip, the other flows' screenshots were reverted as churn.
+- `after-evidence-page-linked-to.png` re-taken on the seeded demo project so the list shows the chip strips.
