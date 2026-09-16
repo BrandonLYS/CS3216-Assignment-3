@@ -121,7 +121,19 @@ describe("toAiTools", () => {
       (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>
     >;
     expect(Object.keys(approval).sort()).toEqual(["delete_milestone", "delete_task", "update_project"]);
-    const status = await approval.update_project!({ key: "NEW" }, {});
-    expect(status).toEqual({ type: "user-approval", reason: "Update Project AST: key → “NEW”?" });
+    const status = await approval.update_project!({ key: "NEW", description: null }, {});
+    expect(status).toEqual({
+      type: "user-approval",
+      reason: "Update Project AST: key → “NEW”, description → cleared?",
+    });
+  });
+
+  it("denies instead of failing the turn when the target of a confirmation no longer exists", async () => {
+    const approval = toolApprovalFor(ctx, ASSISTANT_TOOLS) as Record<
+      string,
+      (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>
+    >;
+    const status = await approval.delete_task!({ id: "00000000-0000-0000-0000-000000000000" }, {});
+    expect(status).toEqual({ type: "denied", reason: "Task not found" });
   });
 });

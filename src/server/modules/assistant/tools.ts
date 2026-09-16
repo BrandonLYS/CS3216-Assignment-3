@@ -33,7 +33,7 @@ const q = (s: unknown) => `“${String(s)}”`;
 const changeList = (patch: Record<string, unknown>) =>
   Object.entries(patch)
     .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k} → ${q(v)}`)
+    .map(([k, v]) => `${k} → ${v === null || v === "" ? "cleared" : q(v)}`)
     .join(", ");
 
 export const ASSISTANT_TOOLS: ToolDef[] = [

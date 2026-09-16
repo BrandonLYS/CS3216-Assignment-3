@@ -48,7 +48,13 @@ export function toolApprovalFor(
         def.name,
         async (input: Record<string, unknown>) => {
           const full = scope && "projectId" in def.input.shape ? { ...input, projectId: scope.projectId } : input;
-          return { type: "user-approval" as const, reason: await def.describe?.(ctx, full) };
+          try {
+            return { type: "user-approval" as const, reason: await def.describe?.(ctx, full) };
+          } catch (e) {
+            // e.g. the target no longer exists: deny with the reason instead of failing the turn.
+            if (e instanceof DomainError) return { type: "denied" as const, reason: e.message };
+            throw e;
+          }
         },
       ]),
   );
