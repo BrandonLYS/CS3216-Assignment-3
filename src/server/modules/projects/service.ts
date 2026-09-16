@@ -43,13 +43,20 @@ export const projectsService = {
     }),
 
   /**
-   * The project's Activity Events cascade away with it, so `rec.deleted` cannot persist a row;
-   * it still publishes `project.deleted` so subscribers can react.
+   * The project's Activity Events cascade away with it, so no `project.deleted` row can be
+   * persisted (the FK has no parent). `rec.signal` still publishes it so subscribers can react.
    */
   delete: (ctx: Ctx, id: string) =>
     mutate(ctx, async (tx, rec) => {
       const project = await assertOwnsProject(tx, ctx.userId, id);
       await projectsRepo.delete(tx, id);
-      rec.deleted("project", id, id, project.name);
+      rec.signal("project.deleted", {
+        projectId: id,
+        entityType: "project",
+        entityId: id,
+        entityLabel: project.name,
+        action: "deleted",
+        changes: [],
+      });
     }),
 };
