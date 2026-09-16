@@ -55,3 +55,14 @@ After: `after-01-search-by-key.png`, `after-02-task-dialog-open.png`, `after-03-
 - `ActionResult` `!ok` is rendered as "No tasks match"; the only validation failure the client can trigger (`q` < 2) is gated in the widget before the call.
 - Known behaviour: bare-number search in an archived current Project returns nothing (plan §5.3, story 18). `F1AB1` without a separator is a title search (plan §5.1).
 - Follow-ups out of scope: index on `lower(title)` if the ILIKE scan becomes slow; searching other entities from the palette.
+
+## Review fixes
+
+Follow-up to the adversarial review (`review-12.md`), two commits: server then widget.
+
+1. **Palette state survived close/reopen (HIGH).** `AppShell` keeps `<CommandPalette />` mounted and the component only returned `null` when closed, so `query`/`search` persisted and reopening ⌘K showed the previous query and stale Task rows. Fixed by splitting the component: the exported `CommandPalette` is now `if (!open) return null; return <CommandPaletteBody … />`, and `CommandPaletteBody` owns `query`, the search state and the debounce/Escape effects, so it genuinely unmounts on close and remounts blank. This avoids a reset-in-effect (`react-hooks/set-state-in-effect`). The misleading "unmounts when closed" comment was rewritten to describe the split. The Escape listener now lives in the body (only registered while open) and re-subscribes on `onClose` changes, so it never invokes a stale closure.
+2. **Stale-response discard missed the "dropped below 2 chars" case (MEDIUM).** `requestId.current` is now incremented _before_ the `if (!showTasks) return;` guard, so an in-flight response for a previous ≥2-char query is discarded when the query has since shrunk.
+3. **Explicit `ESCAPE` on the `ILIKE` (LOW).** `search.ts` builds the title predicate as `` sql`${tasks.title} ilike ${pattern} escape '\\'` `` (renders as `escape '\'` in SQL); `escapeLike` is unchanged (escapes `\`, `%`, `_`). Added a test proving `_` is literal: titles `Run load_test harness` vs `Run load-test harness`, query `load_test` returns only the former; query `load\test` returns nothing.
+4. **a11y (LOW).** "Searching…", "No tasks match" and "No results." rows now carry `role="status" aria-live="polite"`.
+
+Verification: `npm run typecheck`, `npm run lint` clean; `npm test` **5 files, 40 tests passed** (search suite 18/18); e2e `E2E_PORT=3108 E2E_NO_SERVER=1 npx playwright test e2e/flows.spec.ts` **12/12 passed**; unrelated screenshot churn reverted with `git checkout --`.

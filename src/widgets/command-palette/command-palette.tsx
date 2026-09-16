@@ -45,24 +45,30 @@ const DEBOUNCE_MS = 180;
 type SearchState = { loading: boolean; results: TaskSearchResult[] };
 const IDLE: SearchState = { loading: false, results: [] };
 
-export function CommandPalette({
-  open,
-  onClose,
-  projects,
-  onNewProject,
-}: {
+interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
   projects: ProjectRow[];
   onNewProject: () => void;
-}) {
+}
+
+/**
+ * `AppShell` keeps this mounted for the whole session, so the body — which owns `query`, the
+ * search state and the debounce/keyboard effects — is a separate component that really unmounts
+ * when `open` is false. Reopening therefore always starts from a blank query with no stale rows,
+ * without needing a reset effect.
+ */
+export function CommandPalette({ open, ...props }: CommandPaletteProps) {
+  if (!open) return null;
+  return <CommandPaletteBody {...props} />;
+}
+
+function CommandPaletteBody({ onClose, projects, onNewProject }: Omit<CommandPaletteProps, "open">) {
   const router = useRouter();
   const pathname = usePathname();
   const currentProject = projects.find((p) => pathname.startsWith(`/projects/${p.id}`));
   const currentProjectId = currentProject?.id;
 
-  // Search state lives here (above the early return) so hooks run on every render; the component
-  // unmounts when closed, so everything resets on reopen for free.
   const [query, setQuery] = React.useState("");
   const q = query.trim();
   const showTasks = q.length >= MIN_QUERY;
@@ -76,8 +82,10 @@ export function CommandPalette({
   };
 
   React.useEffect(() => {
-    if (!showTasks) return;
+    // Bump before the guard so a response for a previous query is discarded even when the query
+    // has since dropped below MIN_QUERY (no new request is issued, but the old one must not land).
     const id = ++requestId.current;
+    if (!showTasks) return;
     const timer = setTimeout(async () => {
       const res = await searchTasksAction({ q, currentProjectId });
       if (id !== requestId.current) return; // a newer query is in flight
@@ -86,15 +94,15 @@ export function CommandPalette({
     return () => clearTimeout(timer);
   }, [q, showTasks, currentProjectId]);
 
+  // Always registered while the body is mounted (i.e. while open); re-subscribes when the shell
+  // hands down a new `onClose` so the latest closure is the one invoked.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) onClose();
+      if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
+  }, [onClose]);
 
   const go = (href: string) => {
     onClose();
@@ -129,7 +137,9 @@ export function CommandPalette({
         />
         <Command.List className="max-h-80 overflow-y-auto p-2 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-eyebrow [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:tracking-[0.4px] [&_[cmdk-group-heading]]:text-ink-tertiary [&_[cmdk-group-heading]]:uppercase">
           {!showTasks && staticCount === 0 && (
-            <div className="px-2 py-6 text-center text-caption text-ink-subtle">No results.</div>
+            <div role="status" aria-live="polite" className="px-2 py-6 text-center text-caption text-ink-subtle">
+              No results.
+            </div>
           )}
 
           {currentProject && sectionHits.length > 0 && (
@@ -186,11 +196,17 @@ export function CommandPalette({
           {showTasks && (
             <Command.Group heading="Tasks">
               {search.loading ? (
-                <div className="flex h-8 items-center gap-2.5 px-2 text-caption text-ink-subtle" aria-live="polite">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex h-8 items-center gap-2.5 px-2 text-caption text-ink-subtle"
+                >
                   <Loader2 className="size-3.5 animate-spin" /> Searching…
                 </div>
               ) : search.results.length === 0 ? (
-                <div className="px-2 py-3 text-center text-caption text-ink-subtle">No tasks match</div>
+                <div role="status" aria-live="polite" className="px-2 py-3 text-center text-caption text-ink-subtle">
+                  No tasks match
+                </div>
               ) : (
                 search.results.map((r) => (
                   <Item
