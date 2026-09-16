@@ -40,3 +40,11 @@ export const updateTaskSchema = z.object({
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+
+/** Command-palette Task search: trimmed query of 2–100 chars; `limit` defaults to and is capped at 10. */
+export const searchTasksSchema = z.object({
+  q: z.string().trim().min(2, "Type at least 2 characters").max(100, "Query is too long"),
+  currentProjectId: z.uuid().optional(),
+  limit: z.number().int().min(1).max(10).default(10),
+});
+export type SearchTasksInput = z.infer<typeof searchTasksSchema>;

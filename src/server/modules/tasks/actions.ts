@@ -3,8 +3,9 @@
 import { z } from "zod";
 import { runAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
+import { searchTasks } from "./search";
 import { tasksService } from "./service";
-import { createTaskSchema, updateTaskSchema } from "./validation";
+import { createTaskSchema, searchTasksSchema, updateTaskSchema } from "./validation";
 
 export async function createTaskAction(fd: FormData) {
   const res = await runAction(createTaskSchema, fd, (ctx, i) => tasksService.create(ctx, i));
@@ -37,4 +38,9 @@ export async function deleteTaskAction(fd: FormData) {
   const res = await runAction(z.object({ id: z.string() }), fd, (ctx, { id }) => tasksService.delete(ctx, id));
   if (res.ok) revalidateProject(projectId);
   return res;
+}
+
+/** Read-only: the command palette's only entry point for Task search. No revalidation. */
+export async function searchTasksAction(input: z.input<typeof searchTasksSchema>) {
+  return runAction(searchTasksSchema, input, (ctx, i) => searchTasks(ctx, i));
 }
