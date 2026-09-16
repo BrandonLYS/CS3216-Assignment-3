@@ -12,3 +12,4 @@ export * from "@/server/modules/comments/schema";
 export * from "@/server/modules/evidence/schema";
 export * from "@/server/modules/activity/schema";
 export * from "@/server/modules/assistant/schema";
+export * from "@/server/modules/memory/schema";

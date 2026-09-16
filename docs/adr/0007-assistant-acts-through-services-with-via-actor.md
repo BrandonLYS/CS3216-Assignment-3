@@ -19,5 +19,5 @@ Reflection runs in the chat route's `after()` hook, not a queue. Vercel function
 ## Consequences
 
 - Profile and Working Memory are versioned rows in Postgres, not files; every write (User or Reflection) appends a version with its author.
-- Conversations and Messages are the Assistant's own thread, not Project items: they carry no Activity Event and no domain event, so `assistantService` writes them without `mutate`.
+- Conversations, Messages, Profile and Working Memory versions are the Assistant's own documents, not Project items: they carry no Activity Event and no domain event, so `assistantService` and `memoryService` write them without `mutate`.
 - Destructive tools (deletes, Project-level updates) have no server `execute`; the client renders a confirm card and answers the tool call. They are excluded from the MCP adapter, which has no UI to confirm.

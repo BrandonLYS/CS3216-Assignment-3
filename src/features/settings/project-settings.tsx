@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { createLabelAction, deleteLabelAction, updateLabelAction } from "@/server/modules/labels/actions";
 import type { LabelRow } from "@/server/modules/labels/schema";
+import type { MemoryVersionRow } from "@/server/modules/memory/schema";
 import { deleteProjectAction, updateProjectAction } from "@/server/modules/projects/actions";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { HEALTH_LEVELS, PROJECT_STATUSES } from "@/shared/domain";
@@ -20,9 +21,10 @@ import {
   TextareaField,
   enumOptions,
 } from "@/shared/ui";
+import { MemoryEditor } from "@/features/memory/memory-editor";
 import { StatusManager } from "./status-manager";
 
-export function ProjectSettings({ refs }: { refs: ProjectRefs }) {
+export function ProjectSettings({ refs, memory }: { refs: ProjectRefs; memory: MemoryVersionRow[] }) {
   const { project } = refs;
   const router = useRouter();
   const [labelModal, setLabelModal] = React.useState<{ label?: LabelRow; deleting?: boolean } | null>(null);
@@ -116,6 +118,22 @@ export function ProjectSettings({ refs }: { refs: ProjectRefs }) {
               </div>
             ))}
           </Panel>
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <div>
+            <SectionTitle>Working Memory</SectionTitle>
+            <p className="mt-1 text-caption text-ink-subtle">
+              What the Assistant knows about this Project: priorities, recurring People, decisions. Read on every turn
+              here; Reflection revises it and every version is kept.
+            </p>
+          </div>
+          <MemoryEditor
+            projectId={project.id}
+            versions={memory}
+            placeholder="Priya owns vendor risk. UAT slips are the main worry. Weekly sync on Tuesdays."
+            hint="Markdown. Roughly 2,000 tokens at most."
+          />
         </section>
 
         <section className="flex flex-col gap-4">

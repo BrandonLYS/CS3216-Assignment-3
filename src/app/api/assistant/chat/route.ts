@@ -15,6 +15,7 @@ import { assistantConfig, getModel } from "@/server/modules/assistant/model";
 import { projectSystemPrompt, workspaceSystemPrompt } from "@/server/modules/assistant/prompt";
 import { assistantService } from "@/server/modules/assistant/service";
 import { PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "@/server/modules/assistant/tools";
+import { memoryService } from "@/server/modules/memory/service";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 
 export const maxDuration = 60;
@@ -45,9 +46,14 @@ export async function POST(req: Request) {
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
     const { conversation } = await assistantService.conversation(ctx, projectId);
+    const [profile, workingMemory] = await Promise.all([
+      memoryService.current(ctx, null),
+      scope ? memoryService.current(ctx, projectId) : null,
+    ]);
+    const memory = { profile: profile?.body, workingMemory: workingMemory?.body };
     const system = scope
-      ? projectSystemPrompt(await findTool("get_project_summary").handler(ctx, scope))
-      : workspaceSystemPrompt(await findTool("list_projects").handler(ctx, {}));
+      ? projectSystemPrompt(await findTool("get_project_summary").handler(ctx, scope), memory)
+      : workspaceSystemPrompt(await findTool("list_projects").handler(ctx, {}), memory);
 
     const result = streamText({
       model,
