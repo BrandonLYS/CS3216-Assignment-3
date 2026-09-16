@@ -5,6 +5,7 @@ import {
   type EntityType,
   type HistoryEntityType,
   type HistoryFieldKind,
+  type Via,
 } from "@/shared/domain";
 import { fmtDate } from "@/shared/lib/dates";
 import type { ActivityItem } from "./service";
@@ -26,6 +27,7 @@ export interface HistoryEntry {
   newLabel: string | null;
   actorId: string | null;
   actorName: string | null;
+  via: Via | null;
   /** ISO timestamp. */
   occurredAt: string;
 }
@@ -86,6 +88,7 @@ export function enrichHistory(rows: ActivityItem[], entityType: HistoryEntityTyp
       newValue: e.newValue,
       actorId: e.actorId,
       actorName,
+      via: e.via,
       occurredAt: e.occurredAt.toISOString(),
     };
     if (e.entityType === "comment") {

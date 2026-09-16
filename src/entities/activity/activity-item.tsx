@@ -1,6 +1,7 @@
 import type { ActivityItem as Item } from "@/server/modules/activity/service";
 import { labelFor } from "@/shared/domain";
 import { relative } from "@/shared/lib/dates";
+import { ViaBadge } from "./via-badge";
 
 const HUMAN_FIELDS: Record<string, string> = {
   statusId: "status",
@@ -43,7 +44,8 @@ export function ActivityRow({ item, projectName }: { item: Item; projectName?: s
       <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-hairline-tertiary" />
       <div className="min-w-0 flex-1">
         <p className="text-ink-muted">
-          <span className="font-medium text-ink">{item.actorName ?? "Someone"}</span> {describeActivity(item)}
+          <span className="font-medium text-ink">{item.actorName ?? "Someone"}</span> {describeActivity(item)}{" "}
+          <ViaBadge via={item.event.via} />
         </p>
         <p className="text-ink-tertiary">
           {relative(item.event.occurredAt)}

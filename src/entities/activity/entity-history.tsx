@@ -1,12 +1,14 @@
 import { ArrowRight } from "lucide-react";
 import type { HistoryEntry } from "@/server/modules/activity/enrich";
-import { HISTORY_FIELDS, type HistoryEntityType } from "@/shared/domain";
+import { HISTORY_FIELDS, type HistoryEntityType, type Via } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
 import { fmtDateTime, relative } from "@/shared/lib/dates";
+import { ViaBadge } from "./via-badge";
 
 export interface HistoryGroup {
   key: string;
   actorName: string | null;
+  via: Via | null;
   occurredAt: string;
   entries: HistoryEntry[];
 }
@@ -26,10 +28,10 @@ export function groupHistory(entries: HistoryEntry[], entityType: HistoryEntityT
   };
   const groups: HistoryGroup[] = [];
   for (const e of entries) {
-    const key = `${e.actorId ?? ""}|${e.occurredAt.slice(0, 19)}`;
+    const key = `${e.actorId ?? ""}|${e.via ?? ""}|${e.occurredAt.slice(0, 19)}`;
     const last = groups.at(-1);
     if (last && last.key === key) last.entries.push(e);
-    else groups.push({ key, actorName: e.actorName, occurredAt: e.occurredAt, entries: [e] });
+    else groups.push({ key, actorName: e.actorName, via: e.via, occurredAt: e.occurredAt, entries: [e] });
   }
   for (const g of groups) g.entries.sort((a, b) => rank(a) - rank(b));
   return groups;
@@ -71,6 +73,7 @@ export function EntityHistory({
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-medium text-ink">{g.actorName ?? "Someone"}</span>
+                <ViaBadge via={g.via} />
                 <time dateTime={g.occurredAt} title={fmtDateTime(g.occurredAt)} className="text-ink-tertiary">
                   {relative(g.occurredAt)}
                 </time>
