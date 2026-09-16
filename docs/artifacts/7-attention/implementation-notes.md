@@ -89,3 +89,26 @@ issue text are listed below so the reviewer does not have to diff them out.
 | `after-overview-collapsed.png` | (e2e) "Overdue" group collapsed, badge and count still visible                   |
 | `after-dashboard-counts.png`   | (e2e) Dashboard with "N overdue · N blocked · N late dependencies" strip         |
 | `after-item-opens-task.png`    | (e2e) Clicking "Reconcile legacy ledger" opens its dialog                        |
+
+## Review fixes
+
+Follow-up commits addressing the adversarial review of PR #11 (`review-11.md`):
+
+1. **Duplicate fetches on the Project Overview.** `projectAttention(ctx, projectId, opts)` now accepts
+   `opts.rows?: ProjectAttentionRows` (`tasks`, `milestones`, `risks`, optional `dependencies`), typed from the
+   repository return types. `assertOwnsProject` is still the first line. The Overview passes the three collections
+   it already loaded, so only the dependency edges are queried inside — 5 round-trips instead of ~8. A new
+   `queries.test.ts` case asserts that pre-fetched rows give a result deep-equal to fetching.
+2. **Fragile e2e relative-day assertion.** `/Due .*, 3 days ago/` is now `/Due .*, \d+ days? ago/`, tolerant of
+   midnight / clock skew between the Playwright process and the dev server.
+3. **User story 18 for the Dashboard roster.** `workspaceOverview` returns `activeProjects` (active + on_hold)
+   alongside `projects`. The Dashboard "Projects" panel renders `activeProjects` (with an empty-state line
+   pointing at `/projects`); `projects` remains for the empty-state check and `projectById`, so attention items,
+   milestones and activity rows can still resolve a Project key/name. The DB test now asserts the archived
+   Project is absent from `activeProjects` but still resolvable via `projectById`.
+4. **Singular count labels.** `ATTENTION_RULE_META` gained a `singular` string per rule; `AttentionBadge` uses it
+   when `count === 1` ("1 late dependency", "1 top risk", "1 milestone passed"). The e2e `/\d+ late dependenc/`
+   regex already matched both forms. `docs/attention/screenshots/04-dashboard-counts.png` changed accordingly
+   (the e2e fixture yields exactly one late dependency); `after-dashboard.png` was re-taken.
+
+Verification after the fixes: `typecheck`, `lint`, `npm test` (42/42) and the full e2e suite (12/12) are green.

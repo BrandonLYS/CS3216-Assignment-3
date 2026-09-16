@@ -597,7 +597,8 @@ test.describe("attention", () => {
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
     const list = page.locator("section", { hasText: "Needs attention" }).first();
     await expect(list.getByText("Overdue", { exact: true }).first()).toBeVisible();
-    await expect(list.getByText(/Due .*, 3 days ago/)).toBeVisible();
+    // Tolerant of midnight/clock skew between Playwright and the server: any past-day count.
+    await expect(list.getByText(/Due .*, \d+ days? ago/)).toBeVisible();
     await expect(list.getByText("Blocked", { exact: true }).first()).toBeVisible();
     await expect(list.getByText("Late dependency", { exact: true }).first()).toBeVisible();
     await expect(list.getByText(/Depends on .*, due .*, after start/)).toBeVisible();
