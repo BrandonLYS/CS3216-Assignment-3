@@ -6,8 +6,9 @@ import { milestonesService } from "@/server/modules/milestones/service";
 import { risksService } from "@/server/modules/risks/service";
 import { statusesService } from "@/server/modules/statuses/service";
 import { tasksService } from "@/server/modules/tasks/service";
+import { projectsService } from "@/server/modules/projects/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
-import { projectAttention } from "./queries";
+import { ATTENTION_DASHBOARD_LIMIT, projectAttention, workspaceOverview } from "./queries";
 
 const TODAY = "2026-09-15";
 
@@ -140,5 +141,68 @@ describe("projectAttention", () => {
   it("rejects a foreign User", async () => {
     const stranger = await makeCtx();
     await expect(projectAttention(stranger, projectId, { today: TODAY })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe("workspaceOverview", () => {
+  it("excludes completed/archived projects and caps the cross-project list", async () => {
+    const owner = await makeCtx();
+    const active = await makeProject(owner, "ACT");
+    const archived = await makeProject(owner, "OLD");
+    for (let i = 0; i < 12; i++) {
+      await tasksService.create(owner, {
+        projectId: active.id,
+        title: `Late ${i}`,
+        priority: "none",
+        dueDate: "2026-09-01",
+      });
+    }
+    await tasksService.create(owner, {
+      projectId: archived.id,
+      title: "Old late",
+      priority: "none",
+      dueDate: "2026-09-01",
+    });
+    await projectsService.update(owner, { id: archived.id, status: "archived" });
+
+    const o = await workspaceOverview(owner, { today: TODAY });
+    expect(ATTENTION_DASHBOARD_LIMIT).toBe(10);
+    expect(o.attention.items).toHaveLength(ATTENTION_DASHBOARD_LIMIT);
+    expect(o.attention.items.every((i) => i.projectId === active.id)).toBe(true);
+    expect(o.attention.byProject.has(archived.id)).toBe(false);
+    expect(o.attention.byProject.get(active.id)).toEqual({
+      counts: {
+        task_overdue: 12,
+        dependency_late: 0,
+        milestone_past_open: 0,
+        task_blocked: 0,
+        risk_top: 0,
+        task_due_soon: 0,
+      },
+      total: 12,
+    });
+    expect(o.stats).toEqual({ activeProjects: 1, overdue: 12, dueSoon: 0, blocked: 0, topRisks: 0 });
+    // The archived Project is still listed (roster), just not evaluated.
+    expect(o.projects.map((p) => p.id).sort()).toEqual([active.id, archived.id].sort());
+  });
+
+  it("items are sorted by severity then urgency across projects", async () => {
+    const owner = await makeCtx();
+    const a = await makeProject(owner, "AAA");
+    const b = await makeProject(owner, "BBB");
+    const blocked = (await statusesService.list(owner, a.id, "task")).find((s) => s.category === "blocked")!;
+    await tasksService.create(owner, { projectId: a.id, title: "Stuck", priority: "none", statusId: blocked.id });
+    await tasksService.create(owner, { projectId: b.id, title: "Late", priority: "none", dueDate: "2026-09-10" });
+    await tasksService.create(owner, { projectId: a.id, title: "Later", priority: "none", dueDate: "2026-09-13" });
+
+    const o = await workspaceOverview(owner, { today: TODAY });
+    expect(o.attention.items.map((i) => [i.rule, i.projectId])).toEqual([
+      ["task_overdue", b.id],
+      ["task_overdue", a.id],
+      ["task_blocked", a.id],
+    ]);
+    expect(o.attention.items[0]!.rule).toBe("task_overdue");
+    expect(o.stats.overdue).toBe(2);
+    expect(o.stats.blocked).toBe(1);
   });
 });
