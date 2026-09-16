@@ -30,12 +30,22 @@ export type CommentSnapshot = {
 
 export const COMMENT_LABEL_MAX = 60;
 
-/** "ACME-12: first line of the body…" — used as entityLabel for Activity Events. */
+const EMPTY_PREVIEW = "(no preview)";
+
+/**
+ * "ACME-12: first non-empty line of the body…" — used as entityLabel for Activity Events.
+ * Truncates by code point (not UTF-16 unit) so emoji are never split into lone surrogates.
+ */
 export function commentLabel(itemLabel: string, body: string): string {
-  const firstLine = body.split(/\r?\n/, 1)[0]!.trim();
-  const excerpt =
-    firstLine.length > COMMENT_LABEL_MAX ? `${firstLine.slice(0, COMMENT_LABEL_MAX - 1).trimEnd()}…` : firstLine;
-  return `${itemLabel}: ${excerpt}`;
+  const firstLine =
+    body
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? EMPTY_PREVIEW;
+  const chars = Array.from(firstLine);
+  if (chars.length <= COMMENT_LABEL_MAX) return `${itemLabel}: ${firstLine}`;
+  const head = chars.slice(0, COMMENT_LABEL_MAX - 1).join("");
+  return `${itemLabel}: ${head.trimEnd()}…`;
 }
 
 const snapshotOf = (c: CommentRow): CommentSnapshot => ({

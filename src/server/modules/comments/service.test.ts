@@ -14,7 +14,7 @@ import { risksService } from "@/server/modules/risks/service";
 import type { TaskRow } from "@/server/modules/tasks/schema";
 import { tasksService } from "@/server/modules/tasks/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
-import { commentsService } from "./service";
+import { COMMENT_LABEL_MAX, commentLabel, commentsService } from "./service";
 import type { CreateCommentInput } from "./validation";
 
 let ctx: Ctx;
@@ -44,6 +44,30 @@ const mk = (over: Partial<CreateCommentInput> = {}) =>
     body: "Jason said integration lands next week.",
     ...over,
   });
+
+describe("commentLabel", () => {
+  it("uses the first non-empty line, skipping leading blank lines", () => {
+    expect(commentLabel("KEY-1", "\n  \n\nReal first line\nSecond")).toBe("KEY-1: Real first line");
+  });
+
+  it("falls back to a placeholder when the body has no non-empty line", () => {
+    expect(commentLabel("KEY-1", "\n \n")).toBe("KEY-1: (no preview)");
+    expect(commentLabel("KEY-1", "")).toBe("KEY-1: (no preview)");
+  });
+
+  it("truncates by code point so emoji are never split into lone surrogates", () => {
+    const body = "🚀🎉".repeat(40); // 80 code points, 160 UTF-16 units
+    const label = commentLabel("KEY-1", body);
+    expect(label.endsWith("…")).toBe(true);
+    expect(label).toBe(Array.from(label).join(""));
+    expect(label).not.toMatch(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]|[\uD800-\uDBFF]([^\uDC00-\uDFFF]|$)/);
+    expect(Array.from(label.slice("KEY-1: ".length)).length).toBe(COMMENT_LABEL_MAX);
+  });
+
+  it("leaves a short first line untouched", () => {
+    expect(commentLabel("R-3", "short")).toBe("R-3: short");
+  });
+});
 
 describe("commentsService", () => {
   it("creates a Comment on a Task, a Risk and a Milestone and lists them oldest first", async () => {
@@ -191,6 +215,24 @@ describe("commentsService", () => {
     const rows = await tasksService.list(ctx, projectId);
     expect(rows.find((r) => r.task.id === a.id)?.commentCount).toBe(2);
     expect(rows.find((r) => r.task.id === b.id)?.commentCount).toBe(0);
+    expect((await tasksService.get(ctx, a.id))?.commentCount).toBe(2);
+  });
+
+  it("commentCount is scoped to the Project: Comments elsewhere never change this Project's counts", async () => {
+    const a = await tasksService.create(ctx, { projectId, title: "Scoped", priority: "none" });
+    await mk({ entityId: a.id, body: "Only one here" });
+    const before = await tasksService.list(ctx, projectId);
+
+    const other = await makeProject(ctx, "SCP");
+    const foreign = await tasksService.create(ctx, { projectId: other.id, title: "Chatty", priority: "none" });
+    await mk({ projectId: other.id, entityId: foreign.id, body: "One" });
+    await mk({ projectId: other.id, entityId: foreign.id, body: "Two" });
+
+    const after = await tasksService.list(ctx, projectId);
+    expect(after.map((r) => [r.task.id, r.commentCount])).toEqual(before.map((r) => [r.task.id, r.commentCount]));
+    expect(after.find((r) => r.task.id === a.id)?.commentCount).toBe(1);
+    expect((await tasksService.get(ctx, a.id))?.commentCount).toBe(1);
+    expect((await tasksService.list(ctx, other.id)).find((r) => r.task.id === foreign.id)?.commentCount).toBe(2);
   });
 
   it("refuses a foreign User creating, listing or deleting", async () => {
