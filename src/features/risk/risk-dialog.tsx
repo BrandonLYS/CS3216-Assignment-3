@@ -8,6 +8,7 @@ import type { RiskRow } from "@/server/modules/risks/schema";
 import { SCALE_LEVELS } from "@/shared/domain";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField, enumOptions } from "@/shared/ui";
 import { CommentThread } from "@/features/comment/comment-thread";
+import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 
 export function RiskDialog({
   open,
@@ -46,97 +47,99 @@ export function RiskDialog({
           </p>
         </ActionForm>
       ) : (
-        <ActionForm
-          key={r?.id ?? "new"}
-          action={r ? updateRiskAction : createRiskAction}
-          hidden={r ? { id: r.id } : { projectId: refs.project.id }}
-          submitLabel={r ? "Save changes" : "Create risk"}
-          cancel={onClose}
-          onSuccess={onClose}
-          footerStart={
-            r && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-tag-red hover:text-tag-red"
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash2 className="size-3.5" /> Delete
-              </Button>
-            )
-          }
-        >
-          <TextField
-            name="title"
-            label="Title"
-            required
-            autoFocus
-            defaultValue={r?.title}
-            placeholder="Vendor access delay blocks testing"
-          />
-          <FormRow>
+        <ItemDialogTabs history={r ? { projectId: r.projectId, entityType: "risk", entityId: r.id } : null}>
+          <ActionForm
+            key={r?.id ?? "new"}
+            action={r ? updateRiskAction : createRiskAction}
+            hidden={r ? { id: r.id } : { projectId: refs.project.id }}
+            submitLabel={r ? "Save changes" : "Create risk"}
+            cancel={onClose}
+            onSuccess={onClose}
+            footerStart={
+              r && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-tag-red hover:text-tag-red"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </Button>
+              )
+            }
+          >
+            <TextField
+              name="title"
+              label="Title"
+              required
+              autoFocus
+              defaultValue={r?.title}
+              placeholder="Vendor access delay blocks testing"
+            />
+            <FormRow>
+              <TextareaField
+                name="cause"
+                label="Cause"
+                defaultValue={r?.cause ?? ""}
+                placeholder="Why might this happen?"
+                inputClassName="min-h-16"
+              />
+              <TextareaField
+                name="impactDescription"
+                label="Impact"
+                defaultValue={r?.impactDescription ?? ""}
+                placeholder="What happens if it does?"
+                inputClassName="min-h-16"
+              />
+            </FormRow>
+            <FormRow>
+              <SelectField
+                name="probability"
+                label="Probability"
+                defaultValue={r?.probability ?? "medium"}
+                options={enumOptions(SCALE_LEVELS)}
+              />
+              <SelectField
+                name="impact"
+                label="Impact level"
+                defaultValue={r?.impact ?? "medium"}
+                options={enumOptions(SCALE_LEVELS)}
+              />
+            </FormRow>
+            <FormRow>
+              <SelectField
+                name="statusId"
+                label="Status"
+                defaultValue={r?.statusId ?? statuses.find((s) => s.isDefault)?.id}
+                options={statuses.map((s) => ({ value: s.id, label: s.name }))}
+              />
+              <SelectField
+                name="ownerId"
+                label="Owner"
+                defaultValue={r?.ownerId ?? ""}
+                placeholder="No owner"
+                options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
+              />
+            </FormRow>
             <TextareaField
-              name="cause"
-              label="Cause"
-              defaultValue={r?.cause ?? ""}
-              placeholder="Why might this happen?"
-              inputClassName="min-h-16"
+              name="mitigation"
+              label="Mitigation"
+              defaultValue={r?.mitigation ?? ""}
+              placeholder="What are we doing about it?"
             />
+            <FormRow>
+              <TextField name="reviewDate" label="Review date" type="date" defaultValue={r?.reviewDate ?? ""} />
+            </FormRow>
             <TextareaField
-              name="impactDescription"
-              label="Impact"
-              defaultValue={r?.impactDescription ?? ""}
-              placeholder="What happens if it does?"
-              inputClassName="min-h-16"
+              name="description"
+              label="Notes"
+              defaultValue={r?.description ?? ""}
+              inputClassName="min-h-14"
             />
-          </FormRow>
-          <FormRow>
-            <SelectField
-              name="probability"
-              label="Probability"
-              defaultValue={r?.probability ?? "medium"}
-              options={enumOptions(SCALE_LEVELS)}
-            />
-            <SelectField
-              name="impact"
-              label="Impact level"
-              defaultValue={r?.impact ?? "medium"}
-              options={enumOptions(SCALE_LEVELS)}
-            />
-          </FormRow>
-          <FormRow>
-            <SelectField
-              name="statusId"
-              label="Status"
-              defaultValue={r?.statusId ?? statuses.find((s) => s.isDefault)?.id}
-              options={statuses.map((s) => ({ value: s.id, label: s.name }))}
-            />
-            <SelectField
-              name="ownerId"
-              label="Owner"
-              defaultValue={r?.ownerId ?? ""}
-              placeholder="No owner"
-              options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
-            />
-          </FormRow>
-          <TextareaField
-            name="mitigation"
-            label="Mitigation"
-            defaultValue={r?.mitigation ?? ""}
-            placeholder="What are we doing about it?"
-          />
-          <FormRow>
-            <TextField name="reviewDate" label="Review date" type="date" defaultValue={r?.reviewDate ?? ""} />
-          </FormRow>
-          <TextareaField
-            name="description"
-            label="Notes"
-            defaultValue={r?.description ?? ""}
-            inputClassName="min-h-14"
-          />
-          {r && <CommentThread projectId={refs.project.id} entityType="risk" entityId={r.id} people={refs.people} />}
-        </ActionForm>
+            {r && <CommentThread projectId={refs.project.id} entityType="risk" entityId={r.id} people={refs.people} />}
+          </ActionForm>
+        </ItemDialogTabs>
       )}
     </Dialog>
   );

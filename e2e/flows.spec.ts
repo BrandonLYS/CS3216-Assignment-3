@@ -629,6 +629,53 @@ test.describe("attention", () => {
   });
 });
 
+test.describe("history", () => {
+  const shot = shots("history");
+
+  test("shows an item's field changes, grouped per save, with names and dates", async ({ page }) => {
+    await openProject(page, "Tasks");
+    await page.getByRole("button", { name: "New task" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("tab")).toHaveCount(0); // create mode: no tabs
+    await shot(page, "create-dialog-no-tabs");
+    await dialog.getByLabel("Title").fill("Rotate PSP API keys");
+    await dialog.getByLabel("Due date").fill("2026-09-18");
+    await dialog.getByRole("button", { name: "Create task" }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByText("Rotate PSP API keys").click();
+    await expect(dialog.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
+    await shot(page, "edit-dialog-details-tab");
+    await dialog.getByRole("tab", { name: "History" }).click();
+    await expect(dialog.getByText("Created", { exact: true })).toBeVisible();
+    await shot(page, "history-fresh");
+
+    await dialog.getByRole("tab", { name: "Details" }).click();
+    // History groups events by actor and second; make sure the save lands in a later second than the create.
+    await page.waitForTimeout(1100);
+    await dialog.getByLabel("Status").selectOption({ label: "In Progress" });
+    await dialog.getByLabel("Owner").selectOption({ label: "Priya Nair" });
+    await dialog.getByLabel("Due date").fill("2026-09-23");
+    await dialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByText("Rotate PSP API keys").click();
+    await dialog.getByRole("tab", { name: "History" }).click();
+    const panel = dialog.getByRole("tabpanel", { name: "History" });
+    for (const t of ["Todo", "In Progress", "Priya Nair", "18 Sep 2026", "23 Sep 2026"]) {
+      await expect(panel.getByText(t)).toBeVisible();
+    }
+    await expect(panel.locator("ol > li")).toHaveCount(2); // one group per save + Created
+    await expect(panel.locator("li").last()).toHaveText("Created");
+    await shot(page, "history-after-save");
+
+    await dialog.getByRole("tab", { name: "History" }).focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(dialog.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
+    await shot(page, "keyboard-back-to-details");
+  });
+});
+
 // Must stay last: it creates a second Project, which earlier flows' `.first()` locators tolerate but do not expect.
 test.describe("task-search", () => {
   const shot = shots("task-search");

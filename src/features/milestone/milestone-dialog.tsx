@@ -14,6 +14,7 @@ import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField } from "@/shared/ui";
 import { CommentThread } from "@/features/comment/comment-thread";
 import { DependencyEditor } from "@/features/dependency/dependency-editor";
+import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 
 export function MilestoneDialog({
   open,
@@ -57,58 +58,65 @@ export function MilestoneDialog({
           </p>
         </ActionForm>
       ) : (
-        <ActionForm
-          key={m?.id ?? "new"}
-          action={m ? updateMilestoneAction : createMilestoneAction}
-          hidden={m ? { id: m.id } : { projectId: refs.project.id }}
-          submitLabel={m ? "Save changes" : "Create milestone"}
-          cancel={onClose}
-          onSuccess={onClose}
-          footerStart={
-            m && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-tag-red hover:text-tag-red"
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash2 className="size-3.5" /> Delete
-              </Button>
-            )
-          }
-        >
-          <TextField name="name" label="Name" required autoFocus defaultValue={m?.name} placeholder="UAT begins" />
-          <TextareaField name="description" label="Description" defaultValue={m?.description ?? ""} />
-          <FormRow>
-            <TextField name="dueDate" label="Due date" type="date" required defaultValue={m?.dueDate} />
-            <SelectField
-              name="statusId"
-              label="Status"
-              defaultValue={m?.statusId ?? statuses.find((s) => s.isDefault)?.id}
-              options={statuses.map((s) => ({ value: s.id, label: s.name }))}
-            />
-          </FormRow>
-          <SelectField
-            name="ownerId"
-            label="Owner"
-            defaultValue={m?.ownerId ?? ""}
-            placeholder="No owner"
-            options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
-          />
-          {m && (
-            <>
-              <DependencyEditor
-                projectId={refs.project.id}
-                item={{ type: "milestone", id: m.id }}
-                tasks={tasks}
-                milestones={refs.milestones}
-                dependencies={dependencies}
+        <ItemDialogTabs history={m ? { projectId: m.projectId, entityType: "milestone", entityId: m.id } : null}>
+          <ActionForm
+            key={m?.id ?? "new"}
+            action={m ? updateMilestoneAction : createMilestoneAction}
+            hidden={m ? { id: m.id } : { projectId: refs.project.id }}
+            submitLabel={m ? "Save changes" : "Create milestone"}
+            cancel={onClose}
+            onSuccess={onClose}
+            footerStart={
+              m && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-tag-red hover:text-tag-red"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </Button>
+              )
+            }
+          >
+            <TextField name="name" label="Name" required autoFocus defaultValue={m?.name} placeholder="UAT begins" />
+            <TextareaField name="description" label="Description" defaultValue={m?.description ?? ""} />
+            <FormRow>
+              <TextField name="dueDate" label="Due date" type="date" required defaultValue={m?.dueDate} />
+              <SelectField
+                name="statusId"
+                label="Status"
+                defaultValue={m?.statusId ?? statuses.find((s) => s.isDefault)?.id}
+                options={statuses.map((s) => ({ value: s.id, label: s.name }))}
               />
-              <CommentThread projectId={refs.project.id} entityType="milestone" entityId={m.id} people={refs.people} />
-            </>
-          )}
-        </ActionForm>
+            </FormRow>
+            <SelectField
+              name="ownerId"
+              label="Owner"
+              defaultValue={m?.ownerId ?? ""}
+              placeholder="No owner"
+              options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
+            />
+            {m && (
+              <>
+                <DependencyEditor
+                  projectId={refs.project.id}
+                  item={{ type: "milestone", id: m.id }}
+                  tasks={tasks}
+                  milestones={refs.milestones}
+                  dependencies={dependencies}
+                />
+                <CommentThread
+                  projectId={refs.project.id}
+                  entityType="milestone"
+                  entityId={m.id}
+                  people={refs.people}
+                />
+              </>
+            )}
+          </ActionForm>
+        </ItemDialogTabs>
       )}
     </Dialog>
   );

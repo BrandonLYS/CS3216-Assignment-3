@@ -6,3 +6,4 @@ export * from "./page-header";
 export * from "./action-form";
 export * from "./form-fields";
 export * from "./logo";
+export * from "./tabs";

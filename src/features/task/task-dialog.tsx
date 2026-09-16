@@ -11,6 +11,7 @@ import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaFi
 import { useFieldError } from "@/shared/ui/action-form";
 import { CommentThread } from "@/features/comment/comment-thread";
 import { DependencyEditor } from "@/features/dependency/dependency-editor";
+import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 
 export function TaskDialog({
   open,
@@ -58,107 +59,109 @@ export function TaskDialog({
           </p>
         </ActionForm>
       ) : (
-        <ActionForm
-          key={t?.id ?? "new"}
-          action={t ? updateTaskAction : createTaskAction}
-          hidden={t ? { id: t.id } : { projectId: refs.project.id }}
-          submitLabel={t ? "Save changes" : "Create task"}
-          cancel={onClose}
-          onSuccess={onClose}
-          footerStart={
-            t && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-tag-red hover:text-tag-red"
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash2 className="size-3.5" /> Delete
-              </Button>
-            )
-          }
-        >
-          <TextField
-            name="title"
-            label="Title"
-            required
-            autoFocus
-            defaultValue={t?.title}
-            placeholder="What needs to happen?"
-          />
-          <TextareaField
-            name="description"
-            label="Description"
-            defaultValue={t?.description ?? ""}
-            placeholder="Context, acceptance criteria, links…"
-          />
-          <FormRow>
-            <SelectField
-              name="statusId"
-              label="Status"
-              defaultValue={t?.statusId ?? defaults?.statusId ?? taskStatuses.find((s) => s.isDefault)?.id}
-              options={taskStatuses.map((s) => ({ value: s.id, label: s.name }))}
-            />
-            <SelectField
-              name="priority"
-              label="Priority"
-              defaultValue={t?.priority ?? "none"}
-              options={enumOptions(PRIORITIES)}
-            />
-          </FormRow>
-          <FormRow>
-            <SelectField
-              name="assigneeId"
-              label="Owner"
-              defaultValue={t?.assigneeId ?? ""}
-              placeholder="Unassigned"
-              options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
-            />
-            <SelectField
-              name="teamId"
-              label="Team"
-              defaultValue={t?.teamId ?? ""}
-              placeholder="No team"
-              options={refs.teams.map((x) => ({ value: x.id, label: x.name }))}
-            />
-          </FormRow>
-          <FormRow>
-            <SelectField
-              name="milestoneId"
-              label="Milestone"
-              defaultValue={t?.milestoneId ?? defaults?.milestoneId ?? ""}
-              placeholder="No milestone"
-              options={refs.milestones.map((m) => ({ value: m.id, label: m.name }))}
-            />
+        <ItemDialogTabs history={t ? { projectId: t.projectId, entityType: "task", entityId: t.id } : null}>
+          <ActionForm
+            key={t?.id ?? "new"}
+            action={t ? updateTaskAction : createTaskAction}
+            hidden={t ? { id: t.id } : { projectId: refs.project.id }}
+            submitLabel={t ? "Save changes" : "Create task"}
+            cancel={onClose}
+            onSuccess={onClose}
+            footerStart={
+              t && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-tag-red hover:text-tag-red"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </Button>
+              )
+            }
+          >
             <TextField
-              name="estimateHours"
-              label="Estimate (hours)"
-              type="number"
-              min={0}
-              step={0.5}
-              defaultValue={t?.estimateHours ?? ""}
+              name="title"
+              label="Title"
+              required
+              autoFocus
+              defaultValue={t?.title}
+              placeholder="What needs to happen?"
             />
-          </FormRow>
-          <FormRow>
-            <TextField name="startDate" label="Start date" type="date" defaultValue={t?.startDate ?? ""} />
-            <TextField name="dueDate" label="Due date" type="date" defaultValue={t?.dueDate ?? ""} />
-          </FormRow>
-          <LabelPicker labels={refs.labels} selected={task?.labels.map((l) => l.id) ?? []} />
-
-          {t && (
-            <>
-              <DependencyEditor
-                projectId={refs.project.id}
-                item={{ type: "task", id: t.id }}
-                tasks={tasks}
-                milestones={refs.milestones}
-                dependencies={dependencies}
+            <TextareaField
+              name="description"
+              label="Description"
+              defaultValue={t?.description ?? ""}
+              placeholder="Context, acceptance criteria, links…"
+            />
+            <FormRow>
+              <SelectField
+                name="statusId"
+                label="Status"
+                defaultValue={t?.statusId ?? defaults?.statusId ?? taskStatuses.find((s) => s.isDefault)?.id}
+                options={taskStatuses.map((s) => ({ value: s.id, label: s.name }))}
               />
-              <CommentThread projectId={refs.project.id} entityType="task" entityId={t.id} people={refs.people} />
-            </>
-          )}
-        </ActionForm>
+              <SelectField
+                name="priority"
+                label="Priority"
+                defaultValue={t?.priority ?? "none"}
+                options={enumOptions(PRIORITIES)}
+              />
+            </FormRow>
+            <FormRow>
+              <SelectField
+                name="assigneeId"
+                label="Owner"
+                defaultValue={t?.assigneeId ?? ""}
+                placeholder="Unassigned"
+                options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
+              />
+              <SelectField
+                name="teamId"
+                label="Team"
+                defaultValue={t?.teamId ?? ""}
+                placeholder="No team"
+                options={refs.teams.map((x) => ({ value: x.id, label: x.name }))}
+              />
+            </FormRow>
+            <FormRow>
+              <SelectField
+                name="milestoneId"
+                label="Milestone"
+                defaultValue={t?.milestoneId ?? defaults?.milestoneId ?? ""}
+                placeholder="No milestone"
+                options={refs.milestones.map((m) => ({ value: m.id, label: m.name }))}
+              />
+              <TextField
+                name="estimateHours"
+                label="Estimate (hours)"
+                type="number"
+                min={0}
+                step={0.5}
+                defaultValue={t?.estimateHours ?? ""}
+              />
+            </FormRow>
+            <FormRow>
+              <TextField name="startDate" label="Start date" type="date" defaultValue={t?.startDate ?? ""} />
+              <TextField name="dueDate" label="Due date" type="date" defaultValue={t?.dueDate ?? ""} />
+            </FormRow>
+            <LabelPicker labels={refs.labels} selected={task?.labels.map((l) => l.id) ?? []} />
+
+            {t && (
+              <>
+                <DependencyEditor
+                  projectId={refs.project.id}
+                  item={{ type: "task", id: t.id }}
+                  tasks={tasks}
+                  milestones={refs.milestones}
+                  dependencies={dependencies}
+                />
+                <CommentThread projectId={refs.project.id} entityType="task" entityId={t.id} people={refs.people} />
+              </>
+            )}
+          </ActionForm>
+        </ItemDialogTabs>
       )}
     </Dialog>
   );
