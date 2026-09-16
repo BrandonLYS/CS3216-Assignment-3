@@ -32,6 +32,20 @@ const TOOL_LABEL: Record<string, string> = {
   delete_task: "Deleted Task",
   delete_milestone: "Deleted Milestone",
   update_project: "Updated Project",
+  create_risk: "Logged Risk",
+  update_risk: "Updated Risk",
+  add_comment: "Commented",
+  add_dependency: "Added dependency",
+  remove_dependency: "Removed dependency",
+  list_people: "Listed People",
+  create_person: "Added Person",
+  list_teams: "Listed Teams",
+  list_labels: "Listed Labels",
+  create_label: "Created Label",
+  set_task_labels: "Tagged Task",
+  list_evidence: "Listed Evidence",
+  get_evidence: "Read Evidence",
+  link_evidence: "Linked Evidence",
 };
 
 const isPendingCard = (part: UIMessage["parts"][number]) => isToolUIPart(part) && part.state === "approval-requested";
