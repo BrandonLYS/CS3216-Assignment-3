@@ -7,11 +7,16 @@ import { assertOwnsProject } from "@/server/modules/projects/service";
 import { peopleRepo, teamsRepo } from "./repository";
 import type { CreatePersonInput, CreateTeamInput, UpdatePersonInput, UpdateTeamInput } from "./validation";
 
-/** Ensure an optional Person/Team reference belongs to the same project. */
-export async function assertPersonInProject(db: DbOrTx, projectId: string, personId?: string | null) {
+/** Ensure an optional Person/Team reference belongs to the same project; `field` names the offending input. */
+export async function assertPersonInProject(
+  db: DbOrTx,
+  projectId: string,
+  personId?: string | null,
+  field = "assigneeId",
+) {
   if (!personId) return;
   const p = await peopleRepo.findById(db, personId);
-  if (!p || p.projectId !== projectId) throw new ValidationError("Invalid person", { assigneeId: ["Invalid"] });
+  if (!p || p.projectId !== projectId) throw new ValidationError("Invalid person", { [field]: ["Invalid"] });
 }
 
 export async function assertTeamInProject(db: DbOrTx, projectId: string, teamId?: string | null) {

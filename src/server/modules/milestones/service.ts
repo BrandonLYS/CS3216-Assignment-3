@@ -3,6 +3,7 @@ import { compactPatch, diffFields } from "@/server/core/diff";
 import { NotFoundError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
 import type { DbOrTx } from "@/server/db/client";
+import { commentsRepo } from "@/server/modules/comments/repository";
 import { dependenciesRepo } from "@/server/modules/dependencies/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
@@ -57,6 +58,7 @@ export const milestonesService = {
     mutate(ctx, async (tx, rec) => {
       const m = await getOwned(tx, ctx.userId, id);
       await dependenciesRepo.deleteForItem(tx, id);
+      await commentsRepo.deleteForEntity(tx, "milestone", id);
       await milestonesRepo.delete(tx, id);
       rec.deleted("milestone", m.projectId, id, m.name);
     }),

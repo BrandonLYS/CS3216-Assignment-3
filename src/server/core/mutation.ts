@@ -14,16 +14,18 @@ export class Recorder {
 
   constructor(private readonly actorId: string) {}
 
-  created(entityType: EntityType, projectId: string, entityId: string, entityLabel: string) {
-    this.push(entityType, projectId, entityId, entityLabel, "created", []);
+  /** `snapshot`, when given, is stored as the Activity Event's `newValue` (e.g. a Comment body). */
+  created(entityType: EntityType, projectId: string, entityId: string, entityLabel: string, snapshot?: unknown) {
+    this.push(entityType, projectId, entityId, entityLabel, "created", [], snapshot);
   }
 
   updated(entityType: EntityType, projectId: string, entityId: string, entityLabel: string, changes: FieldChange[]) {
     if (changes.length) this.push(entityType, projectId, entityId, entityLabel, "updated", changes);
   }
 
-  deleted(entityType: EntityType, projectId: string, entityId: string, entityLabel: string) {
-    this.push(entityType, projectId, entityId, entityLabel, "deleted", []);
+  /** `snapshot`, when given, is stored as the Activity Event's `oldValue` so history keeps the content. */
+  deleted(entityType: EntityType, projectId: string, entityId: string, entityLabel: string, snapshot?: unknown) {
+    this.push(entityType, projectId, entityId, entityLabel, "deleted", [], snapshot);
   }
 
   private push(
@@ -33,6 +35,7 @@ export class Recorder {
     entityLabel: string,
     action: DomainEvent["action"],
     changes: FieldChange[],
+    snapshot?: unknown,
   ) {
     this.pending.push({
       name: `${entityType}.${action}`,
@@ -43,6 +46,7 @@ export class Recorder {
       entityLabel,
       action,
       changes,
+      snapshot,
       occurredAt: new Date(),
     });
   }
@@ -58,7 +62,10 @@ export class Recorder {
         action: e.action,
         occurredAt: e.occurredAt,
       };
-      if (e.action !== "updated") return [base];
+      if (e.action !== "updated") {
+        if (e.snapshot === undefined) return [base];
+        return [{ ...base, ...(e.action === "created" ? { newValue: e.snapshot } : { oldValue: e.snapshot }) }];
+      }
       return e.changes.map((c) => ({
         ...base,
         field: c.field,

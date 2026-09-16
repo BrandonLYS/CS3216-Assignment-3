@@ -302,14 +302,14 @@ test.describe("timeline", () => {
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Milestone").selectOption({ label: "UAT begins" });
     await dialog.getByRole("button", { name: "Add predecessor" }).click();
-    await dialog.getByRole("combobox").last().selectOption({ label: "Implement v2 endpoints" });
+    await dialog.getByRole("combobox").filter({ hasText: "Choose…" }).selectOption({ label: "Implement v2 endpoints" });
     await dialog.getByRole("button", { name: "Add", exact: true }).click();
     await expect(dialog.getByText("Implement v2 endpoints").last()).toBeVisible();
     await shot(page, "dependency-editor");
 
     // A cycle must be rejected.
     await dialog.getByRole("button", { name: "Add successor" }).click();
-    await dialog.getByRole("combobox").last().selectOption({ label: "Implement v2 endpoints" });
+    await dialog.getByRole("combobox").filter({ hasText: "Choose…" }).selectOption({ label: "Implement v2 endpoints" });
     await dialog.getByRole("button", { name: "Add", exact: true }).click();
     await expect(dialog.getByText(/cycle|already|circular/i)).toBeVisible();
     await shot(page, "dependency-cycle-rejected");
@@ -496,5 +496,61 @@ test.describe("command-palette", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/risks$/);
     await shot(page, "navigated-to-risks");
+  });
+});
+
+test.describe("comments", () => {
+  const shot = shots("comments");
+
+  test("posts, lists, counts and deletes a Comment on a Task", async ({ page }) => {
+    await openProject(page, "Tasks");
+    await page.getByText("Implement v2 endpoints").first().click();
+    const dialog = page.getByRole("dialog", { name: `${key}-1` });
+    await expect(dialog.getByText("No comments yet.")).toBeVisible();
+    await shot(page, "task-dialog-empty-thread");
+
+    const body = "Vendor confirmed 17 Sep in Friday's meeting.\nSee https://example.com/minutes";
+    const composer = dialog.getByRole("textbox", { name: "Comment" });
+    await composer.fill(body);
+    await dialog.getByLabel("Said by").selectOption({ label: "Priya Nair" });
+    await dialog.getByLabel("Said on").fill("2026-09-12");
+    await shot(page, "composer-filled");
+    await composer.press("ControlOrMeta+Enter");
+    const thread = dialog.getByRole("listitem").filter({ hasText: "Vendor confirmed 17 Sep" });
+    await expect(thread).toBeVisible();
+    await expect(thread.getByText("Priya Nair")).toBeVisible();
+    await expect(thread.getByText("said 12 Sep 2026")).toBeVisible();
+    await expect(thread.getByRole("link", { name: "https://example.com/minutes" })).toBeVisible();
+    await expect(composer).toHaveValue("");
+    await expect(dialog).toBeVisible(); // posting never submits the parent form
+    await shot(page, "comment-posted");
+
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTitle("1 comment")).toBeVisible();
+    await shot(page, "list-with-count");
+    await page.getByRole("button", { name: "board view" }).click();
+    await expect(page.getByTitle("1 comment")).toBeVisible();
+    await shot(page, "board-with-count");
+    await page.getByRole("button", { name: "list view" }).click();
+
+    await page.getByText("Implement v2 endpoints").first().click();
+    await dialog.getByRole("button", { name: "Delete comment" }).click();
+    await expect(dialog.getByText("Delete this comment?")).toBeVisible();
+    await shot(page, "delete-confirm");
+    await dialog
+      .getByRole("listitem")
+      .filter({ hasText: "Delete this comment?" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(dialog.getByText("No comments yet.")).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTitle("1 comment")).toBeHidden();
+
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page.getByText(new RegExp(`created Comment "${key}-1: Vendor confirmed`))).toBeVisible();
+    await expect(page.getByText(new RegExp(`deleted Comment "${key}-1: Vendor confirmed`))).toBeVisible();
+    await shot(page, "overview-feed");
   });
 });

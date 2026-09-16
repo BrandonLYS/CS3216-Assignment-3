@@ -1,26 +1,42 @@
-import { and, asc, eq, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { TERMINAL_CATEGORIES } from "@/shared/domain";
+import { comments } from "@/server/modules/comments/schema";
 import { labels } from "@/server/modules/labels/schema";
 import { milestones } from "@/server/modules/milestones/schema";
 import { people, teams } from "@/server/modules/people/schema";
 import { statuses } from "@/server/modules/statuses/schema";
 import { taskLabels, tasks, type NewTaskRow, type TaskRow } from "./schema";
 
-const withJoins = (db: DbOrTx) =>
-  db
+/**
+ * Base select with the joins every detailed read needs. `commentScope` narrows the grouped
+ * Comment-count subquery (by Project for lists, by Task id for a single row) so it never
+ * aggregates Comments outside the rows being read.
+ */
+const withJoins = (db: DbOrTx, commentScope: SQL) => {
+  // One grouped subquery for Comment counts; no per-row query.
+  const commentCounts = db
+    .select({ entityId: comments.entityId, n: sql<number>`count(*)::int`.as("n") })
+    .from(comments)
+    .where(and(eq(comments.entityType, "task"), commentScope))
+    .groupBy(comments.entityId)
+    .as("comment_counts");
+  return db
     .select({
       task: tasks,
       status: statuses,
       assignee: people,
       team: teams,
       milestone: { id: milestones.id, name: milestones.name, dueDate: milestones.dueDate },
+      commentCount: sql<number>`coalesce(${commentCounts.n}, 0)`.mapWith(Number),
     })
     .from(tasks)
     .innerJoin(statuses, eq(statuses.id, tasks.statusId))
     .leftJoin(people, eq(people.id, tasks.assigneeId))
     .leftJoin(teams, eq(teams.id, tasks.teamId))
-    .leftJoin(milestones, eq(milestones.id, tasks.milestoneId));
+    .leftJoin(milestones, eq(milestones.id, tasks.milestoneId))
+    .leftJoin(commentCounts, eq(commentCounts.entityId, tasks.id));
+};
 
 async function attachLabels<T extends { task: TaskRow }>(db: DbOrTx, rows: T[]) {
   const ids = rows.map((r) => r.task.id);
@@ -39,7 +55,7 @@ export const tasksRepo = {
   listByProject: async (db: DbOrTx, projectId: string) =>
     attachLabels(
       db,
-      await withJoins(db)
+      await withJoins(db, eq(comments.projectId, projectId))
         .where(eq(tasks.projectId, projectId))
         .orderBy(asc(statuses.sortOrder), asc(tasks.sortOrder), asc(tasks.number)),
     ),
@@ -70,7 +86,7 @@ export const tasksRepo = {
   },
 
   findDetailed: async (db: DbOrTx, id: string) => {
-    const rows = await attachLabels(db, await withJoins(db).where(eq(tasks.id, id)));
+    const rows = await attachLabels(db, await withJoins(db, eq(comments.entityId, id)).where(eq(tasks.id, id)));
     return rows[0];
   },
 

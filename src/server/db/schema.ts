@@ -8,5 +8,6 @@ export * from "@/server/modules/milestones/schema";
 export * from "@/server/modules/tasks/schema";
 export * from "@/server/modules/dependencies/schema";
 export * from "@/server/modules/risks/schema";
+export * from "@/server/modules/comments/schema";
 export * from "@/server/modules/evidence/schema";
 export * from "@/server/modules/activity/schema";
