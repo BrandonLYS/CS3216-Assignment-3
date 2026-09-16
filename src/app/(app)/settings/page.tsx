@@ -1,13 +1,16 @@
 import { ctxForCurrentUser } from "@/server/core/action";
+import { apiTokensService } from "@/server/modules/api-tokens/service";
 import { memoryService } from "@/server/modules/memory/service";
 import { PageHeader, SectionTitle } from "@/shared/ui";
 import { MemoryEditor } from "@/features/memory/memory-editor";
+import { ApiTokens } from "@/features/settings/api-tokens";
 
 export const metadata = { title: "Settings" };
 
 export default async function UserSettingsPage() {
   const ctx = await ctxForCurrentUser();
-  const versions = await memoryService.versions(ctx, null);
+  const [versions, tokens] = await Promise.all([memoryService.versions(ctx, null), apiTokensService.list(ctx)]);
+  const endpoint = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/api/mcp`;
   return (
     <>
       <PageHeader title="Settings" />
@@ -28,6 +31,15 @@ export default async function UserSettingsPage() {
               placeholder="Always assign new tasks to me. Default to two-week milestones. Keep summaries short."
               hint="Markdown. Roughly 2,000 tokens at most."
             />
+          </section>
+
+          <section className="flex flex-col gap-4">
+            <SectionTitle>API tokens</SectionTitle>
+            <p className="text-caption text-ink-subtle">
+              Let an MCP client such as Claude Desktop or Cursor drive your Projects. Each token acts as you; changes
+              show in History via Assistant. Destructive tools are not offered over MCP.
+            </p>
+            <ApiTokens tokens={tokens} endpoint={endpoint} />
           </section>
         </div>
       </div>
