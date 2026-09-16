@@ -7,6 +7,7 @@ import { createRiskAction, deleteRiskAction, updateRiskAction } from "@/server/m
 import type { RiskRow } from "@/server/modules/risks/schema";
 import { SCALE_LEVELS } from "@/shared/domain";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField, enumOptions } from "@/shared/ui";
+import { CommentThread } from "@/features/comment/comment-thread";
 
 export function RiskDialog({
   open,
@@ -134,6 +135,7 @@ export function RiskDialog({
             defaultValue={r?.description ?? ""}
             inputClassName="min-h-14"
           />
+          {r && <CommentThread projectId={refs.project.id} entityType="risk" entityId={r.id} people={refs.people} />}
         </ActionForm>
       )}
     </Dialog>

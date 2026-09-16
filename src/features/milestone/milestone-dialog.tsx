@@ -12,6 +12,7 @@ import type { MilestoneRow } from "@/server/modules/milestones/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField } from "@/shared/ui";
+import { CommentThread } from "@/features/comment/comment-thread";
 import { DependencyEditor } from "@/features/dependency/dependency-editor";
 
 export function MilestoneDialog({
@@ -96,13 +97,16 @@ export function MilestoneDialog({
             options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
           />
           {m && (
-            <DependencyEditor
-              projectId={refs.project.id}
-              item={{ type: "milestone", id: m.id }}
-              tasks={tasks}
-              milestones={refs.milestones}
-              dependencies={dependencies}
-            />
+            <>
+              <DependencyEditor
+                projectId={refs.project.id}
+                item={{ type: "milestone", id: m.id }}
+                tasks={tasks}
+                milestones={refs.milestones}
+                dependencies={dependencies}
+              />
+              <CommentThread projectId={refs.project.id} entityType="milestone" entityId={m.id} people={refs.people} />
+            </>
           )}
         </ActionForm>
       )}

@@ -9,6 +9,7 @@ import { createTaskAction, deleteTaskAction, updateTaskAction } from "@/server/m
 import { PRIORITIES } from "@/shared/domain";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField, enumOptions } from "@/shared/ui";
 import { useFieldError } from "@/shared/ui/action-form";
+import { CommentThread } from "@/features/comment/comment-thread";
 import { DependencyEditor } from "@/features/dependency/dependency-editor";
 
 export function TaskDialog({
@@ -146,13 +147,16 @@ export function TaskDialog({
           <LabelPicker labels={refs.labels} selected={task?.labels.map((l) => l.id) ?? []} />
 
           {t && (
-            <DependencyEditor
-              projectId={refs.project.id}
-              item={{ type: "task", id: t.id }}
-              tasks={tasks}
-              milestones={refs.milestones}
-              dependencies={dependencies}
-            />
+            <>
+              <DependencyEditor
+                projectId={refs.project.id}
+                item={{ type: "task", id: t.id }}
+                tasks={tasks}
+                milestones={refs.milestones}
+                dependencies={dependencies}
+              />
+              <CommentThread projectId={refs.project.id} entityType="task" entityId={t.id} people={refs.people} />
+            </>
           )}
         </ActionForm>
       )}
