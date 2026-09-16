@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
 import { nextNumber } from "@/server/core/sequence";
 import type { DbOrTx } from "@/server/db/client";
+import { commentsRepo } from "@/server/modules/comments/repository";
 import { dependenciesRepo } from "@/server/modules/dependencies/repository";
 import { assertLabelsInProject } from "@/server/modules/labels/service";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
@@ -143,6 +144,7 @@ export const tasksService = {
     mutate(ctx, async (tx, rec) => {
       const t = await getOwned(tx, ctx.userId, id);
       await dependenciesRepo.deleteForItem(tx, id);
+      await commentsRepo.deleteForEntity(tx, "task", id);
       await tasksRepo.delete(tx, id);
       rec.deleted("task", t.projectId, id, t.title);
     }),

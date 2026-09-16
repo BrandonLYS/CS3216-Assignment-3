@@ -20,6 +20,12 @@ export const activityEvents = pgTable(
     action: activityActionEnum("action").notNull(),
     /** Null for created/deleted; set for updated. */
     field: text("field"),
+    /**
+     * For updated: the field's previous/next value. For created/deleted: null unless the
+     * service passed a snapshot (Comments store a `CommentSnapshot` in newValue on created
+     * and oldValue on deleted; it includes the parent `{ entityType, entityId }` so history
+     * can select Comment events per item with a jsonb containment query).
+     */
     oldValue: jsonb("old_value"),
     newValue: jsonb("new_value"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),

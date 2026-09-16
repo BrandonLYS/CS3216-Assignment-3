@@ -4,6 +4,7 @@ import { NotFoundError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
 import { nextNumber } from "@/server/core/sequence";
 import type { DbOrTx } from "@/server/db/client";
+import { commentsRepo } from "@/server/modules/comments/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { statusesService } from "@/server/modules/statuses/service";
@@ -53,6 +54,7 @@ export const risksService = {
   delete: (ctx: Ctx, id: string) =>
     mutate(ctx, async (tx, rec) => {
       const r = await getOwned(tx, ctx.userId, id);
+      await commentsRepo.deleteForEntity(tx, "risk", id);
       await risksRepo.delete(tx, id);
       rec.deleted("risk", r.projectId, id, r.title);
     }),

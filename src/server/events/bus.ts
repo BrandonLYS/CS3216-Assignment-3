@@ -14,6 +14,8 @@ export interface DomainEvent {
   entityLabel: string;
   action: ActivityAction;
   changes: FieldChange[];
+  /** Optional payload for created/deleted events (e.g. a Comment's body); mirrors the Activity Event's new/old value. */
+  snapshot?: unknown;
   occurredAt: Date;
 }
 
