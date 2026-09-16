@@ -182,6 +182,17 @@ describe("commentsService", () => {
     expect(list[0]!.comment.saidByName).toBe("Temp Contractor");
   });
 
+  it("tasksService.list reports commentCount per Task", async () => {
+    const a = await tasksService.create(ctx, { projectId, title: "Discussed", priority: "none" });
+    const b = await tasksService.create(ctx, { projectId, title: "Quiet", priority: "none" });
+    await mk({ entityId: a.id, body: "One" });
+    await mk({ entityId: a.id, body: "Two" });
+
+    const rows = await tasksService.list(ctx, projectId);
+    expect(rows.find((r) => r.task.id === a.id)?.commentCount).toBe(2);
+    expect(rows.find((r) => r.task.id === b.id)?.commentCount).toBe(0);
+  });
+
   it("refuses a foreign User creating, listing or deleting", async () => {
     const stranger = await makeCtx();
     const mine = await mk({ body: "Owner only" });

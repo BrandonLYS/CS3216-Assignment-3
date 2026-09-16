@@ -1,26 +1,37 @@
 import { and, asc, eq, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { TERMINAL_CATEGORIES } from "@/shared/domain";
+import { comments } from "@/server/modules/comments/schema";
 import { labels } from "@/server/modules/labels/schema";
 import { milestones } from "@/server/modules/milestones/schema";
 import { people, teams } from "@/server/modules/people/schema";
 import { statuses } from "@/server/modules/statuses/schema";
 import { taskLabels, tasks, type NewTaskRow, type TaskRow } from "./schema";
 
-const withJoins = (db: DbOrTx) =>
-  db
+const withJoins = (db: DbOrTx) => {
+  // One grouped subquery for Comment counts; no per-row query.
+  const commentCounts = db
+    .select({ entityId: comments.entityId, n: sql<number>`count(*)::int`.as("n") })
+    .from(comments)
+    .where(eq(comments.entityType, "task"))
+    .groupBy(comments.entityId)
+    .as("comment_counts");
+  return db
     .select({
       task: tasks,
       status: statuses,
       assignee: people,
       team: teams,
       milestone: { id: milestones.id, name: milestones.name, dueDate: milestones.dueDate },
+      commentCount: sql<number>`coalesce(${commentCounts.n}, 0)`.mapWith(Number),
     })
     .from(tasks)
     .innerJoin(statuses, eq(statuses.id, tasks.statusId))
     .leftJoin(people, eq(people.id, tasks.assigneeId))
     .leftJoin(teams, eq(teams.id, tasks.teamId))
-    .leftJoin(milestones, eq(milestones.id, tasks.milestoneId));
+    .leftJoin(milestones, eq(milestones.id, tasks.milestoneId))
+    .leftJoin(commentCounts, eq(commentCounts.entityId, tasks.id));
+};
 
 async function attachLabels<T extends { task: TaskRow }>(db: DbOrTx, rows: T[]) {
   const ids = rows.map((r) => r.task.id);

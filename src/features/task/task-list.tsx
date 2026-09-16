@@ -9,6 +9,7 @@ import { cn } from "@/shared/lib/cn";
 import { dueLabel } from "@/shared/lib/dates";
 import { EmptyState } from "@/shared/ui";
 import { InlineSelect } from "@/shared/ui/inline-select";
+import { CommentCount } from "@/entities/comment/comment-count";
 import { Avatar } from "@/entities/person/avatar";
 import { StatusGlyph } from "@/entities/status/status-badge";
 import { PriorityIcon } from "@/entities/task/priority";
@@ -113,6 +114,7 @@ function TaskRow({ item, refs, onOpen }: { item: TaskListItem; refs: ProjectRefs
           </span>
         ))}
       </span>
+      <CommentCount n={item.commentCount} className="shrink-0" />
       {milestone && (
         <span className="flex shrink-0 items-center gap-1 text-caption text-ink-tertiary">
           <Diamond className="size-2.5" /> {milestone.name}

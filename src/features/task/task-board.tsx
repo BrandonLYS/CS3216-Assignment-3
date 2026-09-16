@@ -7,6 +7,7 @@ import { moveTaskAction } from "@/server/modules/tasks/actions";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { cn } from "@/shared/lib/cn";
 import { dueLabel } from "@/shared/lib/dates";
+import { CommentCount } from "@/entities/comment/comment-count";
 import { Avatar } from "@/entities/person/avatar";
 import { StatusGlyph } from "@/entities/status/status-badge";
 import { PriorityIcon } from "@/entities/task/priority";
@@ -114,9 +115,11 @@ export function TaskBoard({
                           title={l.name}
                         />
                       ))}
+                      <CommentCount n={t.commentCount} className="ml-auto" />
                       <span
                         className={cn(
-                          "ml-auto text-caption",
+                          "text-caption",
+                          t.commentCount === 0 && "ml-auto",
                           due.tone === "danger"
                             ? "text-tag-red"
                             : due.tone === "warn"
