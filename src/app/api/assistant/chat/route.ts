@@ -7,6 +7,7 @@ import {
   safeValidateUIMessages,
   type UIMessage,
 } from "ai";
+import { after } from "next/server";
 import { z } from "zod";
 import { ctxForCurrentUser } from "@/server/core/action";
 import { DomainError } from "@/server/core/errors";
@@ -16,6 +17,7 @@ import { projectSystemPrompt, workspaceSystemPrompt } from "@/server/modules/ass
 import { assistantService } from "@/server/modules/assistant/service";
 import { PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "@/server/modules/assistant/tools";
 import { memoryService } from "@/server/modules/memory/service";
+import { reflect } from "@/server/modules/reflection/service";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 
 export const maxDuration = 60;
@@ -69,7 +71,11 @@ export async function POST(req: Request) {
       stream: toUIMessageStream({
         stream: result.stream,
         originalMessages: messages,
-        onEnd: ({ messages: all }) => assistantService.saveMessages(ctx, conversation.id, all),
+        onEnd: async ({ messages: all }) => {
+          await assistantService.saveMessages(ctx, conversation.id, all);
+          // Reflection runs once the response is out; its failures never reach the User (ADR 0007).
+          after(() => reflect({ ...ctx, via: "reflection" }, conversation.id).catch((e) => console.error(e)));
+        },
       }),
     });
   } catch (e) {

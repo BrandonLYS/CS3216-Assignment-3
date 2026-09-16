@@ -3,13 +3,15 @@
 import { RotateCcw } from "lucide-react";
 import * as React from "react";
 import { saveMemoryAction } from "@/server/modules/memory/actions";
-import type { MemoryVersionRow } from "@/server/modules/memory/schema";
+import type { memoryService } from "@/server/modules/memory/service";
 import { diffLines } from "@/shared/lib/diff";
 import { cn } from "@/shared/lib/cn";
 import { fmtDateTime, relative } from "@/shared/lib/dates";
 import { ActionForm, Badge, Button, Panel, TextareaField } from "@/shared/ui";
 
 const AUTHOR_LABEL = { user: "You", reflection: "Reflection" } as const;
+
+type MemoryVersion = Awaited<ReturnType<typeof memoryService.versions>>[number];
 
 /**
  * Markdown editor plus version list for a Profile (`projectId` null) or a Project's Working
@@ -23,14 +25,14 @@ export function MemoryEditor({
 }: {
   projectId: string | null;
   /** Newest first, as returned by `memoryService.versions`. */
-  versions: MemoryVersionRow[];
+  versions: MemoryVersion[];
   placeholder: string;
   hint: string;
 }) {
   const current = versions[0] ?? null;
   const [saved, setSaved] = React.useState(false);
   const [restoring, startRestore] = React.useTransition();
-  const restore = (v: MemoryVersionRow) =>
+  const restore = (v: MemoryVersion) =>
     startRestore(async () => {
       const fd = new FormData();
       fd.set("projectId", projectId ?? "");
@@ -74,6 +76,11 @@ export function MemoryEditor({
                     <time dateTime={v.createdAt.toISOString()} title={fmtDateTime(v.createdAt)}>
                       {relative(v.createdAt)}
                     </time>
+                    {v.conversationId && (
+                      <span className="text-ink-tertiary">
+                        from the {v.sourceProject ? `${v.sourceProject} Conversation` : "dashboard Conversation"}
+                      </span>
+                    )}
                     {i === 0 && <span className="text-ink-tertiary">current</span>}
                     {i > 0 && (
                       <Button
