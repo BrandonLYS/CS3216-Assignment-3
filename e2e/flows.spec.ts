@@ -628,3 +628,62 @@ test.describe("attention", () => {
     await shot(page, "item-opens-task");
   });
 });
+
+// Must stay last: it creates a second Project, which earlier flows' `.first()` locators tolerate but do not expect.
+test.describe("task-search", () => {
+  const shot = shots("task-search");
+  const key2 = `G${stamp}`;
+  const project2 = "Vendor Portal";
+
+  test("⌘K finds tasks across projects by key and title and opens the task", async ({ page }) => {
+    // Second project with two tasks, created through the UI.
+    await login(page);
+    await page.getByRole("button", { name: "New project" }).first().click();
+    await page.getByLabel("Name").fill(project2);
+    await page.getByLabel("Key").fill(key2);
+    await page.getByRole("button", { name: "Create project" }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+    await page.getByRole("link", { name: "Tasks", exact: true }).click();
+    for (const title of ["Sign vendor contract", "Load-test vendor portal"]) {
+      await page.getByRole("button", { name: "New task" }).click();
+      await page.getByRole("dialog").getByLabel("Title").fill(title);
+      await page.getByRole("dialog").getByRole("button", { name: "Create task" }).click();
+      await expect(page.getByRole("dialog")).toBeHidden();
+      await expect(page.getByText(title)).toBeVisible();
+    }
+    await shot(page, "second-project-tasks");
+
+    // Key search from the Dashboard → result shows project name → Enter opens the dialog.
+    await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+    await expect(page).toHaveURL("/");
+    await page.keyboard.press("Meta+k");
+    const input = page.getByPlaceholder("Type a command or search…");
+    await input.fill(`${key}-1`);
+    const hit = page.getByRole("option", { name: new RegExp(`^${key}-1`) });
+    await expect(hit).toContainText("Implement v2 endpoints");
+    await expect(hit).toContainText(projectName);
+    await shot(page, "search-by-key");
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/tasks\?task=[0-9a-f-]{36}$/);
+    await expect(page.getByRole("dialog", { name: `${key}-1` })).toBeVisible();
+    await shot(page, "task-dialog-open");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // Key variants: lower-case with a space.
+    await page.keyboard.press("Meta+k");
+    await input.fill(`${key2.toLowerCase()} 2`);
+    await expect(page.getByRole("option", { name: new RegExp(`^${key2}-2`) })).toContainText("Load-test vendor portal");
+    await shot(page, "search-key-variant");
+
+    // Title fragment matches both projects.
+    await input.fill("load-test");
+    await expect(page.getByRole("option", { name: /Load-test the new gateway/ })).toContainText(projectName);
+    await expect(page.getByRole("option", { name: /Load-test vendor portal/ })).toContainText(project2);
+    await shot(page, "search-by-title");
+
+    await input.fill("zzqx-nothing");
+    await expect(page.getByText("No tasks match")).toBeVisible();
+    await shot(page, "no-tasks-match");
+  });
+});
