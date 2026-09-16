@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError } from "@/server/core/errors";
@@ -15,6 +16,7 @@ import type { TaskRow } from "@/server/modules/tasks/schema";
 import { tasksService } from "@/server/modules/tasks/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import type { HistoryEntry } from "./enrich";
+import { activityEvents } from "./schema";
 import { activityRepo, activityService } from "./service";
 
 let ctx: Ctx;
@@ -63,6 +65,42 @@ describe("activityService.listEntityHistory", () => {
     }
     expect(history[0]!.field).toBe("statusId");
     expect(history[0]!.newLabel).toBe("Todo");
+  });
+
+  it("puts created last when an edit shares its exact occurredAt", async () => {
+    const t = await tasksService.create(ctx, { projectId, title: "Same tick", priority: "none" });
+    const at = new Date("2000-01-01T00:00:00.000Z");
+    const base = {
+      projectId,
+      actorId: ctx.userId,
+      entityType: "task" as const,
+      entityId: t.id,
+      entityLabel: "Same tick",
+    };
+    // Several rows with identical timestamps so random UUID order alone would eventually misplace `created`.
+    await ctx.db.insert(activityEvents).values([
+      { ...base, action: "updated", field: "title", oldValue: "a", newValue: "b", occurredAt: at },
+      { ...base, action: "created", occurredAt: at },
+      { ...base, action: "updated", field: "priority", oldValue: "none", newValue: "high", occurredAt: at },
+      { ...base, action: "updated", field: "description", oldValue: null, newValue: "x", occurredAt: at },
+    ]);
+    const c = await commentsService.create(ctx, { projectId, entityType: "task", entityId: t.id, body: "same tick" });
+    await ctx.db.update(activityEvents).set({ occurredAt: at }).where(eq(activityEvents.entityId, c.id));
+
+    const h = await listFor(t.id);
+    const tied = h.filter((x) => x.occurredAt === at.toISOString());
+    expect(tied).toHaveLength(5);
+    expect(tied.at(-1)!.action).toBe("created");
+    expect(tied.at(-1)!.entityType).toBe("task");
+    expect(tied.map((x) => (x.entityType === "comment" ? "comment" : x.action))).toEqual([
+      "updated",
+      "updated",
+      "updated",
+      "comment",
+      "created",
+    ]);
+    // The backdated group is the oldest, so its `created` row is the bottom-most row overall.
+    expect(h.at(-1)!.action).toBe("created");
   });
 
   it("records a multi-field save as rows sharing one occurredAt", () => {

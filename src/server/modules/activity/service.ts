@@ -40,6 +40,9 @@ export const activityRepo = {
   /**
    * All events for one item plus Comment events whose snapshot payload points at it
    * (`CommentSnapshot.entityType/entityId`, see comments/service.ts). Newest first, no limit.
+   * Ties on `occurredAt` (create + immediate edit in the same tick) order field rows, then
+   * Comment events, then the item's own `created` row so creation is always the bottom-most
+   * row; `id` is a random UUID and only breaks the remaining ties deterministically.
    */
   historyForEntity: (db: DbOrTx, projectId: string, entityType: HistoryEntityType, entityId: string) =>
     select(db)
@@ -55,7 +58,11 @@ export const activityRepo = {
           ),
         ),
       )
-      .orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id)),
+      .orderBy(
+        desc(activityEvents.occurredAt),
+        sql`case when ${activityEvents.entityType} = 'comment' then 1 when ${activityEvents.action} = 'created' then 2 else 0 end`,
+        desc(activityEvents.id),
+      ),
 };
 
 const byId = <T extends { id: string; name: string }>(xs: T[]) => new Map(xs.map((x) => [x.id, x.name]));
