@@ -2,6 +2,8 @@
 
 Project management with a memory: the structured base (projects, tasks, milestones, dependencies, risks, evidence, per-project statuses, full change history) for an AI project-intelligence layer that comes next. See `CS3216 Assignment 3.pdf` for the product journeys, `CONTEXT.md` for the domain glossary, and `docs/adr/` for decisions.
 
+New contributors should follow the [developer onboarding guide](docs/developer-onboarding.md) for prerequisites, local setup, testing, and repository conventions.
+
 ## Run locally
 
 ```bash
