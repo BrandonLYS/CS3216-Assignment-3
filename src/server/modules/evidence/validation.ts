@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { optionalDate, optionalText, requiredText } from "@/server/core/validation";
-import { EVIDENCE_KINDS } from "@/shared/domain";
+import { EVIDENCE_KINDS, LINKABLE_ENTITY_TYPES } from "@/shared/domain";
 
 export const createEvidenceSchema = z.object({
   projectId: z.string(),
@@ -20,5 +20,13 @@ export const updateEvidenceSchema = z.object({
   body: optionalText,
 });
 
+export const evidenceLinkSchema = z.object({
+  projectId: z.string(),
+  evidenceId: z.string(),
+  entityType: z.enum(LINKABLE_ENTITY_TYPES),
+  entityId: z.string(),
+});
+
 export type CreateEvidenceInput = z.infer<typeof createEvidenceSchema>;
 export type UpdateEvidenceInput = z.infer<typeof updateEvidenceSchema>;
+export type EvidenceLinkInput = z.infer<typeof evidenceLinkSchema>;

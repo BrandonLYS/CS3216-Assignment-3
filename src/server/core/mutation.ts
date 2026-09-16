@@ -1,6 +1,6 @@
 import type { Tx } from "@/server/db/client";
 import { activityEvents, type NewActivityEventRow } from "@/server/modules/activity/schema";
-import { eventBus, type DomainEvent } from "@/server/events/bus";
+import { eventBus, type DomainEvent, type DomainEventName } from "@/server/events/bus";
 import type { EntityType } from "@/shared/domain";
 import type { Ctx } from "./context";
 import type { FieldChange } from "./diff";
@@ -11,6 +11,7 @@ import type { FieldChange } from "./diff";
  */
 export class Recorder {
   private pending: DomainEvent[] = [];
+  private signals: DomainEvent[] = [];
 
   constructor(private readonly actorId: string) {}
 
@@ -26,6 +27,14 @@ export class Recorder {
   /** `snapshot`, when given, is stored as the Activity Event's `oldValue` so history keeps the content. */
   deleted(entityType: EntityType, projectId: string, entityId: string, entityLabel: string, snapshot?: unknown) {
     this.push(entityType, projectId, entityId, entityLabel, "deleted", [], snapshot);
+  }
+
+  /** Queue a domain event that has no Activity Event of its own (published after commit, not persisted). */
+  signal(
+    name: DomainEventName,
+    e: Pick<DomainEvent, "projectId" | "entityType" | "entityId" | "entityLabel" | "changes">,
+  ) {
+    this.signals.push({ ...e, name, action: "updated", actorId: this.actorId, occurredAt: new Date() });
   }
 
   private push(
@@ -77,8 +86,9 @@ export class Recorder {
   }
 
   async publish() {
-    const events = this.pending;
+    const events = [...this.pending, ...this.signals];
     this.pending = [];
+    this.signals = [];
     await eventBus.publish(events);
   }
 }

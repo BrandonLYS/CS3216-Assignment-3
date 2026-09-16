@@ -1,6 +1,6 @@
-import { date, index, integer, pgTable, text } from "drizzle-orm/pg-core";
+import { date, index, integer, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import { id, timestamps } from "@/server/db/columns";
-import { evidenceKindEnum } from "@/server/db/enums";
+import { entityTypeEnum, evidenceKindEnum } from "@/server/db/enums";
 import { projects } from "@/server/modules/projects/schema";
 
 /**
@@ -32,3 +32,31 @@ export const evidence = pgTable(
 
 export type EvidenceRow = typeof evidence.$inferSelect;
 export type NewEvidenceRow = typeof evidence.$inferInsert;
+
+/**
+ * Many-to-many between Evidence and Tasks/Risks/Milestones. The item side is
+ * polymorphic, so its cascade is done in the item services (`deleteForEntity`).
+ */
+export const evidenceLinks = pgTable(
+  "evidence_links",
+  {
+    evidenceId: text("evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "cascade" }),
+    entityType: entityTypeEnum("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    /** Denormalised for cheap ownership checks and per-project listing. */
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.evidenceId, t.entityType, t.entityId] }),
+    index("evidence_links_entity_idx").on(t.entityType, t.entityId),
+    index("evidence_links_project_idx").on(t.projectId),
+  ],
+);
+
+export type EvidenceLinkRow = typeof evidenceLinks.$inferSelect;
+export type NewEvidenceLinkRow = typeof evidenceLinks.$inferInsert;

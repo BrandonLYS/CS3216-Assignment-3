@@ -5,10 +5,14 @@ import { compactPatch, diffFields } from "@/server/core/diff";
 import { NotFoundError, ValidationError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
 import type { DbOrTx } from "@/server/db/client";
+import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
+import { risksRepo } from "@/server/modules/risks/repository";
+import { tasksRepo } from "@/server/modules/tasks/repository";
 import { getStorage } from "@/server/storage";
-import { evidenceRepo } from "./repository";
-import type { CreateEvidenceInput, UpdateEvidenceInput } from "./validation";
+import { labelFor, type LinkableEntityType } from "@/shared/domain";
+import { evidenceLinksRepo, evidenceRepo } from "./repository";
+import type { CreateEvidenceInput, EvidenceLinkInput, UpdateEvidenceInput } from "./validation";
 
 export const MAX_EVIDENCE_BYTES = 15 * 1024 * 1024;
 export const ACCEPTED_MIME = new Set([
@@ -40,6 +44,28 @@ async function getOwned(db: DbOrTx, userId: string, id: string) {
   const e = await evidenceRepo.findById(db, id);
   if (!e) throw new NotFoundError("Evidence");
   await assertOwnsProject(db, userId, e.projectId);
+  return e;
+}
+
+/** The linked item must exist in `projectId`; returns its display label (title/name). */
+async function linkedItemLabel(db: DbOrTx, projectId: string, entityType: LinkableEntityType, entityId: string) {
+  const row =
+    entityType === "task"
+      ? await tasksRepo.findById(db, entityId)
+      : entityType === "risk"
+        ? await risksRepo.findById(db, entityId)
+        : await milestonesRepo.findById(db, entityId);
+  if (!row || row.projectId !== projectId) {
+    throw new ValidationError(`${labelFor(entityType)} not in this project`, { entityId: ["Invalid"] });
+  }
+  return "name" in row ? row.name : row.title;
+}
+
+async function ownedEvidenceInProject(db: DbOrTx, projectId: string, evidenceId: string) {
+  const e = await evidenceRepo.findById(db, evidenceId);
+  if (!e || e.projectId !== projectId) {
+    throw new ValidationError("Evidence not in this project", { evidenceId: ["Invalid"] });
+  }
   return e;
 }
 
@@ -116,5 +142,70 @@ export const evidenceService = {
     const e = await getOwned(ctx.db, ctx.userId, id);
     if (!e.storageKey) throw new NotFoundError("File");
     return { evidence: e, bytes: await getStorage().get(e.storageKey) };
+  },
+
+  /**
+   * Idempotent: linking an existing pair returns the existing row with no Activity Event.
+   * The Activity Event is recorded against the item (field `evidence`), never the Evidence,
+   * so the Overview feed shows one entry.
+   */
+  link: (ctx: Ctx, input: EvidenceLinkInput) =>
+    mutate(ctx, async (tx, rec) => {
+      await assertOwnsProject(tx, ctx.userId, input.projectId);
+      const ev = await ownedEvidenceInProject(tx, input.projectId, input.evidenceId);
+      const itemLabel = await linkedItemLabel(tx, input.projectId, input.entityType, input.entityId);
+      const inserted = await evidenceLinksRepo.insertIgnore(tx, input);
+      if (!inserted) return (await evidenceLinksRepo.find(tx, input))!;
+      rec.updated(input.entityType, input.projectId, input.entityId, itemLabel, [
+        { field: "evidence", oldValue: null, newValue: ev.title },
+      ]);
+      rec.signal("evidence.linked", {
+        projectId: input.projectId,
+        entityType: "evidence",
+        entityId: ev.id,
+        entityLabel: ev.title,
+        changes: [
+          { field: "link", oldValue: null, newValue: { entityType: input.entityType, entityId: input.entityId } },
+        ],
+      });
+      return inserted;
+    }),
+
+  /** Removing a link that does not exist is a no-op success. */
+  unlink: (ctx: Ctx, input: EvidenceLinkInput) =>
+    mutate(ctx, async (tx, rec) => {
+      await assertOwnsProject(tx, ctx.userId, input.projectId);
+      const ev = await ownedEvidenceInProject(tx, input.projectId, input.evidenceId);
+      const itemLabel = await linkedItemLabel(tx, input.projectId, input.entityType, input.entityId);
+      const removed = await evidenceLinksRepo.delete(tx, input);
+      if (!removed.length) return;
+      rec.updated(input.entityType, input.projectId, input.entityId, itemLabel, [
+        { field: "evidence", oldValue: ev.title, newValue: null },
+      ]);
+      rec.signal("evidence.unlinked", {
+        projectId: input.projectId,
+        entityType: "evidence",
+        entityId: ev.id,
+        entityLabel: ev.title,
+        changes: [
+          { field: "link", oldValue: { entityType: input.entityType, entityId: input.entityId }, newValue: null },
+        ],
+      });
+    }),
+
+  listForEntity: async (ctx: Ctx, projectId: string, entityType: LinkableEntityType, entityId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    return evidenceLinksRepo.listForEntity(ctx.db, entityType, entityId);
+  },
+
+  listForEvidence: async (ctx: Ctx, evidenceId: string) => {
+    const e = await getOwned(ctx.db, ctx.userId, evidenceId);
+    return evidenceLinksRepo.listForEvidence(ctx.db, e.id);
+  },
+
+  /** Every linkable item in the project, for the Evidence page picker. */
+  listLinkTargets: async (ctx: Ctx, projectId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    return evidenceLinksRepo.listTargets(ctx.db, projectId);
   },
 };

@@ -95,6 +95,10 @@ export const COMMENTABLE_ENTITY_TYPES = ["task", "risk", "milestone"] as const s
 export type CommentableEntityType = (typeof COMMENTABLE_ENTITY_TYPES)[number];
 export const COMMENT_MAX_LENGTH = 4000;
 
+/** Items an Evidence record can be linked to (same set as Comments). */
+export const LINKABLE_ENTITY_TYPES = COMMENTABLE_ENTITY_TYPES;
+export type LinkableEntityType = CommentableEntityType;
+
 export const ACTIVITY_ACTIONS = ["created", "updated", "deleted"] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
