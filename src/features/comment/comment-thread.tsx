@@ -38,24 +38,29 @@ export function CommentThread({
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
   const [confirmId, setConfirmId] = React.useState<string | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  // The dialog can close while an action is in flight; never set state after unmount.
+  const mounted = React.useRef(false);
 
   async function refresh() {
     const res = await listCommentsAction({ projectId, entityType, entityId });
+    if (!mounted.current) return;
     if (res.ok) setComments(res.data);
     else setError(res.error);
   }
 
   React.useEffect(() => {
+    mounted.current = true;
     let cancelled = false;
     async function load() {
       const res = await listCommentsAction({ projectId, entityType, entityId });
-      if (cancelled) return;
+      if (cancelled || !mounted.current) return;
       if (res.ok) setComments(res.data);
       else setError(res.error);
     }
     void load();
     return () => {
       cancelled = true;
+      mounted.current = false;
     };
   }, [projectId, entityType, entityId]);
 
@@ -72,14 +77,17 @@ export function CommentThread({
       saidById: saidById || null,
       saidOn: saidOn || null,
     });
+    if (!mounted.current) return;
     setPending(false);
     if (!res.ok) {
+      // Keep the draft so the user can fix it and retry.
       setError(res.error);
       setFieldErrors(res.fieldErrors ?? {});
       return;
     }
     setBody("");
     await refresh();
+    if (!mounted.current) return;
     textareaRef.current?.focus();
   }
 
@@ -87,17 +95,18 @@ export function CommentThread({
     setPending(true);
     setError(null);
     const res = await deleteCommentAction({ id });
+    if (!mounted.current) return;
     setPending(false);
-    setConfirmId(null);
+    // Leave the confirm UI open on failure so the error is shown in context and retry is possible.
     if (!res.ok) return setError(res.error);
+    setConfirmId(null);
     await refresh();
   }
 
+  // Enter in the single-line controls must not submit the enclosing item form; posting is
+  // reserved for the Post button and ⌘/Ctrl+Enter in the textarea.
   const stopEnter = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      void post();
-    }
+    if (e.key === "Enter") e.preventDefault();
   };
 
   const count = comments?.length ?? 0;
