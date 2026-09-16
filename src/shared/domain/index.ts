@@ -56,8 +56,12 @@ export type ScaleLevel = (typeof SCALE_LEVELS)[number];
 export const RISK_SEVERITY_SCORE: Record<ScaleLevel, number> = { low: 1, medium: 2, high: 3 };
 export const riskSeverity = (r: { probability: ScaleLevel; impact: ScaleLevel }) =>
   RISK_SEVERITY_SCORE[r.probability] * RISK_SEVERITY_SCORE[r.impact];
-/** Top severity band = the maximum the 1..3 x 1..3 scale allows (High x High = 9). */
-export const RISK_TOP_SEVERITY = RISK_SEVERITY_SCORE.high * RISK_SEVERITY_SCORE.high;
+/**
+ * Severity bands. The top band starts at Medium x High (6) — the threshold the Risk Register and
+ * Project Overview already render red; the Attention rule `risk_top` uses the same constant.
+ */
+export const RISK_TOP_SEVERITY = RISK_SEVERITY_SCORE.medium * RISK_SEVERITY_SCORE.high;
+export const RISK_MID_SEVERITY = RISK_SEVERITY_SCORE.low * RISK_SEVERITY_SCORE.high;
 
 /** Endpoints a Dependency may connect. */
 export const DEPENDENCY_ITEM_TYPES = ["task", "milestone"] as const;

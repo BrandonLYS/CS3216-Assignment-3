@@ -48,8 +48,9 @@ issue text are listed below so the reviewer does not have to diff them out.
 
 ## Deviations from the issue text
 
-- **Top band.** Read literally as the maximum band: `RISK_TOP_SEVERITY = 9` (High × High), test is `>=`. The
-  pages' existing red-icon threshold (`>= 6`) was not adopted; it is a one-constant change if preferred.
+- **Top band.** Aligned with the repo's existing convention rather than the literal "maximum band": the Risk
+  Register and Project Overview already colour severity `>= 6` (Medium × High) red, so `RISK_TOP_SEVERITY = 6`
+  and both pages now read `RISK_TOP_SEVERITY` / `RISK_MID_SEVERITY` from the shared domain (one place).
 - **Item shape** adds `matched`, `code`, `urgency`, `projectId` to the issue's
   `{ rule, reasons, entityType, entityId, label, href, date? }`. All are serialisable and additive.
 - **Overview "Blocked" tile semantics.** It now counts Tasks whose most-severe rule is `task_blocked`; an

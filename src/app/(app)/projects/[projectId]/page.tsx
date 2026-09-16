@@ -7,7 +7,7 @@ import { projectsService } from "@/server/modules/projects/service";
 import { risksService } from "@/server/modules/risks/service";
 import { tasksService } from "@/server/modules/tasks/service";
 import { projectAttention } from "@/server/modules/workspace/queries";
-import { TERMINAL_CATEGORIES, labelFor, riskSeverity } from "@/shared/domain";
+import { RISK_MID_SEVERITY, RISK_TOP_SEVERITY, TERMINAL_CATEGORIES, labelFor, riskSeverity } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
 import { dueLabel, fmtDate } from "@/shared/lib/dates";
 import { Badge, Panel, SectionTitle } from "@/shared/ui";
@@ -158,7 +158,11 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
                         <AlertTriangle
                           className={cn(
                             "size-3.5",
-                            sev >= 6 ? "text-tag-red" : sev >= 3 ? "text-tag-orange" : "text-ink-subtle",
+                            sev >= RISK_TOP_SEVERITY
+                              ? "text-tag-red"
+                              : sev >= RISK_MID_SEVERITY
+                                ? "text-tag-orange"
+                                : "text-ink-subtle",
                           )}
                         />
                         <span className="font-mono text-caption text-ink-tertiary">R-{risk.number}</span>

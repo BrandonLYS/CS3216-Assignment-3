@@ -114,11 +114,18 @@ describe("evaluateAttention", () => {
 
   it("lists a top-band open risk, not a closed top-band risk", () => {
     const r = run({
-      risks: [risk("r1", "high", "high"), risk("r2", "high", "high", CLOSED), risk("r3", "high", "medium")],
+      risks: [
+        risk("r1", "high", "high"),
+        risk("r2", "high", "high", CLOSED),
+        risk("r3", "high", "medium"),
+        risk("r4", "medium", "medium"),
+      ],
     });
     const g = group(r, "risk_top")!;
-    expect(g.items.map((i) => i.entityId)).toEqual(["r1"]);
+    // Top band starts at Medium x High (6), the same threshold the Risk Register colours red.
+    expect(g.items.map((i) => i.entityId)).toEqual(["r1", "r3"]);
     expect(g.items[0]!.reasons).toEqual(["Severity 9 (High / High)"]);
+    expect(g.items[1]!.reasons).toEqual(["Severity 6 (High / Medium)"]);
     expect(g.items[0]!.href).toBe("/projects/p1/risks?risk=r1");
     expect(g.items[0]!.code).toMatch(/^R-\d+$/);
   });

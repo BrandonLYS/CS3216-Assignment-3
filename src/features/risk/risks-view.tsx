@@ -6,7 +6,15 @@ import * as React from "react";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { patchRiskAction } from "@/server/modules/risks/actions";
 import type { RiskListItem } from "@/server/modules/risks/repository";
-import { SCALE_LEVELS, TERMINAL_CATEGORIES, labelFor, riskSeverity, type ScaleLevel } from "@/shared/domain";
+import {
+  RISK_MID_SEVERITY,
+  RISK_TOP_SEVERITY,
+  SCALE_LEVELS,
+  TERMINAL_CATEGORIES,
+  labelFor,
+  riskSeverity,
+  type ScaleLevel,
+} from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
 import { dueLabel } from "@/shared/lib/dates";
 import { Button, EmptyState } from "@/shared/ui";
@@ -88,7 +96,11 @@ export function RisksView({ refs, risks }: { refs: ProjectRefs; risks: RiskListI
                         <AlertTriangle
                           className={cn(
                             "size-3.5 shrink-0",
-                            sev >= 6 ? "text-tag-red" : sev >= 3 ? "text-tag-orange" : "text-ink-tertiary",
+                            sev >= RISK_TOP_SEVERITY
+                              ? "text-tag-red"
+                              : sev >= RISK_MID_SEVERITY
+                                ? "text-tag-orange"
+                                : "text-ink-tertiary",
                           )}
                         />
                         <span className="truncate text-ink">{risk.title}</span>
