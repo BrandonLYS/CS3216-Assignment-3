@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { createLabelAction, deleteLabelAction, updateLabelAction } from "@/server/modules/labels/actions";
 import type { LabelRow } from "@/server/modules/labels/schema";
-import type { MemoryVersionRow } from "@/server/modules/memory/schema";
+import type { memoryService } from "@/server/modules/memory/service";
 import { deleteProjectAction, updateProjectAction } from "@/server/modules/projects/actions";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { HEALTH_LEVELS, PROJECT_STATUSES } from "@/shared/domain";
@@ -24,7 +24,13 @@ import {
 import { MemoryEditor } from "@/features/memory/memory-editor";
 import { StatusManager } from "./status-manager";
 
-export function ProjectSettings({ refs, memory }: { refs: ProjectRefs; memory: MemoryVersionRow[] }) {
+export function ProjectSettings({
+  refs,
+  memory,
+}: {
+  refs: ProjectRefs;
+  memory: Awaited<ReturnType<typeof memoryService.versions>>;
+}) {
   const { project } = refs;
   const router = useRouter();
   const [labelModal, setLabelModal] = React.useState<{ label?: LabelRow; deleting?: boolean } | null>(null);

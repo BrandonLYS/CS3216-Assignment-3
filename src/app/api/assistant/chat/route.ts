@@ -7,6 +7,7 @@ import {
   safeValidateUIMessages,
   type UIMessage,
 } from "ai";
+import { after } from "next/server";
 import { z } from "zod";
 import { ctxForCurrentUser } from "@/server/core/action";
 import { DomainError } from "@/server/core/errors";
@@ -16,6 +17,7 @@ import { projectSystemPrompt, workspaceSystemPrompt } from "@/server/modules/ass
 import { assistantService } from "@/server/modules/assistant/service";
 import { PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "@/server/modules/assistant/tools";
 import { memoryService } from "@/server/modules/memory/service";
+import { reflect } from "@/server/modules/reflection/service";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 
 export const maxDuration = 60;
@@ -65,11 +67,24 @@ export async function POST(req: Request) {
       experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
     });
+    // Reflection runs once the response is out and the thread is saved; its failures never reach the User (ADR 0007).
+    const { promise: saved, resolve: markSaved } = Promise.withResolvers<boolean>();
+    after(async () => {
+      if (await saved) await reflect({ ...ctx, via: "reflection" }, conversation.id).catch((e) => console.error(e));
+    });
     return createUIMessageStreamResponse({
       stream: toUIMessageStream({
         stream: result.stream,
         originalMessages: messages,
-        onEnd: ({ messages: all }) => assistantService.saveMessages(ctx, conversation.id, all),
+        onEnd: async ({ messages: all }) => {
+          await assistantService.saveMessages(ctx, conversation.id, all).then(
+            () => markSaved(true),
+            (e) => {
+              markSaved(false);
+              throw e;
+            },
+          );
+        },
       }),
     });
   } catch (e) {
