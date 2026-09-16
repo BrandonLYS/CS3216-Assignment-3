@@ -8,6 +8,7 @@ import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { cn } from "@/shared/lib/cn";
 import { dueLabel } from "@/shared/lib/dates";
 import { CommentCount } from "@/entities/comment/comment-count";
+import { LinkedEvidenceCount } from "@/entities/evidence/evidence-chip";
 import { Avatar } from "@/entities/person/avatar";
 import { StatusGlyph } from "@/entities/status/status-badge";
 import { PriorityIcon } from "@/entities/task/priority";
@@ -115,11 +116,12 @@ export function TaskBoard({
                           title={l.name}
                         />
                       ))}
-                      <CommentCount n={t.commentCount} className="ml-auto" />
+                      <LinkedEvidenceCount count={t.linkedEvidenceCount} className="ml-auto" />
+                      <CommentCount n={t.commentCount} className={cn(t.linkedEvidenceCount === 0 && "ml-auto")} />
                       <span
                         className={cn(
                           "text-caption",
-                          t.commentCount === 0 && "ml-auto",
+                          t.commentCount === 0 && t.linkedEvidenceCount === 0 && "ml-auto",
                           due.tone === "danger"
                             ? "text-tag-red"
                             : due.tone === "warn"

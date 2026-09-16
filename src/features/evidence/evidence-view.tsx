@@ -24,15 +24,7 @@ import {
   enumOptions,
 } from "@/shared/ui";
 import { useFieldError } from "@/shared/ui/action-form";
-
-const KIND_COLOR: Record<string, string> = {
-  plan: "var(--color-tag-blue)",
-  minutes: "var(--color-tag-purple)",
-  status_update: "var(--color-tag-green)",
-  task_export: "var(--color-tag-yellow)",
-  risk_register: "var(--color-tag-orange)",
-  other: "var(--color-tag-gray)",
-};
+import { EVIDENCE_KIND_COLOR } from "@/entities/evidence/evidence-chip";
 
 const fmtBytes = (n: number) =>
   n > 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`;
@@ -68,7 +60,7 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <span className="size-1.5 rounded-full" style={{ background: KIND_COLOR[e.kind] }} />
+                  <span className="size-1.5 rounded-full" style={{ background: EVIDENCE_KIND_COLOR[e.kind] }} />
                   <span className="truncate text-body-sm text-ink">{e.title}</span>
                 </div>
                 <div className="flex items-center gap-2 pl-3.5 text-caption text-ink-tertiary">
@@ -100,7 +92,7 @@ export function EvidenceView({ refs, items }: { refs: ProjectRefs; items: Eviden
             <div className="flex items-start justify-between gap-4 border-b border-hairline px-6 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Badge color={KIND_COLOR[selected.kind]}>{labelFor(selected.kind)}</Badge>
+                  <Badge color={EVIDENCE_KIND_COLOR[selected.kind]}>{labelFor(selected.kind)}</Badge>
                   {selected.sourceDate && (
                     <span className="text-caption text-ink-subtle">
                       Source date {fmtDate(selected.sourceDate, "d MMM yyyy")}

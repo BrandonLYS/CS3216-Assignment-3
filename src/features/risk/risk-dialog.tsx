@@ -8,6 +8,7 @@ import type { RiskRow } from "@/server/modules/risks/schema";
 import { SCALE_LEVELS } from "@/shared/domain";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField, enumOptions } from "@/shared/ui";
 import { CommentThread } from "@/features/comment/comment-thread";
+import { LinkedEvidence } from "@/features/evidence/linked-evidence";
 import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 
 export function RiskDialog({
@@ -137,6 +138,7 @@ export function RiskDialog({
               defaultValue={r?.description ?? ""}
               inputClassName="min-h-14"
             />
+            {r && <LinkedEvidence refs={refs} item={{ type: "risk", id: r.id }} />}
             {r && <CommentThread projectId={refs.project.id} entityType="risk" entityId={r.id} people={refs.people} />}
           </ActionForm>
         </ItemDialogTabs>

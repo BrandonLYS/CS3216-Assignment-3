@@ -11,6 +11,7 @@ import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaFi
 import { useFieldError } from "@/shared/ui/action-form";
 import { CommentThread } from "@/features/comment/comment-thread";
 import { DependencyEditor } from "@/features/dependency/dependency-editor";
+import { LinkedEvidence } from "@/features/evidence/linked-evidence";
 import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 
 export function TaskDialog({
@@ -157,6 +158,7 @@ export function TaskDialog({
                   milestones={refs.milestones}
                   dependencies={dependencies}
                 />
+                <LinkedEvidence refs={refs} item={{ type: "task", id: t.id }} />
                 <CommentThread projectId={refs.project.id} entityType="task" entityId={t.id} people={refs.people} />
               </>
             )}
