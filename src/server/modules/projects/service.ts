@@ -56,6 +56,7 @@ export const projectsService = {
         entityId: id,
         entityLabel: project.name,
         action: "deleted",
+        changes: [],
       });
     }),
 };

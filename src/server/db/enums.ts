@@ -11,6 +11,7 @@ import {
   SCALE_LEVELS,
   STATUS_CATEGORIES,
   STATUS_SCOPES,
+  VIA_ACTORS,
 } from "@/shared/domain";
 
 export const statusScopeEnum = pgEnum("status_scope", STATUS_SCOPES);
@@ -24,3 +25,4 @@ export const dependencyTypeEnum = pgEnum("dependency_type", DEPENDENCY_TYPES);
 export const evidenceKindEnum = pgEnum("evidence_kind", EVIDENCE_KINDS);
 export const entityTypeEnum = pgEnum("entity_type", ENTITY_TYPES);
 export const activityActionEnum = pgEnum("activity_action", ACTIVITY_ACTIONS);
+export const viaActorEnum = pgEnum("via_actor", VIA_ACTORS);
