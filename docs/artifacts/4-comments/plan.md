@@ -47,7 +47,9 @@ Files:
     "comments",
     {
       id: id(),
-      projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+      projectId: text("project_id")
+        .notNull()
+        .references(() => projects.id, { onDelete: "cascade" }),
       /** Polymorphic target; same shape as activity_events. Validation restricts to COMMENTABLE_ENTITY_TYPES. */
       entityType: entityTypeEnum("entity_type").notNull(),
       entityId: text("entity_id").notNull(),
@@ -216,9 +218,17 @@ Files:
 - `src/entities/comment/comment-body.tsx` (new, display atom): `CommentBody({ body }: { body: string })` renders `<p className="text-body-sm text-ink whitespace-pre-wrap break-words">` splitting on `/(https?:\/\/[^\s<>"')\]]+)/g`; URL parts become `<a href target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">`. No Markdown.
 - `src/features/comment/comment-thread.tsx` (new, `"use client"`):
   ```ts
-  export function CommentThread({ projectId, entityType, entityId, people }: {
-    projectId: string; entityType: CommentableEntityType; entityId: string; people: ProjectRefs["people"];
-  })
+  export function CommentThread({
+    projectId,
+    entityType,
+    entityId,
+    people,
+  }: {
+    projectId: string;
+    entityType: CommentableEntityType;
+    entityId: string;
+    people: ProjectRefs["people"];
+  });
   ```
   - State: `comments: CommentListItem[] | null` (null = loading), `body`, `saidById` (default `""`), `saidOn` (default `today()` from `@/shared/lib/dates`), `pending`, `error`, `fieldErrors`, `confirmId: string | null`.
   - `useEffect` on `[projectId, entityType, entityId]` → `listCommentsAction(...)`, set list. `refresh()` re-calls it. (If the `react-hooks/set-state-in-effect` lint rule fires, load inside the effect via an async function that sets state after await, which the rule permits, or use a `key` + lazy init pattern.)
@@ -353,7 +363,7 @@ Notes for the implementer: the whole file must run (`E2E_NO_SERVER=1 npx playwri
 ### `docs/flows.md` — add row after `command-palette`:
 
 ```md
-| `comments`        | Open a Task, post a Comment attributed to a Person with a said-on date, see it in the thread and the count on the row/board, delete it with confirmation, see created/deleted in the Overview feed | [comments](./comments/screenshots)               |
+| `comments` | Open a Task, post a Comment attributed to a Person with a said-on date, see it in the thread and the count on the row/board, delete it with confirmation, see created/deleted in the Overview feed | [comments](./comments/screenshots) |
 ```
 
 ## 5. Screenshot evidence plan
