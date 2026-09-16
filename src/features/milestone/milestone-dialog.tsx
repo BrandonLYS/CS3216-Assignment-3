@@ -63,6 +63,19 @@ export function MilestoneDialog({
           submitLabel={m ? "Save changes" : "Create milestone"}
           cancel={onClose}
           onSuccess={onClose}
+          footerStart={
+            m && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-tag-red hover:text-tag-red"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="size-3.5" /> Delete
+              </Button>
+            )
+          }
         >
           <TextField name="name" label="Name" required autoFocus defaultValue={m?.name} placeholder="UAT begins" />
           <TextareaField name="description" label="Description" defaultValue={m?.description ?? ""} />
@@ -83,26 +96,13 @@ export function MilestoneDialog({
             options={refs.people.map((p) => ({ value: p.id, label: p.name }))}
           />
           {m && (
-            <>
-              <DependencyEditor
-                projectId={refs.project.id}
-                item={{ type: "milestone", id: m.id }}
-                tasks={tasks}
-                milestones={refs.milestones}
-                dependencies={dependencies}
-              />
-              <div className="-mb-9 flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-tag-red hover:text-tag-red"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="size-3.5" /> Delete
-                </Button>
-              </div>
-            </>
+            <DependencyEditor
+              projectId={refs.project.id}
+              item={{ type: "milestone", id: m.id }}
+              tasks={tasks}
+              milestones={refs.milestones}
+              dependencies={dependencies}
+            />
           )}
         </ActionForm>
       )}

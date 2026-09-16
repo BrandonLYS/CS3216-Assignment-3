@@ -64,6 +64,19 @@ export function TaskDialog({
           submitLabel={t ? "Save changes" : "Create task"}
           cancel={onClose}
           onSuccess={onClose}
+          footerStart={
+            t && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-tag-red hover:text-tag-red"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="size-3.5" /> Delete
+              </Button>
+            )
+          }
         >
           <TextField
             name="title"
@@ -133,26 +146,13 @@ export function TaskDialog({
           <LabelPicker labels={refs.labels} selected={task?.labels.map((l) => l.id) ?? []} />
 
           {t && (
-            <>
-              <DependencyEditor
-                projectId={refs.project.id}
-                item={{ type: "task", id: t.id }}
-                tasks={tasks}
-                milestones={refs.milestones}
-                dependencies={dependencies}
-              />
-              <div className="-mb-9 flex">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-tag-red hover:text-tag-red"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="size-3.5" /> Delete
-                </Button>
-              </div>
-            </>
+            <DependencyEditor
+              projectId={refs.project.id}
+              item={{ type: "task", id: t.id }}
+              tasks={tasks}
+              milestones={refs.milestones}
+              dependencies={dependencies}
+            />
           )}
         </ActionForm>
       )}

@@ -28,6 +28,7 @@ export function ActionForm({
   className,
   hidden = {},
   danger,
+  footerStart,
 }: {
   action: Action;
   onSuccess?: (data: unknown) => void;
@@ -38,6 +39,8 @@ export function ActionForm({
   /** Hidden inputs (ids etc). */
   hidden?: Record<string, string | undefined>;
   danger?: boolean;
+  /** Rendered at the left of the footer row, opposite Cancel/Submit (e.g. a Delete button). */
+  footerStart?: React.ReactNode;
 }) {
   const [state, setState] = React.useState<Ctx>({ pending: false, error: null, fieldErrors: {} });
 
@@ -77,6 +80,7 @@ export function ActionForm({
           </p>
         )}
         <div className="flex items-center justify-end gap-2 pt-1">
+          {footerStart && <div className="mr-auto flex items-center">{footerStart}</div>}
           {cancel && (
             <Button type="button" variant="ghost" onClick={cancel}>
               Cancel

@@ -52,6 +52,19 @@ export function RiskDialog({
           submitLabel={r ? "Save changes" : "Create risk"}
           cancel={onClose}
           onSuccess={onClose}
+          footerStart={
+            r && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-tag-red hover:text-tag-red"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="size-3.5" /> Delete
+              </Button>
+            )
+          }
         >
           <TextField
             name="title"
@@ -121,19 +134,6 @@ export function RiskDialog({
             defaultValue={r?.description ?? ""}
             inputClassName="min-h-14"
           />
-          {r && (
-            <div className="-mb-9 flex">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-tag-red hover:text-tag-red"
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash2 className="size-3.5" /> Delete
-              </Button>
-            </div>
-          )}
         </ActionForm>
       )}
     </Dialog>
