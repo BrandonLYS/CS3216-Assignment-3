@@ -114,3 +114,5 @@ export const ATTENTION_RULES = [
 export type AttentionRule = (typeof ATTENTION_RULES)[number];
 /** `task_due_soon` window in calendar days, inclusive of today and today + N. */
 export const ATTENTION_DUE_SOON_DAYS = 7;
+
+export * from "./history-fields";
