@@ -39,10 +39,12 @@ export const evidenceRepo = {
   delete: (db: DbOrTx, id: string) => db.delete(evidence).where(eq(evidence.id, id)),
 };
 
-type LinkKey = Pick<EvidenceLinkRow, "evidenceId" | "entityType" | "entityId">;
+/** Every link lookup carries the Project: ownership is asserted on `projectId`, so ids alone must never select a row. */
+type LinkKey = Pick<EvidenceLinkRow, "projectId" | "evidenceId" | "entityType" | "entityId">;
 
 const linkKey = (k: LinkKey) =>
   and(
+    eq(evidenceLinks.projectId, k.projectId),
     eq(evidenceLinks.evidenceId, k.evidenceId),
     eq(evidenceLinks.entityType, k.entityType),
     eq(evidenceLinks.entityId, k.entityId),
@@ -86,9 +88,15 @@ export const evidenceLinksRepo = {
       .where(eq(evidenceLinks.projectId, projectId))
       .orderBy(evidenceRecency, desc(evidence.createdAt), asc(evidenceLinks.createdAt)),
 
-  listForEntity: (db: DbOrTx, entityType: LinkableEntityType, entityId: string) =>
+  listForEntity: (db: DbOrTx, projectId: string, entityType: LinkableEntityType, entityId: string) =>
     withLabels(db)
-      .where(and(eq(evidenceLinks.entityType, entityType), eq(evidenceLinks.entityId, entityId)))
+      .where(
+        and(
+          eq(evidenceLinks.projectId, projectId),
+          eq(evidenceLinks.entityType, entityType),
+          eq(evidenceLinks.entityId, entityId),
+        ),
+      )
       .orderBy(evidenceRecency, desc(evidence.createdAt), asc(evidenceLinks.createdAt)),
 
   listForEvidence: (db: DbOrTx, evidenceId: string) =>

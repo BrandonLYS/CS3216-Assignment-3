@@ -90,6 +90,21 @@ describe("evidenceService links", () => {
     expect(await evidenceService.listForEvidence(ctx, local.id)).toEqual([]);
   });
 
+  it("does not list links of an item from another Project the User also owns", async () => {
+    const other = await makeProject(ctx, "OTB");
+    const foreignTask = await tasksService.create(ctx, { projectId: other.id, title: "Foreign", priority: "none" });
+    const foreignEvidence = await mkEvidence("Foreign minutes", { projectId: other.id });
+    await evidenceService.link(ctx, {
+      projectId: other.id,
+      evidenceId: foreignEvidence.id,
+      entityType: "task",
+      entityId: foreignTask.id,
+    });
+    expect(await evidenceService.listForEntity(ctx, other.id, "task", foreignTask.id)).toHaveLength(1);
+    // Ownership of `projectId` is asserted, but the item belongs to a different Project.
+    expect(await evidenceService.listForEntity(ctx, projectId, "task", foreignTask.id)).toEqual([]);
+  });
+
   it("removes links when the Evidence is deleted", async () => {
     const t = await tasksService.create(ctx, { projectId, title: "Loses its source", priority: "none" });
     const ev = await mkEvidence("Doomed evidence");

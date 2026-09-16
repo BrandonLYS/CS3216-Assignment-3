@@ -195,7 +195,7 @@ export const evidenceService = {
 
   listForEntity: async (ctx: Ctx, projectId: string, entityType: LinkableEntityType, entityId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
-    return evidenceLinksRepo.listForEntity(ctx.db, entityType, entityId);
+    return evidenceLinksRepo.listForEntity(ctx.db, projectId, entityType, entityId);
   },
 
   listForEvidence: async (ctx: Ctx, evidenceId: string) => {
