@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { addDays, format } from "date-fns";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -552,5 +553,74 @@ test.describe("comments", () => {
     await expect(page.getByText(new RegExp(`created Comment "${key}-1: Vendor confirmed`))).toBeVisible();
     await expect(page.getByText(new RegExp(`deleted Comment "${key}-1: Vendor confirmed`))).toBeVisible();
     await shot(page, "overview-feed");
+  });
+});
+
+test.describe("attention", () => {
+  const shot = shots("attention");
+  // Attention rules key on the server's calendar date, so the fixtures are dated relative to now.
+  const d = (n: number) => format(addDays(new Date(), n), "yyyy-MM-dd");
+
+  test("overview groups attention by rule, dashboard shows per-project counts, items open their dialog", async ({
+    page,
+  }) => {
+    await openProject(page, "Tasks");
+    const create = async (title: string, o: { start?: string; due: string }) => {
+      await page.getByRole("button", { name: "New task" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Title").fill(title);
+      if (o.start) await dialog.getByLabel("Start date").fill(o.start);
+      await dialog.getByLabel("Due date").fill(o.due);
+      await dialog.getByRole("button", { name: "Create task" }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.getByText(title).first()).toBeVisible();
+    };
+    await create("Reconcile legacy ledger", { due: d(-3) }); // -> task_overdue
+    await create("Rotate PSP credentials", { due: d(20) }); // -> task_blocked
+    await page.getByText("Rotate PSP credentials").first().click();
+    await page.getByRole("dialog").getByLabel("Status").selectOption({ label: "Blocked" });
+    await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await create("Vendor delivers sandbox", { due: d(10) }); // upstream
+    await create("Run vendor smoke test", { start: d(2), due: d(6) }); // -> dependency_late
+    await page.getByText("Run vendor smoke test").first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Add predecessor" }).click();
+    await dialog.getByRole("combobox").last().selectOption({ label: "Vendor delivers sandbox" });
+    await dialog.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(dialog.getByText("Vendor delivers sandbox").last()).toBeVisible();
+    await dialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog).toBeHidden();
+    await shot(page, "tasks-seeded");
+
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+    const list = page.locator("section", { hasText: "Needs attention" }).first();
+    await expect(list.getByText("Overdue", { exact: true }).first()).toBeVisible();
+    await expect(list.getByText(/Due .*, 3 days ago/)).toBeVisible();
+    await expect(list.getByText("Blocked", { exact: true }).first()).toBeVisible();
+    await expect(list.getByText("Late dependency", { exact: true }).first()).toBeVisible();
+    await expect(list.getByText(/Depends on .*, due .*, after start/)).toBeVisible();
+    await shot(page, "overview-groups");
+
+    // Collapsing a group keeps its count visible in the summary.
+    await list.getByText("Overdue", { exact: true }).first().click();
+    await expect(list.getByText("Reconcile legacy ledger")).toBeHidden();
+    await expect(list.getByText("Overdue", { exact: true }).first()).toBeVisible();
+    await shot(page, "overview-collapsed");
+
+    await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+    await expect(page).toHaveURL("/");
+    const row = page.getByRole("link", { name: projectName }).filter({ hasText: /overdue/ });
+    await expect(row.getByText(/\d+ overdue/)).toBeVisible();
+    await expect(row.getByText(/\d+ blocked/)).toBeVisible();
+    await expect(row.getByText(/\d+ late dependenc/)).toBeVisible();
+    await expect(page.getByText("Due in 7 days")).toBeVisible();
+    await shot(page, "dashboard-counts");
+
+    await page.getByTestId("attention-item").filter({ hasText: "Reconcile legacy ledger" }).first().click();
+    await expect(page).toHaveURL(/\/tasks\?task=/);
+    await expect(page.getByRole("dialog").getByLabel("Title")).toHaveValue("Reconcile legacy ledger");
+    await shot(page, "item-opens-task");
   });
 });
