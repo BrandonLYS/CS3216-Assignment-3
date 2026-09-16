@@ -40,3 +40,15 @@ Branch `feat/5-history` (on top of `feat/4-comments`). Implemented commit by com
 - A deleted Status/Person shows `<uuid> (deleted)` — literal to the issue's "fall back to the raw value with a "(deleted)" suffix". Reading the `status.deleted` event's `entityLabel` for a nicer name is a follow-up.
 - The footer (Cancel/Save/Delete) is hidden with the Details panel while History is active; `X`/Escape still close the dialog.
 - Overview feed still renders raw field keys; the dictionary is ready for it.
+
+## Review fixes
+
+Follow-ups to the adversarial review (`review-13.md`, items 1–3 and 5):
+
+- **`created` always last (HIGH).** `activityRepo.historyForEntity` now orders `desc(occurredAt)`, then `case when entity_type = 'comment' then 1 when action = 'created' then 2 else 0 end` (field rows → Comment events → the item's own `created`), then `desc(id)`. `groupHistory` ranks `created`/`deleted` item rows _after_ field rows and Comments inside a same-second group instead of first. Tests: `service.test.ts` inserts four Activity rows plus a Comment event with an identical `occurredAt` and asserts the order `updated, updated, updated, comment, created`; new pure `src/entities/activity/entity-history.test.ts` covers the same-second group and actor/second splitting. Postgres enums sort by declaration order (`created < updated < deleted`), so `desc(action)` would also have worked, but the explicit `CASE` does not depend on that.
+- **`ItemDialogTabs.load()` guards (HIGH).** A `requestId` ref discards responses from a superseded request and a `mounted` ref (set in an effect, cleared on cleanup) prevents `setState` after the dialog unmounts mid-fetch.
+- **Details tabpanel ARIA (MEDIUM).** Details is now a `DetailsPanel` rendered inside `<Tabs>` with `id="${id}-panel-details"` / `aria-labelledby="${id}-tab-details"` (matching `Tab`'s `aria-controls`), `hidden` + `aria-hidden` when inactive, `tabIndex={0}` when active; `className="hidden"` is kept for layout. `tabs.tsx` exports `useTabsId()` so the prefix is not duplicated.
+- **Refetch feedback (LOW).** When History already has entries and a refetch is in flight, the list stays visible with `aria-busy="true"`, `opacity-60` and a `role="status"` "Refreshing…" caption.
+- Not changed: item 4 (`fmtDate` date-only shift west of UTC — pre-existing shared behaviour) and item 6 (`labelFor` barrel import) remain follow-ups.
+
+Verification: `npm run typecheck`, `npm run lint`, `npm test` (8 files, 54/54), `E2E_PORT=3105 E2E_NO_SERVER=1 npx playwright test e2e/flows.spec.ts` 13/13.

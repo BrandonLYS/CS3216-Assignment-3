@@ -22,6 +22,14 @@ function useTabs(component: string): TabsContextValue {
   return ctx;
 }
 
+/**
+ * The `useId` prefix the primitives use for `${id}-tab-${value}` / `${id}-panel-${value}`.
+ * For hand-rolled panels that must stay mounted while hidden (a `<TabPanel>` unmounts).
+ */
+export function useTabsId(): string {
+  return useTabs("useTabsId").id;
+}
+
 export function Tabs({
   value,
   onValueChange,
