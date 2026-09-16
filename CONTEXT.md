@@ -68,3 +68,9 @@ The list of all Risks in a Project.
 **Evidence**:
 A source artifact attached to a Project (plan, minutes, status update, export) from which project facts may be derived.
 _Avoid_: Document, file, attachment, upload
+
+### Discussion
+
+**Comment**:
+A short, plain-text, dated statement attached to one Task, Risk or Milestone, optionally attributed to the Person who said it ("said by") and dated to when it was said ("said on"). Immutable once posted; may be deleted, in which case the item's history keeps the body.
+_Avoid_: Message, note, remark, update

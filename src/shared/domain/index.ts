@@ -80,8 +80,14 @@ export const ENTITY_TYPES = [
   "team",
   "label",
   "status",
+  "comment",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
+
+/** Entity types a Comment (and, later, an Evidence link) may attach to. */
+export const COMMENTABLE_ENTITY_TYPES = ["task", "risk", "milestone"] as const satisfies readonly EntityType[];
+export type CommentableEntityType = (typeof COMMENTABLE_ENTITY_TYPES)[number];
+export const COMMENT_MAX_LENGTH = 4000;
 
 export const ACTIVITY_ACTIONS = ["created", "updated", "deleted"] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
