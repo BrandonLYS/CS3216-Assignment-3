@@ -29,7 +29,7 @@ Verified facts that shape the plan:
 - cmdk 1.1.1 (`node_modules/cmdk/dist/index.d.ts`): `Command shouldFilter?: boolean` ("if false, you must conditionally
   render valid items yourself"), `Item value?/keywords?/forceMount?`, `Group forceMount?`, `Input value?/onValueChange?`.
   With default filtering, `forceMount` items are rendered but **do not count** toward `filtered.count`, so `Command.Empty`
-  ("No results.") would render *alongside* Task rows, and cmdk re-sorts groups by score (Task rows with an opaque `value`
+  ("No results.") would render _alongside_ Task rows, and cmdk re-sorts groups by score (Task rows with an opaque `value`
   score 0 → group sinks). Decision: **`shouldFilter={false}`** and filter the static items in JS (see Commit 4).
 
 ## 2. Changes, grouped into commit points
@@ -197,7 +197,7 @@ test.describe("task-search", () => {
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
     await expect(page).toHaveURL("/");
     await page.keyboard.press("Meta+k");
-    const input = page.getByPlaceholder("Type a command or search…");   // check the real placeholder in the palette
+    const input = page.getByPlaceholder("Type a command or search…"); // check the real placeholder in the palette
     await input.fill(`${key}-1`);
     await shot(page, "search-by-key");
     const hit = page.getByRole("option", { name: new RegExp(`${key}-1`) });
@@ -279,7 +279,7 @@ React.useEffect(() => {
 }, [q, showTasks, currentProjectId]);
 ```
 
-   (If the `react-hooks/set-state-in-effect` lint rule complains about the synchronous `setSearch` calls, derive `loading` from a `pendingQuery` state set in the same effect or move the synchronous reset into the `onValueChange` handler.)
+(If the `react-hooks/set-state-in-effect` lint rule complains about the synchronous `setSearch` calls, derive `loading` from a `pendingQuery` state set in the same effect or move the synchronous reset into the `onValueChange` handler.)
 
 3. Static filtering (replaces cmdk's): `const hit = (...labels: string[]) => !q || labels.some((l) => l.toLowerCase().includes(q.toLowerCase()));`
    then compute `sectionHits = currentProject ? PROJECT_SECTIONS.filter((s) => hit(s.label)) : []`,
@@ -295,34 +295,40 @@ React.useEffect(() => {
    matches, so the Task row is first and Enter opens it):
 
 ```tsx
-{showTasks && (
-  <Command.Group heading="Tasks">
-    {search.loading ? (
-      <div className="flex h-8 items-center gap-2.5 px-2 text-caption text-ink-subtle" aria-live="polite">
-        <Loader2 className="size-3.5 animate-spin" /> Searching…
-      </div>
-    ) : search.results.length === 0 ? (
-      <div className="px-2 py-3 text-center text-caption text-ink-subtle">No tasks match</div>
-    ) : (
-      search.results.map((r) => (
-        <Item key={r.id} value={`task:${r.id}`} icon={ListTodo} onSelect={() => go(`/projects/${r.projectId}/tasks?task=${r.id}`)}>
-          <span className="shrink-0 font-mono text-[10px] text-ink-tertiary">{`${r.projectKey}-${r.number}`}</span>
-          <span className="truncate">{r.title}</span>
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            <span className="max-w-32 truncate text-caption text-ink-tertiary">{r.projectName}</span>
-            <StatusBadge status={r.status} />
-          </span>
-        </Item>
-      ))
-    )}
-  </Command.Group>
-)}
+{
+  showTasks && (
+    <Command.Group heading="Tasks">
+      {search.loading ? (
+        <div className="flex h-8 items-center gap-2.5 px-2 text-caption text-ink-subtle" aria-live="polite">
+          <Loader2 className="size-3.5 animate-spin" /> Searching…
+        </div>
+      ) : search.results.length === 0 ? (
+        <div className="px-2 py-3 text-center text-caption text-ink-subtle">No tasks match</div>
+      ) : (
+        search.results.map((r) => (
+          <Item
+            key={r.id}
+            value={`task:${r.id}`}
+            icon={ListTodo}
+            onSelect={() => go(`/projects/${r.projectId}/tasks?task=${r.id}`)}
+          >
+            <span className="shrink-0 font-mono text-[10px] text-ink-tertiary">{`${r.projectKey}-${r.number}`}</span>
+            <span className="truncate">{r.title}</span>
+            <span className="ml-auto flex shrink-0 items-center gap-2">
+              <span className="max-w-32 truncate text-caption text-ink-tertiary">{r.projectName}</span>
+              <StatusBadge status={r.status} />
+            </span>
+          </Item>
+        ))
+      )}
+    </Command.Group>
+  );
+}
 ```
 
-   Spinner/empty rows are plain `<div>`s, not `Command.Item`, so they are never selectable. `go()` already calls
-   `onClose()` then `router.push` (user story 17). Check `StatusBadge`'s actual props in `src/entities/status/status-badge.tsx` and adapt.
-5. `Item` helper: add optional `value?: string` prop and pass it to `Command.Item` (stable unique value; cmdk requires one
-   when `textContent` changes). Add `min-w-0` to the Item class so `truncate` works.
+Spinner/empty rows are plain `<div>`s, not `Command.Item`, so they are never selectable. `go()` already calls
+`onClose()` then `router.push` (user story 17). Check `StatusBadge`'s actual props in `src/entities/status/status-badge.tsx` and adapt. 5. `Item` helper: add optional `value?: string` prop and pass it to `Command.Item` (stable unique value; cmdk requires one
+when `textContent` changes). Add `min-w-0` to the Item class so `truncate` works.
 
 Only design tokens are used (`text-ink-subtle`, `text-ink-tertiary`, `bg-surface-3`, `text-caption`); Status colour comes
 from `status.color` via `StatusBadge`, semantics from `status.category` (nothing keys off `status.name`).
@@ -390,7 +396,7 @@ Steps as in the code above. Screenshots: `01-second-project-tasks`, `02-search-b
    (`F1AB`). Resolution: two regexes (`KEY_WITH_SEPARATOR` allows digits; `KEY_NO_SEPARATOR` letters-only). Documented in
    `search.ts` and covered by a test. `F1AB1` (no separator) is deliberately a title search.
 2. **`?task=` dialog opening** — already implemented (`tasks-view.tsx:26-41`, page wrapped in `<Suspense>`). Nothing to
-   add. If the target Tasks page is *already* mounted (search from the same Project), `router.push` only changes search
+   add. If the target Tasks page is _already_ mounted (search from the same Project), `router.push` only changes search
    params; `useSearchParams` re-renders and the dialog opens — verify once manually.
 3. **Current Project id** — from `pathname.startsWith("/projects/{id}")` (existing line 44). If the current Project is
    archived, bare-number search returns nothing (archived excluded) — acceptable, matches story 18.
@@ -398,7 +404,7 @@ Steps as in the code above. Screenshots: `01-second-project-tasks`, `02-search-b
    `command-score`). Existing e2e (`Payments`, `Risks`) still passes. Alternative rejected: `forceMount` on Task items keeps
    fuzzy matching but `Command.Empty` fires next to Task rows and cmdk re-sorts groups by score.
 5. **Stale results and Enter** — results are cleared on every new query (spinner shown) so Enter can never select a row
-   from a previous query. Enter pressed *during* loading selects the first static match or nothing.
+   from a previous query. Enter pressed _during_ loading selects the first static match or nothing.
 6. **Server action from a widget** — `widgets` importing `@/server/modules/tasks/actions` is consistent with layering
    (`features` already do). The palette never imports a repository. The `ActionResult` `!ok` branch is treated as "no
    results" (validation can only fail for `q` < 2, which the widget already gates).
