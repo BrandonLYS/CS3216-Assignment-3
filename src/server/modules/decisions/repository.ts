@@ -4,7 +4,7 @@ import { activityEvents } from "@/server/modules/activity/schema";
 import { comments } from "@/server/modules/comments/schema";
 import { evidence } from "@/server/modules/evidence/schema";
 import { people } from "@/server/modules/people/schema";
-import type { DecisionEdgeKind } from "@/shared/domain";
+import type { AssumptionSubtype, AssumptionTargetType, DecisionEdgeKind } from "@/shared/domain";
 import {
   assumptions,
   decisionEdges,
@@ -55,6 +55,45 @@ export const assumptionsRepo = {
 
   listByIds: (db: DbOrTx, ids: string[]) =>
     ids.length ? db.select().from(assumptions).where(inArray(assumptions.id, ids)) : Promise.resolve([]),
+
+  /** Holding Assumptions that watch one entity (the detector's candidate set). */
+  listHoldingWatching: (db: DbOrTx, projectId: string, targetType: AssumptionTargetType, targetId: string) =>
+    db
+      .select()
+      .from(assumptions)
+      .where(
+        and(
+          eq(assumptions.projectId, projectId),
+          eq(assumptions.state, "holding"),
+          eq(assumptions.targetType, targetType),
+          eq(assumptions.targetId, targetId),
+        ),
+      ),
+
+  /** Holding dependency Assumptions of a Project (re-evaluated when a Task or Milestone changes). */
+  listHoldingBySubtype: (db: DbOrTx, projectId: string, subtype: AssumptionSubtype) =>
+    db
+      .select()
+      .from(assumptions)
+      .where(
+        and(eq(assumptions.projectId, projectId), eq(assumptions.state, "holding"), eq(assumptions.subtype, subtype)),
+      ),
+
+  /** Broken, undismissed Assumptions: the impact alerts. */
+  listAlertsByProjects: (db: DbOrTx, projectIds: string[]) =>
+    projectIds.length
+      ? db
+          .select()
+          .from(assumptions)
+          .where(
+            and(
+              inArray(assumptions.projectId, projectIds),
+              eq(assumptions.state, "broken"),
+              isNull(assumptions.alertDismissedAt),
+            ),
+          )
+          .orderBy(desc(assumptions.updatedAt))
+      : Promise.resolve([]),
 
   insert: async (db: DbOrTx, values: NewAssumptionRow) => {
     const [row] = await db.insert(assumptions).values(values).returning();

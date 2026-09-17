@@ -87,11 +87,15 @@ export const HISTORY_FIELDS: Record<HistoryEntityType, Record<string, HistoryFie
     sources: { label: "Sources", kind: "list" },
     assumptions: { label: "Assumptions", kind: "list" },
     supersedes: { label: "Supersedes", kind: "text" },
+    leadsTo: { label: "Leads to", kind: "list" },
   },
   assumption: {
     statement: { label: "Statement", kind: "text" },
     state: { label: "State", kind: "enum" },
     assumedUntil: { label: "Assumed until", kind: "date" },
+    brokenReason: { label: "Broken because", kind: "text" },
+    brokenByEventId: { label: "Broken by change", kind: "text" },
+    alertDismissedAt: { label: "Alert dismissed", kind: "date" },
   },
 };
 
