@@ -512,3 +512,121 @@ describe("break, dismiss and consequences (#38)", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
+
+describe("search (#40)", () => {
+  it("answers from confirmed Decisions with linked Sources, never from pending Proposals", async () => {
+    const { proposalsRepo } = await import("@/server/modules/proposals/repository");
+    const p = await makeProject(ctx, "WHY");
+    const ev = await evidenceService.create(ctx, {
+      projectId: p.id,
+      title: "Kickoff minutes",
+      kind: "minutes",
+      body: "We decided to switch from surveys to interviews.",
+    });
+    const t = await tasksService.create(ctx, { projectId: p.id, title: "Recruit", priority: "none" });
+    const c = await commentsService.create(ctx, {
+      projectId: p.id,
+      entityType: "task",
+      entityId: t.id,
+      body: "Response rate was 4%.",
+    });
+    const [taskEvent] = await activityRepo.forEntity(ctx.db, t.id);
+    const d = await decisionsService.create(ctx, {
+      projectId: p.id,
+      title: "Switch from surveys to interviews",
+      decidedOn: "2026-09-10",
+      chosen: "Semi-structured interviews",
+      alternatives: "Keep the survey open",
+      sources: [
+        { kind: "evidence", entityId: ev.id },
+        { kind: "comment", entityId: c.id },
+        { kind: "activity_event", entityId: taskEvent!.event.id },
+      ],
+    });
+    await proposalsRepo.insertMany(ctx.db, [
+      {
+        projectId: p.id,
+        fingerprint: "f",
+        title: "Switch from surveys to interviews (pending)",
+        chosen: "interviews",
+        sources: [{ kind: "evidence", entityId: ev.id, excerpt: "x" }],
+        assumptions: [],
+        extractor: "heuristic",
+      },
+    ]);
+
+    const out = await decisionsService.search(ctx, {
+      projectId: p.id,
+      query: "why did we switch from surveys to interviews?",
+      limit: 5,
+    });
+    expect(out.decisions.map((x) => x.id)).toEqual([d.id]);
+    expect(out.nearestEvidence).toEqual([]);
+    const a = out.decisions[0]!;
+    expect(a.href).toBe(`/projects/${p.id}/decisions?decision=${d.id}`);
+    expect(a.sources.map((s) => s.href)).toEqual([
+      `/projects/${p.id}/evidence?item=${ev.id}#evidence-${ev.id}`,
+      `/projects/${p.id}/tasks?task=${t.id}&tab=history`,
+      `/projects/${p.id}/tasks?task=${t.id}&tab=history`,
+    ]);
+    expect(a.sources.every((s) => s.href.startsWith("/"))).toBe(true);
+    expect(a.supersededBy).toBeNull();
+  });
+
+  it("names the superseding Decision and returns nearest Evidence when nothing matches", async () => {
+    const p = await makeProject(ctx, "SUP");
+    const ev = await evidenceService.create(ctx, {
+      projectId: p.id,
+      title: "Vendor evaluation",
+      kind: "plan",
+      body: "Compared Stripe and Adyen.",
+    });
+    const older = await decisionsService.create(ctx, {
+      projectId: p.id,
+      title: "Use Stripe",
+      decidedOn: "2026-08-01",
+      chosen: "Stripe",
+      sources: [{ kind: "evidence", entityId: ev.id }],
+    });
+    const newer = await decisionsService.create(ctx, {
+      projectId: p.id,
+      title: "Use Adyen",
+      decidedOn: "2026-09-01",
+      chosen: "Adyen",
+      sources: [{ kind: "evidence", entityId: ev.id }],
+      supersedesId: older.id,
+    });
+    const out = await decisionsService.search(ctx, { projectId: p.id, query: "why stripe", limit: 5 });
+    expect(out.decisions[0]).toMatchObject({
+      id: older.id,
+      status: "superseded",
+      supersededBy: { id: newer.id, number: newer.number, title: "Use Adyen" },
+    });
+    expect(out.decisions[0]!.supersededBy!.href).toBe(`/projects/${p.id}/decisions?decision=${newer.id}`);
+
+    const none = await decisionsService.search(ctx, {
+      projectId: p.id,
+      query: "why did we pick the vendor evaluation date",
+      limit: 5,
+    });
+    expect(none.decisions).toEqual([]);
+    expect(none.nearestEvidence).toEqual([
+      {
+        id: ev.id,
+        title: "Vendor evaluation",
+        kind: "plan",
+        href: `/projects/${p.id}/evidence?item=${ev.id}#evidence-${ev.id}`,
+      },
+    ]);
+    expect(
+      (await decisionsService.search(ctx, { projectId: p.id, query: "quantum", limit: 5 })).nearestEvidence,
+    ).toEqual([]);
+  });
+
+  it("refuses a stranger", async () => {
+    const stranger = await makeCtx();
+    await expect(
+      decisionsService.search(stranger, { projectId, query: "why interviews", limit: 5 }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
