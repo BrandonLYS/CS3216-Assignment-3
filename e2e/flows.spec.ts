@@ -945,3 +945,91 @@ test.describe("impact", () => {
     await shot(page, "decision-still-broken");
   });
 });
+
+test.describe("proposals", () => {
+  const shot = shots("proposals");
+
+  const addEvidence = async (page: Page, title: string, body: string) => {
+    await page.getByRole("main").getByRole("link", { name: "Evidence", exact: true }).click();
+    await expect(page).toHaveURL(/\/evidence$/);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Title").fill(title);
+    await dialog.getByLabel("Kind").selectOption("minutes");
+    await dialog.getByLabel("Pasted text").fill(body);
+    await dialog.getByRole("button", { name: "Add evidence" }).click();
+    await expect(dialog).toBeHidden();
+  };
+  const propose = async (page: Page) => {
+    await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+    await expect(page).toHaveURL(/\/decisions$/);
+    await page.getByTestId("propose-from-evidence").click();
+    await expect(page.getByText(/proposed from|Nothing new/)).toBeVisible();
+  };
+  const overview = async (page: Page) => {
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page.getByText("Needs attention")).toBeVisible();
+  };
+
+  test("the Assistant proposes decisions from evidence; the PM edits, accepts and rejects them", async ({ page }) => {
+    await openProject(page);
+    await addEvidence(
+      page,
+      "Steering call notes",
+      "Attendees: Priya, Marcus.\n\nAfter the pilot we decided to switch from weekly surveys to fortnightly interviews because response rates fell to 4%. The vendor sandbox is still pending.",
+    );
+    await propose(page);
+    await overview(page);
+    const cards = page.getByTestId("proposal-card");
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first()).toContainText("Switch from weekly surveys to fortnightly interviews");
+    await expect(cards.first()).toContainText("After the pilot we decided to switch from weekly surveys");
+    await expect(cards.first()).toContainText("Steering call notes");
+    await shot(page, "proposal-card");
+
+    // Edit and accept: the Decision dialog opens prefilled; change the title before creating.
+    await cards.first().getByTestId("edit-accept-proposal").click();
+    const dialog = page.getByRole("dialog", { name: "Confirm proposed decision" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Chosen")).toHaveValue(/decided to switch from weekly surveys/);
+    await expect(dialog.getByText("Steering call notes")).toBeVisible();
+    await dialog.getByLabel("Title").fill("Interviews replace the weekly survey");
+    await dialog.getByLabel("Decided on").fill("2026-09-15");
+    await shot(page, "edit-and-accept-dialog");
+    await dialog.getByRole("button", { name: "Accept and create decision" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText("Interviews replace the weekly survey")).toBeVisible();
+    await expect(page.getByTestId("acceptance-rate")).toHaveText(/1 of 1/);
+
+    // The Activity Event carries the Assistant attribution.
+    await page.getByText("Interviews replace the weekly survey").click();
+    const edit = page.getByRole("dialog", { name: /D-\d+/ });
+    await edit.getByRole("tab", { name: "History" }).click();
+    await expect(edit.getByText("via Assistant").first()).toBeVisible();
+    await shot(page, "accepted-history");
+    await edit.getByRole("button", { name: "Close" }).click();
+
+    // Two more proposals: accept one with one click, reject the other; a re-run raises nothing.
+    await addEvidence(
+      page,
+      "Sprint review notes",
+      "We agreed to freeze the legacy gateway on 1 October instead of running both in parallel. The team chose Playwright over Cypress for the regression suite.",
+    );
+    await propose(page);
+    await overview(page);
+    await expect(cards).toHaveCount(2);
+    await cards.filter({ hasText: "freeze the legacy gateway" }).getByTestId("accept-proposal").click();
+    await expect(cards).toHaveCount(1);
+    await shot(page, "one-click-accept");
+    await cards.first().getByTestId("reject-proposal").click();
+    await expect(cards).toHaveCount(0);
+
+    await propose(page);
+    await expect(page.getByText("Nothing new to read")).toBeVisible();
+    await expect(page.getByTestId("acceptance-rate")).toHaveText(/2 of 3/);
+    await expect(page.getByText(/^Freeze the legacy gateway on 1 October/)).toBeVisible();
+    await shot(page, "acceptance-rate");
+    await overview(page);
+    await expect(cards).toHaveCount(0);
+  });
+});
