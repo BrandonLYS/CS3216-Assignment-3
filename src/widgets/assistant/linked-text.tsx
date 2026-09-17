@@ -10,13 +10,13 @@ export const isInternalHref = (href: string) => href.startsWith("/projects/");
 
 /**
  * Models sometimes "absolutise" a relative href with an invented host. Keep only the in-app
- * part (path, query, hash) of an http(s) URL whose path is a Project route; anything else is null.
+ * part (path, query, hash) of a relative or http(s) URL whose normalised path (so `/projects/../login`
+ * cannot slip through) is a Project route; anything else is null.
  */
 export function internalHref(href: string): string | null {
-  if (isInternalHref(href)) return href;
-  if (!/^https?:\/\//i.test(href)) return null;
+  if (!isInternalHref(href) && !/^https?:\/\//i.test(href)) return null;
   try {
-    const u = new URL(href);
+    const u = new URL(href, "http://app.local");
     return isInternalHref(u.pathname) ? `${u.pathname}${u.search}${u.hash}` : null;
   } catch {
     return null;

@@ -21,14 +21,11 @@ export const evidenceRepo = {
       .where(eq(evidence.projectId, projectId))
       .orderBy(desc(evidence.sourceDate), desc(evidence.createdAt)),
 
-  /**
-   * Evidence whose title, body or extracted text contains any term, newest first, capped.
-   * Terms come from `queryTerms` (letters, digits, `-` only), so no `ILIKE` wildcard escaping is needed.
-   */
+  /** Evidence whose title, body or extracted text contains any term (literal match), newest first, capped. */
   searchByTerms: (db: DbOrTx, projectId: string, terms: string[], limit: number): Promise<EvidenceRow[]> => {
     if (!terms.length) return Promise.resolve([]);
     const mentions = terms.map((t) => {
-      const pattern = `%${t}%`;
+      const pattern = `%${t.replace(/[\\%_]/g, "\\$&")}%`;
       return or(ilike(evidence.title, pattern), ilike(evidence.body, pattern), ilike(evidence.extractedText, pattern));
     });
     return db

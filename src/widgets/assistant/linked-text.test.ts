@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isInternalHref, splitLinks } from "./linked-text";
+import { internalHref, splitLinks } from "./linked-text";
 
 describe("splitLinks", () => {
   it("turns internal Markdown links into link chunks and keeps the surrounding text", () => {
@@ -20,9 +20,11 @@ describe("splitLinks", () => {
       "mailto:a@b.c",
       "/login",
       "/api/auth/sign-out",
+      "/projects/../login",
+      "/projects/p/../../api/x",
     ]) {
       expect(splitLinks(`see [here](${href})`)).toEqual([{ type: "text", text: `see [here](${href})` }]);
-      expect(isInternalHref(href)).toBe(false);
+      expect(internalHref(href)).toBeNull();
     }
   });
 

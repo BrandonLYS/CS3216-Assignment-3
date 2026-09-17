@@ -60,8 +60,10 @@ describe("rankEvidence", () => {
       { id: "2", title: "Survey results", body: null, extractedText: "x" },
       { id: "3", title: "Other", body: null, extractedText: null },
       { id: "4", title: "Surveys again", body: "surveys", extractedText: null },
+      { id: "5", title: "Transcript", body: "agenda", extractedText: "the survey came back" },
     ];
-    expect(rankEvidence(rows, ["survey", "surveys"], 2).map((e) => e.id)).toEqual(["4", "2"]);
+    expect(rankEvidence(rows, ["survey", "surveys"], 3).map((e) => e.id)).toEqual(["4", "2", "1"]);
+    expect(rankEvidence(rows, ["survey"], 5).map((e) => e.id)).toContain("5");
   });
 });
 

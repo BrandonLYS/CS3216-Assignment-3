@@ -71,11 +71,11 @@ export interface RankableEvidence {
   extractedText: string | null;
 }
 
-/** Evidence by the same terms, title x3; used only when no Decision matched. */
+/** Evidence by the same terms, title x3, body and extracted text x1; used only when no Decision matched. */
 export function rankEvidence<T extends RankableEvidence>(rows: T[], terms: string[], limit = 3): T[] {
   if (!terms.length) return [];
   return rows
-    .map((e) => ({ e, score: 3 * hits(e.title, terms) + hits(e.body || e.extractedText, terms) }))
+    .map((e) => ({ e, score: 3 * hits(e.title, terms) + hits(e.body, terms) + hits(e.extractedText, terms) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
