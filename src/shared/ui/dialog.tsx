@@ -28,9 +28,16 @@ export function Dialog({
     () => false,
   );
 
+  const panel = React.useRef<HTMLDivElement>(null);
+
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Only the topmost open dialog answers Escape, so a nested dialog does not close its parent.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const all = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (all[all.length - 1] === panel.current) onClose();
+    };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -42,12 +49,16 @@ export function Dialog({
 
   if (!mounted || !open) return null;
 
+  // Portals still bubble React events through the component tree, so a form inside a nested
+  // Dialog would submit the ActionForm that rendered it; stop submit at the overlay.
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/70 p-4 pt-[8vh] duration-150 animate-in fade-in-0"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      onSubmit={(e) => e.stopPropagation()}
     >
       <div
+        ref={panel}
         role="dialog"
         aria-modal="true"
         aria-label={title}
