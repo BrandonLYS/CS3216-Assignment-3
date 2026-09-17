@@ -12,6 +12,13 @@ export const dependenciesRepo = {
       ? db.select().from(dependencies).where(inArray(dependencies.projectId, projectIds))
       : Promise.resolve([]),
 
+  /** Every edge with `itemId` at either end. */
+  listForItem: (db: DbOrTx, itemId: string) =>
+    db
+      .select()
+      .from(dependencies)
+      .where(or(eq(dependencies.predecessorId, itemId), eq(dependencies.successorId, itemId))),
+
   findById: async (db: DbOrTx, id: string): Promise<DependencyRow | undefined> => {
     const [row] = await db.select().from(dependencies).where(eq(dependencies.id, id));
     return row;

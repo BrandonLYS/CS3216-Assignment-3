@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Tx } from "@/server/db/client";
 import { activityEvents, type NewActivityEventRow } from "@/server/modules/activity/schema";
 import { eventBus, type DomainEvent, type DomainEventName } from "@/server/events/bus";
@@ -74,9 +75,8 @@ export class Recorder {
   }
 
   async flush(tx: Tx) {
-    // One row per created/deleted event and one per change of an updated event; `owners`
-    // remembers, in insertion order, where each returned id goes.
-    const owners: Array<(id: string) => void> = [];
+    // One row per created/deleted event and one per change of an updated event. Ids are
+    // generated here so each event/change knows its row without relying on RETURNING order.
     const rows: NewActivityEventRow[] = this.pending.flatMap((e) => {
       const base = {
         projectId: e.projectId,
@@ -89,18 +89,17 @@ export class Recorder {
         occurredAt: e.occurredAt,
       };
       if (e.action !== "updated") {
-        owners.push((id) => (e.activityEventId = id));
-        if (e.snapshot === undefined) return [base];
-        return [{ ...base, ...(e.action === "created" ? { newValue: e.snapshot } : { oldValue: e.snapshot }) }];
+        e.activityEventId = randomUUID();
+        const row = { ...base, id: e.activityEventId };
+        if (e.snapshot === undefined) return [row];
+        return [{ ...row, ...(e.action === "created" ? { newValue: e.snapshot } : { oldValue: e.snapshot }) }];
       }
       return e.changes.map((c) => {
-        owners.push((id) => (c.activityEventId = id));
-        return { ...base, field: c.field, oldValue: c.oldValue, newValue: c.newValue };
+        c.activityEventId = randomUUID();
+        return { ...base, id: c.activityEventId, field: c.field, oldValue: c.oldValue, newValue: c.newValue };
       });
     });
-    if (!rows.length) return;
-    const inserted = await tx.insert(activityEvents).values(rows).returning({ id: activityEvents.id });
-    inserted.forEach((r, i) => owners[i]?.(r.id));
+    if (rows.length) await tx.insert(activityEvents).values(rows);
   }
 
   async publish() {

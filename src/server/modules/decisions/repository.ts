@@ -4,7 +4,7 @@ import { activityEvents } from "@/server/modules/activity/schema";
 import { comments } from "@/server/modules/comments/schema";
 import { evidence } from "@/server/modules/evidence/schema";
 import { people } from "@/server/modules/people/schema";
-import type { AssumptionSubtype, AssumptionTargetType, DecisionEdgeKind } from "@/shared/domain";
+import type { AssumptionTargetType, DecisionEdgeKind } from "@/shared/domain";
 import {
   assumptions,
   decisionEdges,
@@ -70,14 +70,21 @@ export const assumptionsRepo = {
         ),
       ),
 
-  /** Holding dependency Assumptions of a Project (re-evaluated when a Task or Milestone changes). */
-  listHoldingBySubtype: (db: DbOrTx, projectId: string, subtype: AssumptionSubtype) =>
-    db
-      .select()
-      .from(assumptions)
-      .where(
-        and(eq(assumptions.projectId, projectId), eq(assumptions.state, "holding"), eq(assumptions.subtype, subtype)),
-      ),
+  /** Holding Assumptions watching any of several targets of one type (dependency Assumptions touching an item). */
+  listHoldingWatchingAny: (db: DbOrTx, projectId: string, targetType: AssumptionTargetType, targetIds: string[]) =>
+    targetIds.length
+      ? db
+          .select()
+          .from(assumptions)
+          .where(
+            and(
+              eq(assumptions.projectId, projectId),
+              eq(assumptions.state, "holding"),
+              eq(assumptions.targetType, targetType),
+              inArray(assumptions.targetId, targetIds),
+            ),
+          )
+      : Promise.resolve([]),
 
   /** Broken, undismissed Assumptions: the impact alerts. */
   listAlertsByProjects: (db: DbOrTx, projectIds: string[]) =>
@@ -117,6 +124,14 @@ export const edgesRepo = {
       .select()
       .from(decisionEdges)
       .where(and(eq(decisionEdges.projectId, projectId), eq(decisionEdges.kind, kind))),
+
+  listByKindForProjects: (db: DbOrTx, projectIds: string[], kind: DecisionEdgeKind) =>
+    projectIds.length
+      ? db
+          .select()
+          .from(decisionEdges)
+          .where(and(inArray(decisionEdges.projectId, projectIds), eq(decisionEdges.kind, kind)))
+      : Promise.resolve([]),
 
   find: async (db: DbOrTx, kind: DecisionEdgeKind, fromId: string, toId: string) => {
     const [row] = await db

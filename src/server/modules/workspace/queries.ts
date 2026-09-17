@@ -67,7 +67,7 @@ async function brokenAssumptions(db: Ctx["db"], projectIds: string[]) {
   const rows = await assumptionsRepo.listAlertsByProjects(db, projectIds);
   const out = new Map<string, NonNullable<AttentionInput["assumptions"]>>();
   if (!rows.length) return out;
-  const supports = (await Promise.all(projectIds.map((id) => edgesRepo.listByKind(db, id, "supports")))).flat();
+  const supports = await edgesRepo.listByKindForProjects(db, projectIds, "supports");
   for (const a of rows) {
     const list = out.get(a.projectId) ?? [];
     list.push({

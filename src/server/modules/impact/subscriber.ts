@@ -100,11 +100,15 @@ export async function detectImpact(event: DomainEvent): Promise<void> {
     }
     const depChange = event.changes.find((c) => DEPENDENCY_FIELDS.has(c.field));
     if (depChange) {
-      const candidates = await assumptionsRepo.listHoldingBySubtype(db, event.projectId, "dependency");
-      for (const assumption of candidates) {
-        if (!assumption.targetId) continue;
-        const dep = await dependenciesRepo.findById(db, assumption.targetId);
-        if (!dep || (dep.predecessorId !== event.entityId && dep.successorId !== event.entityId)) continue;
+      const touching = await dependenciesRepo.listForItem(db, event.entityId);
+      const watching = await assumptionsRepo.listHoldingWatchingAny(
+        db,
+        event.projectId,
+        "dependency",
+        touching.map((d) => d.id),
+      );
+      for (const assumption of watching) {
+        const dep = touching.find((d) => d.id === assumption.targetId)!;
         const [pred, succ] = await Promise.all([
           loadDependencyEnd(db, dep.predecessorType, dep.predecessorId),
           loadDependencyEnd(db, dep.successorType, dep.successorId),

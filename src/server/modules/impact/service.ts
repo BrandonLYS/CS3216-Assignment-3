@@ -41,10 +41,16 @@ export const impactService = {
       milestonesRepo.listByProject(ctx.db, projectId),
       risksRepo.listByProject(ctx.db, projectId),
     ]);
-    const sources = await sourcesRepo.listForDecisions(
-      ctx.db,
-      decisions.map((d) => d.decision.id),
-    );
+    const [sources, triggers] = await Promise.all([
+      sourcesRepo.listForDecisions(
+        ctx.db,
+        decisions.map((d) => d.decision.id),
+      ),
+      activityRepo.findByIds(
+        ctx.db,
+        alerts.flatMap((a) => (a.brokenByEventId ? [a.brokenByEventId] : [])),
+      ),
+    ]);
     const base = `/projects/${projectId}`;
     const describe = (i: WalkItem): ImpactAlert["items"][number] | undefined => {
       if (i.type === "task") {
@@ -71,55 +77,49 @@ export const impactService = {
       successorType: d.successorType,
     }));
 
-    return Promise.all(
-      alerts.map(async (assumption) => {
-        const watched =
-          assumption.subtype === "dependency" && assumption.targetId
-            ? dependencies.find((d) => d.id === assumption.targetId)
-            : null;
-        const walk = impactWalk({
-          assumption,
-          edges,
-          dependencies: deps,
-          watchedDependency: watched
-            ? { successorType: watched.successorType, successorId: watched.successorId }
-            : null,
-        });
-        const trigger = assumption.brokenByEventId
-          ? await activityRepo.findById(ctx.db, assumption.brokenByEventId)
+    return alerts.map((assumption) => {
+      const watched =
+        assumption.subtype === "dependency" && assumption.targetId
+          ? dependencies.find((d) => d.id === assumption.targetId)
           : null;
-        return {
-          assumption,
-          reason: assumption.brokenReason ?? "Broken by hand",
-          trigger: trigger
-            ? {
-                entityType: trigger.entityType,
-                entityLabel: trigger.entityLabel,
-                field: trigger.field,
-                oldValue: trigger.oldValue,
-                newValue: trigger.newValue,
-                occurredAt: trigger.occurredAt.toISOString(),
-                actorName: null,
-              }
-            : null,
-          decisions: walk.decisionIds.flatMap((id) => {
-            const d = decisions.find((x) => x.decision.id === id)?.decision;
-            return d
-              ? [
-                  {
-                    id,
-                    number: d.number,
-                    title: d.title,
-                    status: d.status,
-                    sources: sources.filter((s) => s.decisionId === id),
-                  },
-                ]
-              : [];
-          }),
-          items: walk.items.map(describe).filter((x): x is NonNullable<typeof x> => Boolean(x)),
-        };
-      }),
-    );
+      const walk = impactWalk({
+        assumption,
+        edges,
+        dependencies: deps,
+        watchedDependency: watched ? { successorType: watched.successorType, successorId: watched.successorId } : null,
+      });
+      const trigger = triggers.find((t) => t.id === assumption.brokenByEventId) ?? null;
+      return {
+        assumption,
+        reason: assumption.brokenReason ?? "Broken by hand",
+        trigger: trigger
+          ? {
+              entityType: trigger.entityType,
+              entityLabel: trigger.entityLabel,
+              field: trigger.field,
+              oldValue: trigger.oldValue,
+              newValue: trigger.newValue,
+              occurredAt: trigger.occurredAt.toISOString(),
+              actorName: null,
+            }
+          : null,
+        decisions: walk.decisionIds.flatMap((id) => {
+          const d = decisions.find((x) => x.decision.id === id)?.decision;
+          return d
+            ? [
+                {
+                  id,
+                  number: d.number,
+                  title: d.title,
+                  status: d.status,
+                  sources: sources.filter((s) => s.decisionId === id),
+                },
+              ]
+            : [];
+        }),
+        items: walk.items.map(describe).filter((x): x is NonNullable<typeof x> => Boolean(x)),
+      };
+    });
   },
 };
 

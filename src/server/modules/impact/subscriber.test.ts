@@ -177,4 +177,56 @@ describe("impact detection through real services", () => {
     await tasksService.update(ctx, { id: upstream.id, statusId: blocked.id });
     expect((await assumptionsRepo.findById(ctx.db, b.id))?.brokenReason).toContain("is blocked");
   });
+
+  it("breaks a Task start-date Assumption and a dependency whose successor is a Milestone", async () => {
+    const t = await tasksService.create(ctx, {
+      projectId,
+      title: "Recruit",
+      priority: "none",
+      startDate: "2026-09-01",
+    });
+    const a = await decisionsService.createAssumption(ctx, {
+      projectId,
+      decisionId: decision.id,
+      statement: "Recruitment starts in September",
+      subtype: "date",
+      targetType: "task",
+      targetId: t.id,
+      targetField: "startDate",
+      assumedUntil: "2026-09-30",
+    });
+    await tasksService.update(ctx, { id: t.id, dueDate: "2026-12-01" });
+    expect((await assumptionsRepo.findById(ctx.db, a.id))?.state).toBe("holding");
+    await tasksService.update(ctx, { id: t.id, startDate: "2026-10-02" });
+    const broken = (await assumptionsRepo.findById(ctx.db, a.id))!;
+    expect(broken.state).toBe("broken");
+    expect(broken.brokenReason).toBe(
+      '"Recruit" start date moved from 1 Sep 2026 to 2 Oct 2026, past the assumed 30 Sep 2026',
+    );
+    const [alert] = (await impactService.listAlerts(ctx, projectId)).filter((x) => x.assumption.id === a.id);
+    expect(alert!.items.map((i) => i.code)).toEqual(["IMP-3"]);
+
+    const m2 = await milestonesService.create(ctx, { projectId, name: "Report due", dueDate: "2026-11-01" });
+    const dep = await dependenciesService.create(ctx, {
+      projectId,
+      predecessorType: "task",
+      predecessorId: t.id,
+      successorType: "milestone",
+      successorId: m2.id,
+    });
+    const b = await decisionsService.createAssumption(ctx, {
+      projectId,
+      decisionId: decision.id,
+      statement: "Recruitment done before the report",
+      subtype: "dependency",
+      targetType: "dependency",
+      targetId: dep.id,
+    });
+    await tasksService.update(ctx, { id: t.id, dueDate: "2026-11-05" });
+    const b2 = (await assumptionsRepo.findById(ctx.db, b.id))!;
+    expect(b2.state).toBe("broken");
+    expect(b2.brokenReason).toContain("after Report due due 1 Nov 2026");
+    const [alertB] = (await impactService.listAlerts(ctx, projectId)).filter((x) => x.assumption.id === b.id);
+    expect(alertB!.items.map((i) => i.label)).toEqual(["Report due"]);
+  });
 });
