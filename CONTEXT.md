@@ -83,6 +83,10 @@ _Avoid_: Premise, precondition, constraint, hypothesis, risk
 A citation from a Decision or an edge to something already in the Project history: an Evidence item, a Comment or an Activity Event, optionally narrowed to one passage of the Evidence.
 _Avoid_: Reference, link (see Dependency and Evidence link), attachment, footnote
 
+**Proposal**:
+A Decision the Assistant extracted from Evidence or a Comment and offers to the PM for confirmation, with the Sources it came from and any typed Assumptions it suggests. It is pending, accepted or rejected; nothing enters the graph until a PM accepts it.
+_Avoid_: Suggestion, draft decision, candidate, recommendation
+
 **Cause**, **Consequence**:
 The two directions of an edge between a Decision, an Assumption and the items they touch: what led to a record sits on its cause side, what follows from it on its consequence side. Not node types.
 _Avoid_: Reason, effect, outcome, impact node
