@@ -30,7 +30,7 @@ export const messagesRepo = {
 
   upsertMany: async (db: DbOrTx, rows: (typeof messages.$inferInsert)[]) => {
     // A thread can carry the same client id twice (a re-sent turn); Postgres refuses to upsert
-    // one row twice in a statement, so the last occurrence wins here.
+    // one row twice in a statement, so the last occurrence's parts win here (first position kept).
     const unique = [...new Map(rows.map((r) => [`${r.conversationId}:${r.id}`, r])).values()];
     if (!unique.length) return;
     await db

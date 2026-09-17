@@ -82,6 +82,13 @@ export function rankEvidence<T extends RankableEvidence>(rows: T[], terms: strin
     .map((x) => x.e);
 }
 
+/**
+ * A ready-made Markdown citation for the model to paste verbatim. Brackets and line breaks in
+ * a title would break the `[label](href)` parser in the dock, so they are neutralised.
+ */
+export const citation = (label: string, href: string) =>
+  `[${label.replace(/\[/g, "(").replace(/\]/g, ")").replace(/\s+/g, " ").trim() || "source"}](${href})`;
+
 export interface HrefLookups {
   comments: Map<string, Pick<CommentRow, "entityType" | "entityId">>;
   events: Map<string, Pick<ActivityEventRow, "entityType" | "entityId">>;

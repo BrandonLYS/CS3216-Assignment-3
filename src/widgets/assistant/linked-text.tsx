@@ -5,19 +5,19 @@ export type TextChunk = { type: "text"; text: string } | { type: "link"; label: 
 
 const LINK = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
 
-/** Same-app paths only: no scheme, no protocol-relative `//`, so a model cannot send the User elsewhere. */
-export const isInternalHref = (href: string) => href.startsWith("/") && !href.startsWith("//");
+/** Project routes only: no scheme, no protocol-relative `//`, no other app pages, so a model cannot send the User elsewhere. */
+export const isInternalHref = (href: string) => href.startsWith("/projects/");
 
 /**
  * Models sometimes "absolutise" a relative href with an invented host. Keep only the in-app
- * part (path, query, hash) of an http(s) URL whose path is an app route; anything else is null.
+ * part (path, query, hash) of an http(s) URL whose path is a Project route; anything else is null.
  */
 export function internalHref(href: string): string | null {
   if (isInternalHref(href)) return href;
   if (!/^https?:\/\//i.test(href)) return null;
   try {
     const u = new URL(href);
-    return u.pathname.startsWith("/projects/") ? `${u.pathname}${u.search}${u.hash}` : null;
+    return isInternalHref(u.pathname) ? `${u.pathname}${u.search}${u.hash}` : null;
   } catch {
     return null;
   }

@@ -13,7 +13,14 @@ describe("splitLinks", () => {
   });
 
   it("leaves external, protocol-relative and javascript hrefs as literal text", () => {
-    for (const href of ["https://evil.example", "//evil.example/x", "javascript:alert(1)", "mailto:a@b.c"]) {
+    for (const href of [
+      "https://evil.example",
+      "//evil.example/x",
+      "javascript:alert(1)",
+      "mailto:a@b.c",
+      "/login",
+      "/api/auth/sign-out",
+    ]) {
       expect(splitLinks(`see [here](${href})`)).toEqual([{ type: "text", text: `see [here](${href})` }]);
       expect(isInternalHref(href)).toBe(false);
     }
@@ -30,10 +37,10 @@ describe("splitLinks", () => {
   });
 
   it("handles several links, no links and empty text", () => {
-    expect(splitLinks("[A](/a) and [B](/b?x=1)")).toEqual([
-      { type: "link", label: "A", href: "/a" },
+    expect(splitLinks("[A](/projects/p) and [B](/projects/p/tasks?task=1)")).toEqual([
+      { type: "link", label: "A", href: "/projects/p" },
       { type: "text", text: " and " },
-      { type: "link", label: "B", href: "/b?x=1" },
+      { type: "link", label: "B", href: "/projects/p/tasks?task=1" },
     ]);
     expect(splitLinks("plain")).toEqual([{ type: "text", text: "plain" }]);
     expect(splitLinks("")).toEqual([]);

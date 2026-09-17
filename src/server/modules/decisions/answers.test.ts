@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankDecisions, rankEvidence, queryTerms, sourceHref } from "./answers";
+import { citation, rankDecisions, rankEvidence, queryTerms, sourceHref } from "./answers";
 
 const d = (
   over: Partial<{
@@ -62,6 +62,15 @@ describe("rankEvidence", () => {
       { id: "4", title: "Surveys again", body: "surveys", extractedText: null },
     ];
     expect(rankEvidence(rows, ["survey", "surveys"], 2).map((e) => e.id)).toEqual(["4", "2"]);
+  });
+});
+
+describe("citation", () => {
+  it("neutralises brackets and line breaks so the dock parser keeps the link", () => {
+    expect(citation("Kickoff [draft]\nminutes", "/projects/p/evidence?item=e")).toBe(
+      "[Kickoff (draft) minutes](/projects/p/evidence?item=e)",
+    );
+    expect(citation("  ", "/projects/p")).toBe("[source](/projects/p)");
   });
 });
 
