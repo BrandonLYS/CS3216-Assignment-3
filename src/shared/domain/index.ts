@@ -87,6 +87,8 @@ export const ENTITY_TYPES = [
   "label",
   "status",
   "comment",
+  "decision",
+  "assumption",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -113,6 +115,35 @@ export type MemoryAuthor = (typeof MEMORY_AUTHORS)[number];
 /** Who wrote a Message in a Conversation. */
 export const MESSAGE_ROLES = ["user", "assistant", "system"] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
+
+// ---------------------------------------------------------------------------
+// Decision memory (ADR 0008). Two node types, typed edges, sourced records.
+// ---------------------------------------------------------------------------
+export const DECISION_STATUSES = ["active", "superseded", "revisited"] as const;
+export type DecisionStatus = (typeof DECISION_STATUSES)[number];
+
+export const ASSUMPTION_SUBTYPES = ["date", "person", "dependency", "external_rule"] as const;
+export type AssumptionSubtype = (typeof ASSUMPTION_SUBTYPES)[number];
+
+export const ASSUMPTION_STATES = ["holding", "broken", "retired"] as const;
+export type AssumptionState = (typeof ASSUMPTION_STATES)[number];
+
+/** What an Assumption watches; `external_rule` has no target. */
+export const ASSUMPTION_TARGET_TYPES = ["task", "milestone", "person", "dependency"] as const;
+export type AssumptionTargetType = (typeof ASSUMPTION_TARGET_TYPES)[number];
+
+/** Which date of a Task or Milestone a date Assumption watches; matches Activity Event `field` values. */
+export const DATE_TARGET_FIELDS = ["startDate", "dueDate"] as const;
+export type DateTargetField = (typeof DATE_TARGET_FIELDS)[number];
+
+/** Edge direction is always cause to consequence. */
+export const DECISION_EDGE_KINDS = ["supports", "leads_to", "superseded_by"] as const;
+export type DecisionEdgeKind = (typeof DECISION_EDGE_KINDS)[number];
+
+/** What a Source may cite; its own vocabulary because an Activity Event is not an entity type. */
+export const SOURCE_KINDS = ["evidence", "comment", "activity_event"] as const;
+export type SourceKind = (typeof SOURCE_KINDS)[number];
+export const SOURCE_EXCERPT_MAX = 500;
 
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 

@@ -59,6 +59,8 @@ export function describeValue(kind: HistoryFieldKind, v: unknown, refs: RefLooku
       return refName(refs.milestones, v);
     case "labels":
       return Array.isArray(v) && v.length ? v.map((id) => refName(refs.labels, id)).join(", ") : EMPTY;
+    case "list":
+      return Array.isArray(v) && v.length ? v.map(String).join(", ") : EMPTY;
     case "date":
       return fmtDate(String(v), "d MMM yyyy");
     case "enum":

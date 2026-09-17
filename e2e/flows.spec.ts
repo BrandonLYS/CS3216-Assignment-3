@@ -42,7 +42,7 @@ async function openProject(page: Page, section?: string) {
   await page.getByRole("link", { name: projectName }).first().click();
   await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
   if (section) {
-    await page.getByRole("link", { name: section, exact: true }).click();
+    await page.getByRole("main").getByRole("link", { name: section, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/projects/[0-9a-f-]{36}/${section.toLowerCase()}$`));
   }
 }
@@ -568,7 +568,7 @@ test.describe("evidence-links", () => {
     await shot(page, "task-dialog-before-link");
     await dialog.getByRole("button", { name: "Add evidence" }).click();
     await dialog.getByPlaceholder("Search evidence…").fill("Weekly");
-    await dialog.getByRole("option", { name: /Weekly sync minutes/ }).click();
+    await dialog.getByRole("option", { name: /^Weekly sync minutes/ }).click();
     await expect(dialog.getByRole("link", { name: "Weekly sync minutes — 12 Sep" })).toBeVisible();
     await expect(dialog).toBeVisible(); // picking never submits the parent form
     await shot(page, "task-dialog-linked");
@@ -798,5 +798,89 @@ test.describe("task-search", () => {
     await input.fill("zzqx-nothing");
     await expect(page.getByText("No tasks match")).toBeVisible();
     await shot(page, "no-tasks-match");
+  });
+});
+
+test.describe("decisions", () => {
+  const shot = shots("decisions");
+
+  test("records a decision with sources and typed assumptions, retires one and supersedes it", async ({ page }) => {
+    await openProject(page, "Decisions");
+    await shot(page, "empty");
+
+    // A Decision without a Source is refused with a clear field error.
+    await page.getByRole("button", { name: "New decision" }).click();
+    const dialog = page.getByRole("dialog", { name: "New decision" });
+    await dialog.getByLabel("Title").fill("Switch from surveys to interviews");
+    await dialog.getByLabel("Decided on").fill("2026-09-14");
+    await dialog.getByLabel("Owner").selectOption({ label: "Priya Nair" });
+    await dialog.getByLabel("Context").fill("Survey response rate was 4% after two reminders");
+    await dialog.getByLabel("Chosen").fill("Semi-structured interviews with 12 merchants");
+    await dialog.getByLabel("Alternatives").fill("Keep the survey open (too slow); incentivised survey (budget)");
+    await dialog.getByRole("button", { name: "Create decision" }).click();
+    await expect(dialog.getByText("Add at least one source")).toBeVisible();
+    await shot(page, "missing-source-error");
+
+    await dialog.getByRole("button", { name: "Add source" }).click();
+    await dialog.getByPlaceholder("Search evidence, comments and activity…").fill("Weekly sync");
+    await dialog.getByRole("option", { name: /^Weekly sync minutes/ }).click();
+    await expect(dialog.getByText(/^Weekly sync minutes/)).toBeVisible();
+    await shot(page, "new-decision-dialog");
+    await dialog.getByRole("button", { name: "Create decision" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText("D-1")).toBeVisible();
+
+    // Typed Assumptions on D-1: a date assumption on the UAT milestone and a person assumption.
+    await page.getByText("Switch from surveys to interviews").click();
+    const edit = page.getByRole("dialog", { name: "D-1" });
+    await expect(edit).toBeVisible();
+    await edit.getByRole("button", { name: "New assumption" }).click();
+    const assumption = page.getByRole("dialog", { name: "New assumption" });
+    await assumption.getByLabel("Statement").fill("Merchant dataset arrives before UAT");
+    await assumption.getByLabel("Subtype").selectOption("date");
+    await assumption.getByRole("combobox", { name: "Target", exact: true }).selectOption({ label: "UAT begins" });
+    await assumption.getByLabel("Assumed until").fill("2026-10-01");
+    await shot(page, "new-assumption-dialog");
+    await assumption.getByRole("button", { name: "Add assumption" }).click();
+    await expect(assumption).toBeHidden();
+    await expect(edit.getByText("Merchant dataset arrives before UAT")).toBeVisible();
+
+    await edit.getByRole("button", { name: "New assumption" }).click();
+    await assumption.getByLabel("Statement").fill("Priya stays on the project through UAT");
+    await assumption.getByLabel("Subtype").selectOption("person");
+    await assumption.getByRole("combobox", { name: "Person", exact: true }).selectOption({ label: "Priya Nair" });
+    await assumption.getByRole("button", { name: "Add assumption" }).click();
+    await expect(assumption).toBeHidden();
+    await expect(edit.getByText("Priya stays on the project through UAT")).toBeVisible();
+    await shot(page, "assumptions");
+
+    // Retire the person assumption.
+    await edit
+      .getByRole("listitem")
+      .filter({ hasText: "Priya stays on the project" })
+      .getByRole("button", { name: "Retire" })
+      .click();
+    await expect(edit.getByRole("listitem").filter({ hasText: "Priya stays on the project" })).toContainText("Retired");
+    await edit.getByRole("button", { name: "Cancel" }).click();
+    await expect(edit).toBeHidden();
+
+    // D-2 supersedes D-1.
+    await page.getByRole("button", { name: "New decision" }).click();
+    await dialog.getByLabel("Title").fill("Interviews plus a short exit survey");
+    await dialog.getByLabel("Decided on").fill("2026-09-16");
+    await dialog.getByLabel("Chosen").fill("Keep interviews, add a 3-question exit survey");
+    await dialog.getByLabel("Supersedes").selectOption({ label: "D-1 Switch from surveys to interviews" });
+    await dialog.getByRole("button", { name: "Add source" }).click();
+    await dialog.getByPlaceholder("Search evidence, comments and activity…").fill("Weekly sync");
+    await dialog.getByRole("option", { name: /^Weekly sync minutes/ }).click();
+    await dialog.getByRole("button", { name: "Create decision" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText("1 decision · newest first")).toBeVisible();
+    await page.getByLabel("Show superseded").check();
+    await expect(page.getByText("2 decisions · newest first")).toBeVisible();
+    const d1 = page.getByRole("row").filter({ hasText: "D-1" });
+    await expect(d1).toContainText("Superseded");
+    await expect(d1).toContainText("by D-2");
+    await shot(page, "list-with-superseded");
   });
 });

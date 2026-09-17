@@ -14,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Users,
+  GitBranch,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
@@ -28,6 +29,7 @@ export const PROJECT_SECTIONS = [
   { slug: "timeline", label: "Timeline", icon: CalendarRange },
   { slug: "calendar", label: "Calendar", icon: CalendarDays },
   { slug: "risks", label: "Risks", icon: AlertTriangle },
+  { slug: "decisions", label: "Decisions", icon: GitBranch },
   { slug: "evidence", label: "Evidence", icon: FileText },
   { slug: "people", label: "People", icon: Users },
   { slug: "settings", label: "Settings", icon: Settings },

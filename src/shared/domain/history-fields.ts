@@ -1,11 +1,17 @@
-import { labelFor, type CommentableEntityType } from "./index";
+import { labelFor, type EntityType } from "./index";
 
 /**
- * Items that own a History tab — the same set as #4's COMMENTABLE_ENTITY_TYPES.
+ * Items that own a History tab: the commentable items plus the decision-memory nodes.
  * Spelled out (and checked with `satisfies`) rather than aliased because this module is
  * re-exported from ./index and a runtime alias would hit the cycle's TDZ on load.
  */
-export const HISTORY_ENTITY_TYPES = ["task", "risk", "milestone"] as const satisfies readonly CommentableEntityType[];
+export const HISTORY_ENTITY_TYPES = [
+  "task",
+  "risk",
+  "milestone",
+  "decision",
+  "assumption",
+] as const satisfies readonly EntityType[];
 export type HistoryEntityType = (typeof HISTORY_ENTITY_TYPES)[number];
 
 export type HistoryFieldKind =
@@ -20,7 +26,9 @@ export type HistoryFieldKind =
   | "milestone"
   | "labels"
   // #6: rec.updated field "evidence", value = Evidence title.
-  | "evidence";
+  | "evidence"
+  // Synthetic list-valued fields (Decision `assumptions` / `sources`): array of display strings.
+  | "list";
 
 export interface HistoryFieldDef {
   label: string;
@@ -66,6 +74,24 @@ export const HISTORY_FIELDS: Record<HistoryEntityType, Record<string, HistoryFie
     statusId: { label: "Status", kind: "status" },
     ownerId: { label: "Owner", kind: "person" },
     evidence: { label: "Evidence", kind: "evidence" },
+  },
+  decision: {
+    title: { label: "Title", kind: "text" },
+    decidedOn: { label: "Decided on", kind: "date" },
+    ownerId: { label: "Owner", kind: "person" },
+    status: { label: "Status", kind: "enum" },
+    context: { label: "Context", kind: "text" },
+    chosen: { label: "Chosen", kind: "text" },
+    alternatives: { label: "Alternatives", kind: "text" },
+    revisitWhen: { label: "Revisit when", kind: "text" },
+    sources: { label: "Sources", kind: "list" },
+    assumptions: { label: "Assumptions", kind: "list" },
+    supersedes: { label: "Supersedes", kind: "text" },
+  },
+  assumption: {
+    statement: { label: "Statement", kind: "text" },
+    state: { label: "State", kind: "enum" },
+    assumedUntil: { label: "Assumed until", kind: "date" },
   },
 };
 

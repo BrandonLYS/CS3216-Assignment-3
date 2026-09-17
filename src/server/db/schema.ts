@@ -14,3 +14,4 @@ export * from "@/server/modules/activity/schema";
 export * from "@/server/modules/assistant/schema";
 export * from "@/server/modules/memory/schema";
 export * from "@/server/modules/api-tokens/schema";
+export * from "@/server/modules/decisions/schema";
