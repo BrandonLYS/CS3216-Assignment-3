@@ -69,6 +69,24 @@ The list of all Risks in a Project.
 A source artifact attached to a Project (plan, minutes, status update, export) from which project facts may be derived.
 _Avoid_: Document, file, attachment, upload
 
+### Decision Memory
+
+**Decision**:
+A recorded choice made on a Project at a point in time: its title, date, owner (a Person), status (active, superseded, revisited), the context at the time, what was chosen, the alternatives rejected and why, and an optional revisit-when trigger. It rests on zero or more Assumptions, cites at least one Source, and may supersede an earlier Decision. Its history is its Activity Events.
+_Avoid_: Choice, ADR, resolution, verdict, issue
+
+**Assumption**:
+A condition a Decision rests on, which the Project can later contradict. Its subtype names what can invalidate it: date (a Milestone or Task date), person (a Person staying on the Project), dependency (an existing Dependency) or external-rule (a condition outside the Project, stated in words). It is holding, broken or retired.
+_Avoid_: Premise, precondition, constraint, hypothesis, risk (a Risk is a possibility of harm; an Assumption is a belief a Decision depends on)
+
+**Source**:
+A citation from a Decision or an edge to something already in the Project history: an Evidence item, a Comment or an Activity Event, optionally narrowed to one passage of the Evidence.
+_Avoid_: Reference, link (see Dependency and Evidence link), attachment, footnote
+
+**Cause**, **Consequence**:
+The two directions of an edge between a Decision, an Assumption and the items they touch: what led to a record sits on its cause side, what follows from it on its consequence side. Not node types.
+_Avoid_: Reason, effect, outcome, impact node
+
 ### Discussion
 
 **Comment**:
