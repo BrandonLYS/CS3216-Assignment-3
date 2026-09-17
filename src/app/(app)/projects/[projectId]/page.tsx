@@ -6,7 +6,9 @@ import { milestonesService } from "@/server/modules/milestones/service";
 import { projectsService } from "@/server/modules/projects/service";
 import { risksService } from "@/server/modules/risks/service";
 import { tasksService } from "@/server/modules/tasks/service";
+import { decisionsService } from "@/server/modules/decisions/service";
 import { impactService } from "@/server/modules/impact/service";
+import { proposalsService } from "@/server/modules/proposals/service";
 import { projectAttention } from "@/server/modules/workspace/queries";
 import { RISK_MID_SEVERITY, RISK_TOP_SEVERITY, TERMINAL_CATEGORIES, labelFor, riskSeverity } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
@@ -17,13 +19,14 @@ import { HealthBadge } from "@/entities/project/health";
 import { Avatar } from "@/entities/person/avatar";
 import { AttentionList } from "@/widgets/attention/attention-list";
 import { ImpactAlerts } from "@/widgets/attention/impact-alerts";
+import { ProposalCards } from "@/widgets/attention/proposal-cards";
 
 export const metadata = { title: "Overview" };
 
 export default async function ProjectOverviewPage({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
   const ctx = await ctxForCurrentUser();
-  const [project, tasks, milestones, risks, activity, counts, alerts] = await Promise.all([
+  const [project, tasks, milestones, risks, activity, counts, alerts, proposals] = await Promise.all([
     projectsService.get(ctx, projectId),
     tasksService.list(ctx, projectId),
     milestonesService.list(ctx, projectId),
@@ -31,7 +34,11 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
     activityService.recentForProject(ctx, projectId, 20),
     tasksService.countsByStatusCategory(ctx, projectId),
     impactService.listAlerts(ctx, projectId),
+    proposalsService.listPending(ctx, projectId),
   ]);
+  const sourceLabels = proposals.length
+    ? await decisionsService.sourceLabels(ctx, projectId)
+    : new Map<string, string>();
   // Reuse the collections above; only the dependency edges are fetched inside.
   const attention = await projectAttention(ctx, projectId, { rows: { tasks, milestones, risks } });
   const base = `/projects/${projectId}`;
@@ -97,6 +104,7 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
             <section className="flex flex-col gap-3">
               <SectionTitle>Needs attention</SectionTitle>
               <ImpactAlerts alerts={alerts} projectId={projectId} />
+              <ProposalCards proposals={proposals} projectId={projectId} sourceLabels={sourceLabels} />
               <AttentionList result={attention} />
             </section>
 

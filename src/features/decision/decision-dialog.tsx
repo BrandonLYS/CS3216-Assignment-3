@@ -10,6 +10,7 @@ import {
 } from "@/server/modules/decisions/actions";
 import type { SourceCandidates } from "@/server/modules/decisions/repository";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
+import type { ProposalRow } from "@/server/modules/proposals/schema";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import type { RiskListItem } from "@/server/modules/risks/repository";
@@ -31,6 +32,7 @@ export function DecisionDialog({
   tasks,
   dependencies,
   risks,
+  draft,
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,12 +43,22 @@ export function DecisionDialog({
   tasks: TaskListItem[];
   dependencies: DependencyRow[];
   risks: RiskListItem[];
+  /** A pending Proposal to confirm: prefills the create form and is marked accepted on save (issue #39). */
+  draft?: (ProposalRow & { sourceLabels: Map<string, string> }) | null;
 }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const d = item?.decision;
   const [sources, setSources] = React.useState<PickedSource[]>(() =>
-    (item?.sources ?? []).map((s) => ({ kind: s.kind, entityId: s.entityId, passageId: s.passageId, label: s.label })),
+    item
+      ? item.sources.map((s) => ({ kind: s.kind, entityId: s.entityId, passageId: s.passageId, label: s.label }))
+      : (draft?.sources ?? []).map((s) => ({
+          kind: s.kind,
+          entityId: s.entityId,
+          excerpt: s.excerpt,
+          label: draft?.sourceLabels.get(`${s.kind}:${s.entityId}`) ?? s.excerpt,
+        })),
   );
+  const f = d ?? draft ?? null;
   const [supersedeError, setSupersedeError] = React.useState<string | null>(null);
   const allAssumptions = React.useMemo(() => {
     const seen = new Map<string, DecisionListItem["assumptions"][number]>();
@@ -62,8 +74,14 @@ export function DecisionDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={d ? `D-${d.number}` : "New decision"}
-      description={d ? undefined : "What was chosen, what was rejected and why, and the source it rests on."}
+      title={d ? `D-${d.number}` : draft ? "Confirm proposed decision" : "New decision"}
+      description={
+        d
+          ? undefined
+          : draft
+            ? "The Assistant extracted this from the sources below. Edit anything, then create it as a confirmed decision."
+            : "What was chosen, what was rejected and why, and the source it rests on."
+      }
       className="max-w-2xl"
     >
       {confirmDelete && d ? (
@@ -85,8 +103,16 @@ export function DecisionDialog({
           <ActionForm
             key={d?.id ?? "new"}
             action={d ? updateDecisionAction : createDecisionAction}
-            hidden={d ? { id: d.id } : { projectId: refs.project.id }}
-            submitLabel={d ? "Save changes" : "Create decision"}
+            hidden={
+              d
+                ? { id: d.id }
+                : {
+                    projectId: refs.project.id,
+                    proposalId: draft?.id,
+                    assumptions: draft ? JSON.stringify(draft.assumptions) : undefined,
+                  }
+            }
+            submitLabel={d ? "Save changes" : draft ? "Accept and create decision" : "Create decision"}
             cancel={onClose}
             onSuccess={onClose}
             footerStart={
@@ -108,11 +134,11 @@ export function DecisionDialog({
               label="Title"
               required
               autoFocus
-              defaultValue={d?.title}
+              defaultValue={f?.title}
               placeholder="Switch from surveys to interviews"
             />
             <FormRow>
-              <TextField name="decidedOn" label="Decided on" type="date" required defaultValue={d?.decidedOn ?? ""} />
+              <TextField name="decidedOn" label="Decided on" type="date" required defaultValue={f?.decidedOn ?? ""} />
               <SelectField
                 name="ownerId"
                 label="Owner"
@@ -159,7 +185,7 @@ export function DecisionDialog({
             <TextareaField
               name="context"
               label="Context"
-              defaultValue={d?.context ?? ""}
+              defaultValue={f?.context ?? ""}
               placeholder="What was true at the time?"
               inputClassName="min-h-16"
             />
@@ -167,7 +193,7 @@ export function DecisionDialog({
               name="chosen"
               label="Chosen"
               required
-              defaultValue={d?.chosen ?? ""}
+              defaultValue={f?.chosen ?? ""}
               placeholder="What we decided to do"
               inputClassName="min-h-16"
             />
@@ -175,14 +201,14 @@ export function DecisionDialog({
               name="alternatives"
               label="Alternatives"
               hint="What was rejected, and why"
-              defaultValue={d?.alternatives ?? ""}
+              defaultValue={f?.alternatives ?? ""}
               inputClassName="min-h-16"
             />
             <FormRow>
               <TextField
                 name="revisitWhen"
                 label="Revisit when"
-                defaultValue={d?.revisitWhen ?? ""}
+                defaultValue={f?.revisitWhen ?? ""}
                 placeholder="Response rate drops below 10%"
               />
               {!d && (

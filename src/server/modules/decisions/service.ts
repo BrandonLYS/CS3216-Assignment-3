@@ -316,6 +316,16 @@ export const decisionsService = {
     return assumptionsRepo.listByProject(ctx.db, projectId);
   },
 
+  /** `kind:entityId` to display label for every citable Source in the Project. */
+  sourceLabels: async (ctx: Ctx, projectId: string) => {
+    const c = await decisionsService.sourceCandidates(ctx, projectId);
+    const out = new Map<string, string>();
+    for (const e of c.evidence) out.set(`evidence:${e.id}`, e.title);
+    for (const m of c.comments)
+      out.set(`comment:${m.id}`, firstLine(`${m.saidByName ? `${m.saidByName}: ` : ""}${m.body}`, LABEL_MAX));
+    return out;
+  },
+
   sourceCandidates: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     return sourceCandidatesRepo.list(ctx.db, projectId);

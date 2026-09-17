@@ -17,7 +17,10 @@ import {
 } from "./validation";
 
 export async function createDecisionAction(fd: FormData) {
-  const res = await runAction(createDecisionSchema, fd, (ctx, i) => decisionsService.create(ctx, i));
+  // Confirming a Proposal is the Assistant acting on the User's behalf (ADR 0007).
+  const res = await runAction(createDecisionSchema, fd, (ctx, i) =>
+    decisionsService.create(i.proposalId ? { ...ctx, via: "assistant" } : ctx, i),
+  );
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }

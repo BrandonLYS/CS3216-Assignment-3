@@ -95,7 +95,9 @@ export function SourcePicker({
       <input
         type="hidden"
         name="sources"
-        value={JSON.stringify(value.map(({ kind, entityId, passageId }) => ({ kind, entityId, passageId })))}
+        value={JSON.stringify(
+          value.map(({ kind, entityId, passageId, excerpt }) => ({ kind, entityId, passageId, excerpt })),
+        )}
       />
       <div className="flex items-center justify-between">
         <span className="text-caption font-medium text-ink-subtle">
