@@ -173,8 +173,9 @@ export const proposalsService = {
 
   reject: async (ctx: Ctx, id: string) => {
     const p = await proposalsService.get(ctx, id);
-    if (p.status !== "pending") throw new ConflictError("That proposal was already resolved");
-    return proposalsRepo.update(ctx.db, id, { status: "rejected", resolvedAt: new Date() });
+    const [row] = await proposalsRepo.markRejected(ctx.db, p.id);
+    if (!row) throw new ConflictError("That proposal was already resolved");
+    return row;
   },
 
   /**

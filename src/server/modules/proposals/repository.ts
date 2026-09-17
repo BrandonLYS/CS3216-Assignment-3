@@ -43,6 +43,14 @@ export const proposalsRepo = {
       .where(and(eq(decisionProposals.id, id), eq(decisionProposals.status, "pending")))
       .returning(),
 
+  /** Same atomic guard as `markAccepted`: only a pending Proposal can be rejected. */
+  markRejected: (db: DbOrTx, id: string) =>
+    db
+      .update(decisionProposals)
+      .set({ status: "rejected", resolvedAt: new Date() })
+      .where(and(eq(decisionProposals.id, id), eq(decisionProposals.status, "pending")))
+      .returning(),
+
   countsByStatus: async (db: DbOrTx, projectId: string) => {
     const rows = await db
       .select({ status: decisionProposals.status, n: count() })
