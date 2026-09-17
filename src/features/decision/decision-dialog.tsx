@@ -10,10 +10,12 @@ import {
 } from "@/server/modules/decisions/actions";
 import type { SourceCandidates } from "@/server/modules/decisions/repository";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
+import type { ProposalRow } from "@/server/modules/proposals/schema";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import type { RiskListItem } from "@/server/modules/risks/repository";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
+import { labelFor } from "@/shared/domain";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField, enumOptions } from "@/shared/ui";
 import { Field, Select } from "@/shared/ui/input";
 import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
@@ -31,6 +33,7 @@ export function DecisionDialog({
   tasks,
   dependencies,
   risks,
+  draft,
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,13 +44,29 @@ export function DecisionDialog({
   tasks: TaskListItem[];
   dependencies: DependencyRow[];
   risks: RiskListItem[];
+  /** A pending Proposal to confirm: prefills the create form and is marked accepted on save (issue #39). */
+  draft?: (ProposalRow & { sourceLabels: Map<string, string> }) | null;
 }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const d = item?.decision;
   const [sources, setSources] = React.useState<PickedSource[]>(() =>
-    (item?.sources ?? []).map((s) => ({ kind: s.kind, entityId: s.entityId, passageId: s.passageId, label: s.label })),
+    item
+      ? item.sources.map((s) => ({ kind: s.kind, entityId: s.entityId, passageId: s.passageId, label: s.label }))
+      : (draft?.sources ?? []).map((s) => ({
+          kind: s.kind,
+          entityId: s.entityId,
+          excerpt: s.excerpt,
+          label: draft?.sourceLabels.get(`${s.kind}:${s.entityId}`) ?? s.excerpt,
+        })),
   );
+  // Field defaults come from the Decision being edited or, on the confirm path, the Proposal.
+  const base = d ?? draft ?? null;
   const [supersedeError, setSupersedeError] = React.useState<string | null>(null);
+  // Confirm path: the PM can leave out any proposed Assumption before the write.
+  const [keepAssumption, setKeepAssumption] = React.useState<boolean[]>(() =>
+    (draft?.assumptions ?? []).map(() => true),
+  );
+  const draftAssumptions = (draft?.assumptions ?? []).filter((_, i) => keepAssumption[i]);
   const allAssumptions = React.useMemo(() => {
     const seen = new Map<string, DecisionListItem["assumptions"][number]>();
     for (const x of decisions) for (const a of x.assumptions) seen.set(a.id, a);
@@ -62,8 +81,14 @@ export function DecisionDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={d ? `D-${d.number}` : "New decision"}
-      description={d ? undefined : "What was chosen, what was rejected and why, and the source it rests on."}
+      title={d ? `D-${d.number}` : draft ? "Confirm proposed decision" : "New decision"}
+      description={
+        d
+          ? undefined
+          : draft
+            ? "The Assistant extracted this from the sources below. Edit anything, then create it as a confirmed decision."
+            : "What was chosen, what was rejected and why, and the source it rests on."
+      }
       className="max-w-2xl"
     >
       {confirmDelete && d ? (
@@ -85,8 +110,16 @@ export function DecisionDialog({
           <ActionForm
             key={d?.id ?? "new"}
             action={d ? updateDecisionAction : createDecisionAction}
-            hidden={d ? { id: d.id } : { projectId: refs.project.id }}
-            submitLabel={d ? "Save changes" : "Create decision"}
+            hidden={
+              d
+                ? { id: d.id }
+                : {
+                    projectId: refs.project.id,
+                    proposalId: draft?.id,
+                    assumptions: draft ? JSON.stringify(draftAssumptions) : undefined,
+                  }
+            }
+            submitLabel={d ? "Save changes" : draft ? "Accept and create decision" : "Create decision"}
             cancel={onClose}
             onSuccess={onClose}
             footerStart={
@@ -108,11 +141,17 @@ export function DecisionDialog({
               label="Title"
               required
               autoFocus
-              defaultValue={d?.title}
+              defaultValue={base?.title}
               placeholder="Switch from surveys to interviews"
             />
             <FormRow>
-              <TextField name="decidedOn" label="Decided on" type="date" required defaultValue={d?.decidedOn ?? ""} />
+              <TextField
+                name="decidedOn"
+                label="Decided on"
+                type="date"
+                required
+                defaultValue={base?.decidedOn ?? ""}
+              />
               <SelectField
                 name="ownerId"
                 label="Owner"
@@ -159,7 +198,7 @@ export function DecisionDialog({
             <TextareaField
               name="context"
               label="Context"
-              defaultValue={d?.context ?? ""}
+              defaultValue={base?.context ?? ""}
               placeholder="What was true at the time?"
               inputClassName="min-h-16"
             />
@@ -167,7 +206,7 @@ export function DecisionDialog({
               name="chosen"
               label="Chosen"
               required
-              defaultValue={d?.chosen ?? ""}
+              defaultValue={base?.chosen ?? ""}
               placeholder="What we decided to do"
               inputClassName="min-h-16"
             />
@@ -175,14 +214,14 @@ export function DecisionDialog({
               name="alternatives"
               label="Alternatives"
               hint="What was rejected, and why"
-              defaultValue={d?.alternatives ?? ""}
+              defaultValue={base?.alternatives ?? ""}
               inputClassName="min-h-16"
             />
             <FormRow>
               <TextField
                 name="revisitWhen"
                 label="Revisit when"
-                defaultValue={d?.revisitWhen ?? ""}
+                defaultValue={base?.revisitWhen ?? ""}
                 placeholder="Response rate drops below 10%"
               />
               {!d && (
@@ -199,6 +238,38 @@ export function DecisionDialog({
               )}
             </FormRow>
             <SourcePicker candidates={candidates} value={sources} onChange={setSources} />
+            {draft && draft.assumptions.length > 0 && (
+              <div className="flex flex-col gap-1.5 rounded-md border border-hairline bg-surface-1 p-3">
+                <span className="text-caption font-medium text-ink-subtle">
+                  Proposed assumptions <span className="font-normal text-ink-tertiary">· untick to leave out</span>
+                </span>
+                <ul className="flex flex-col gap-1">
+                  {draft.assumptions.map((a, i) => (
+                    <li key={i}>
+                      <label className="flex items-start gap-2 text-body-sm text-ink-muted">
+                        <input
+                          type="checkbox"
+                          className="mt-1 accent-primary"
+                          checked={keepAssumption[i] ?? true}
+                          onChange={(e) =>
+                            setKeepAssumption((prev) => prev.map((k, j) => (j === i ? e.target.checked : k)))
+                          }
+                        />
+                        <span>
+                          {a.statement}
+                          <span className="text-caption text-ink-tertiary">
+                            {" "}
+                            · {labelFor(a.subtype)}
+                            {a.targetName ? ` · ${a.targetName}` : ""}
+                            {a.assumedUntil ? ` · until ${a.assumedUntil}` : ""}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {d && (
               <AssumptionsPanel
                 refs={refs}

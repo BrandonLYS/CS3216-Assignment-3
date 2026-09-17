@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { runAction } from "@/server/core/action";
+import { scheduleProposalPass } from "@/server/modules/proposals/schedule";
 import { revalidateProject } from "@/server/core/revalidate";
 import { evidenceService, type UploadedFile } from "./service";
 import { createEvidenceSchema, evidenceLinkSchema, updateEvidenceSchema } from "./validation";
@@ -18,13 +19,21 @@ export async function createEvidenceAction(fd: FormData) {
         }
       : null;
   fd.delete("file");
-  const res = await runAction(createEvidenceSchema, fd, (ctx, i) => evidenceService.create(ctx, i, file));
+  const res = await runAction(createEvidenceSchema, fd, async (ctx, i) => {
+    const row = await evidenceService.create(ctx, i, file);
+    scheduleProposalPass(ctx, row.projectId);
+    return row;
+  });
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }
 
 export async function updateEvidenceAction(fd: FormData) {
-  const res = await runAction(updateEvidenceSchema, fd, (ctx, i) => evidenceService.update(ctx, i));
+  const res = await runAction(updateEvidenceSchema, fd, async (ctx, i) => {
+    const row = await evidenceService.update(ctx, i);
+    scheduleProposalPass(ctx, row.projectId);
+    return row;
+  });
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }

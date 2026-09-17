@@ -7,6 +7,8 @@ import type { SourceCandidates } from "@/server/modules/decisions/repository";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
+import type { ProposalRow } from "@/server/modules/proposals/schema";
+import type { proposalsService } from "@/server/modules/proposals/service";
 import type { RiskListItem } from "@/server/modules/risks/repository";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { fmtDate } from "@/shared/lib/dates";
@@ -15,6 +17,7 @@ import { AssumptionChip } from "@/entities/decision/assumption-chip";
 import { DecisionStatusBadge } from "@/entities/decision/decision-status-badge";
 import { Avatar } from "@/entities/person/avatar";
 import { DecisionDialog } from "./decision-dialog";
+import { ProposeButton } from "./propose-button";
 
 export function DecisionsView({
   refs,
@@ -23,6 +26,9 @@ export function DecisionsView({
   tasks,
   dependencies,
   risks,
+  proposals,
+  sourceLabels,
+  stats,
 }: {
   refs: ProjectRefs;
   decisions: DecisionListItem[];
@@ -30,16 +36,25 @@ export function DecisionsView({
   tasks: TaskListItem[];
   dependencies: DependencyRow[];
   risks: RiskListItem[];
+  /** Pending Proposals, so `?proposal=` can open the dialog prefilled. */
+  proposals: ProposalRow[];
+  sourceLabels: Record<string, string>;
+  stats: Awaited<ReturnType<typeof proposalsService.stats>>;
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const base = `/projects/${refs.project.id}/decisions`;
   const openItem = decisions.find((r) => r.decision.id === params.get("decision")) ?? null;
+  const proposal = proposals.find((p) => p.id === params.get("proposal")) ?? null;
+  const draft = React.useMemo(
+    () => (proposal ? { ...proposal, sourceLabels: new Map(Object.entries(sourceLabels)) } : null),
+    [proposal, sourceLabels],
+  );
   const [creating, setCreating] = React.useState(false);
   const [showSuperseded, setShowSuperseded] = React.useState(false);
   const close = () => {
     setCreating(false);
-    if (openItem) router.replace(base, { scroll: false });
+    if (openItem || proposal) router.replace(base, { scroll: false });
   };
   const byId = new Map(decisions.map((r) => [r.decision.id, r.decision]));
   const visible = decisions.filter((r) => showSuperseded || r.decision.status !== "superseded");
@@ -59,7 +74,20 @@ export function DecisionsView({
           />{" "}
           Show superseded
         </label>
-        <Button variant="primary" size="sm" className="ml-auto" onClick={() => setCreating(true)}>
+        <span className="ml-auto flex items-center gap-3">
+          {stats.proposed > 0 && (
+            <span
+              className="text-caption text-ink-subtle"
+              data-testid="acceptance-rate"
+              title="Accepted over everything the Assistant proposed"
+            >
+              Assistant acceptance: {stats.accepted} of {stats.proposed}
+              {stats.rate !== null && ` (${Math.round(stats.rate * 100)}%)`}
+            </span>
+          )}
+          <ProposeButton projectId={refs.project.id} />
+        </span>
+        <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
           <Plus className="size-3.5" /> New decision
         </Button>
       </div>
@@ -127,8 +155,9 @@ export function DecisionsView({
       )}
 
       <DecisionDialog
-        key={openItem?.decision.id ?? (creating ? "new" : "closed")}
-        open={Boolean(openItem) || creating}
+        key={openItem?.decision.id ?? proposal?.id ?? (creating ? "new" : "closed")}
+        open={Boolean(openItem) || Boolean(proposal) || creating}
+        draft={draft}
         onClose={close}
         refs={refs}
         item={openItem}

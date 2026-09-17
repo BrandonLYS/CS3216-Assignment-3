@@ -16,6 +16,8 @@ import {
   MESSAGE_ROLES,
   PRIORITIES,
   PROJECT_STATUSES,
+  PROPOSAL_EXTRACTORS,
+  PROPOSAL_STATUSES,
   SCALE_LEVELS,
   SOURCE_KINDS,
   STATUS_CATEGORIES,
@@ -44,3 +46,5 @@ export const assumptionTargetTypeEnum = pgEnum("assumption_target_type", ASSUMPT
 export const dateTargetFieldEnum = pgEnum("date_target_field", DATE_TARGET_FIELDS);
 export const decisionEdgeKindEnum = pgEnum("decision_edge_kind", DECISION_EDGE_KINDS);
 export const sourceKindEnum = pgEnum("source_kind", SOURCE_KINDS);
+export const proposalStatusEnum = pgEnum("proposal_status", PROPOSAL_STATUSES);
+export const proposalExtractorEnum = pgEnum("proposal_extractor", PROPOSAL_EXTRACTORS);

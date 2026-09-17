@@ -149,6 +149,12 @@ export const SOURCE_KINDS = ["evidence", "comment", "activity_event"] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 export const SOURCE_EXCERPT_MAX = 500;
 
+/** A Proposal is the Assistant's candidate Decision; it enters the graph only when accepted. */
+export const PROPOSAL_STATUSES = ["pending", "accepted", "rejected"] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+export const PROPOSAL_EXTRACTORS = ["model", "heuristic"] as const;
+export type ProposalExtractor = (typeof PROPOSAL_EXTRACTORS)[number];
+
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 // ---------------------------------------------------------------------------
