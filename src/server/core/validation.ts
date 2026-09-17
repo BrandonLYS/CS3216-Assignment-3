@@ -40,12 +40,12 @@ export function formToObject(fd: FormData): Record<string, unknown> {
   return out;
 }
 
-/** Hidden inputs can only carry strings; parse JSON when a structured value arrives that way. */
-export const parseJsonIfString = (v: unknown) => {
+/** Hidden inputs can only carry strings; parse JSON when a structured value arrives that way. Malformed JSON yields `undefined`. */
+export const parseJsonIfString = (v: unknown): unknown => {
   if (typeof v !== "string") return v;
   try {
     return JSON.parse(v);
   } catch {
-    return v;
+    return undefined;
   }
 };

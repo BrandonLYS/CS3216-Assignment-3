@@ -65,7 +65,7 @@ export function DecisionDialog({
       {confirmDelete && d ? (
         <ActionForm
           action={deleteDecisionAction}
-          hidden={{ id: d.id, projectId: d.projectId }}
+          hidden={{ id: d.id }}
           submitLabel="Delete decision"
           danger
           cancel={() => setConfirmDelete(false)}

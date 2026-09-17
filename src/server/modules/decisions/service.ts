@@ -85,6 +85,11 @@ async function resolveSources(
     } else {
       const ev = await activityRepo.findById(tx, s.entityId);
       if (!ev || ev.projectId !== projectId) throw bad();
+      if (ev.entityType === "decision") {
+        throw new ValidationError("A decision cannot cite another decision", {
+          sources: ["Decision events cannot be cited"],
+        });
+      }
       const what = ev.field ? `${labelFor(ev.field)} changed` : ev.action;
       const label = `${labelFor(ev.entityType)} "${ev.entityLabel}" ${what}`;
       const excerpt = ev.field ? `${JSON.stringify(ev.oldValue)} → ${JSON.stringify(ev.newValue)}` : label;
@@ -139,7 +144,7 @@ async function supportedStatements(tx: Tx, decisionId: string) {
 
 async function attach(tx: Tx, rec: Recorder, decision: DecisionRow, assumption: AssumptionRow) {
   const before = await supportedStatements(tx, decision.id);
-  const edge = await edgesRepo.insert(tx, {
+  const edge = await edgesRepo.insertIgnore(tx, {
     projectId: decision.projectId,
     kind: "supports",
     fromType: "assumption",
@@ -147,6 +152,8 @@ async function attach(tx: Tx, rec: Recorder, decision: DecisionRow, assumption: 
     toType: "decision",
     toId: decision.id,
   });
+  // A concurrent attach already won; the edge exists, nothing to record.
+  if (!edge) return edgesRepo.find(tx, "supports", assumption.id, decision.id);
   const sources = await sourcesRepo.listForDecisions(tx, [decision.id]);
   await sourcesRepo.insertMany(tx, copyToEdge(sources, edge.id));
   rec.updated("decision", decision.projectId, decision.id, decision.title, [
@@ -198,7 +205,7 @@ async function linkSupersedes(tx: Tx, rec: Recorder, newer: DecisionRow, olderId
   if (wouldCreateCycle(edges, older.id, newer.id)) {
     throw new ConflictError(`"${older.title}" already comes after "${newer.title}" - that would be a cycle`);
   }
-  const edge = await edgesRepo.insert(tx, {
+  const edge = await edgesRepo.insertIgnore(tx, {
     projectId: newer.projectId,
     kind: "superseded_by",
     fromType: "decision",
@@ -206,6 +213,7 @@ async function linkSupersedes(tx: Tx, rec: Recorder, newer: DecisionRow, olderId
     toType: "decision",
     toId: newer.id,
   });
+  if (!edge) throw new ConflictError(`"${older.title}" is already superseded by another decision`);
   const sources = await sourcesRepo.listForDecisions(tx, [newer.id]);
   await sourcesRepo.insertMany(tx, copyToEdge(sources, edge.id));
   await decisionsRepo.update(tx, older.id, { status: "superseded" });
@@ -310,6 +318,7 @@ export const decisionsService = {
       await edgesRepo.deleteForNode(tx, id);
       await decisionsRepo.delete(tx, id);
       rec.deleted("decision", d.projectId, id, d.title);
+      const removed = d;
       for (const e of supersededBy) {
         const older = await decisionsRepo.findById(tx, e.fromId);
         if (older?.status === "superseded") {
@@ -321,6 +330,7 @@ export const decisionsService = {
         const a = await assumptionsRepo.findById(tx, e.fromId);
         if (a) await deleteIfOrphan(tx, rec, a);
       }
+      return removed;
     }),
 
   supersede: (ctx: Ctx, { id, supersedesId }: SupersedeDecisionInput) =>
@@ -364,13 +374,14 @@ export const decisionsService = {
       const decision = await getOwned(tx, ctx.userId, decisionId);
       const assumption = await getOwnedAssumption(tx, ctx.userId, assumptionId);
       const edge = await edgesRepo.find(tx, "supports", assumption.id, decision.id);
-      if (!edge) return;
+      if (!edge) return assumption;
       const before = await supportedStatements(tx, decision.id);
       await edgesRepo.delete(tx, edge.id);
       rec.updated("decision", decision.projectId, decision.id, decision.title, [
         { field: "assumptions", oldValue: before, newValue: before.filter((s) => s !== assumption.statement) },
       ]);
       await deleteIfOrphan(tx, rec, assumption);
+      return assumption;
     }),
 
   retireAssumption: (ctx: Ctx, id: string) =>

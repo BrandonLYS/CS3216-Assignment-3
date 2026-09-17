@@ -16,7 +16,10 @@ export const sourceInputSchema = z.object({
 });
 export type SourceInput = z.infer<typeof sourceInputSchema>;
 
-const sourcesField = z.preprocess(parseJsonIfString, z.array(sourceInputSchema).min(1, "Add at least one source"));
+const sourcesField = z.preprocess(
+  (v) => parseJsonIfString(v) ?? [],
+  z.array(sourceInputSchema).min(1, "Add at least one source"),
+);
 
 export const createDecisionSchema = z.object({
   projectId: z.string(),
@@ -72,6 +75,10 @@ type AssumptionShape = z.infer<typeof assumptionShape>;
 export function assumptionFieldErrors(v: AssumptionShape): Record<string, string[]> {
   const errors: Record<string, string[]> = {};
   const need = (path: string, message: string) => (errors[path] = [...(errors[path] ?? []), message]);
+  const noDateFields = () => {
+    if (v.targetField) need("targetField", "Only a date assumption watches a date field");
+    if (v.assumedUntil) need("assumedUntil", "Only a date assumption has an assumed-until date");
+  };
   switch (v.subtype) {
     case "date":
       if ((v.targetType !== "task" && v.targetType !== "milestone") || !v.targetId)
@@ -83,13 +90,15 @@ export function assumptionFieldErrors(v: AssumptionShape): Record<string, string
       break;
     case "person":
       if (v.targetType !== "person" || !v.targetId) need("targetId", "Pick a Person");
+      noDateFields();
       break;
     case "dependency":
       if (v.targetType !== "dependency" || !v.targetId) need("targetId", "Pick a Dependency");
+      noDateFields();
       break;
     case "external_rule":
-      if (v.targetType || v.targetId || v.targetField || v.assumedUntil)
-        need("targetId", "An external rule has no target");
+      if (v.targetType || v.targetId) need("targetId", "An external rule has no target");
+      noDateFields();
       break;
   }
   return errors;

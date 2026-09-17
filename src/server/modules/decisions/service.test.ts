@@ -142,6 +142,14 @@ describe("decisionsService.create", () => {
     expect(a.label).toContain("Recruit interviewees");
   });
 
+  it("rejects a Source that is a decision Activity Event", async () => {
+    const d = await mk();
+    const [ev] = await activityRepo.forEntity(ctx.db, d.id);
+    await expect(mk({ sources: [{ kind: "activity_event", entityId: ev!.event.id }] })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+  });
+
   it("rejects an owner from another Project", async () => {
     const other = await makeCtx();
     const otherProject = await makeProject(other, "OWN");
@@ -197,6 +205,9 @@ describe("assumptions", () => {
     ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       mkAssumption(d.id, { targetType: "task", targetId: milestone.id, targetField: "dueDate" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      mkAssumption(d.id, { subtype: "person", targetType: "person", targetId: priya.id, targetField: "dueDate" }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -381,5 +392,34 @@ describe("ownership", () => {
       decisionsService.detachAssumption(stranger, { decisionId: d.id, assumptionId: a.id }),
     ).rejects.toBeInstanceOf(ForbiddenError);
     await expect(decisionsService.retireAssumption(stranger, a.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("refuses to attach an Assumption from another Project", async () => {
+    const d = await mk();
+    const other = await makeCtx();
+    const otherProject = await makeProject(other, "ATT");
+    const foreignEvidence = await evidenceService.create(other, {
+      projectId: otherProject.id,
+      title: "Foreign minutes",
+      kind: "minutes",
+      body: "x",
+    });
+    const foreignDecision = await decisionsService.create(other, {
+      projectId: otherProject.id,
+      title: "Foreign",
+      decidedOn: "2026-09-01",
+      chosen: "y",
+      sources: [{ kind: "evidence", entityId: foreignEvidence.id }],
+    });
+    const foreignAssumption = await decisionsService.createAssumption(other, {
+      projectId: otherProject.id,
+      decisionId: foreignDecision.id,
+      statement: "theirs",
+      subtype: "external_rule",
+    });
+    await expect(
+      decisionsService.attachAssumption(ctx, { decisionId: d.id, assumptionId: foreignAssumption.id }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await edgesRepo.find(ctx.db, "supports", foreignAssumption.id, d.id)).toBeUndefined();
   });
 });

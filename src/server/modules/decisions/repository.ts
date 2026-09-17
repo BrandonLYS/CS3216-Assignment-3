@@ -101,9 +101,10 @@ export const edgesRepo = {
       .from(decisionEdges)
       .where(and(eq(decisionEdges.kind, kind), eq(decisionEdges.fromId, fromId))),
 
-  insert: async (db: DbOrTx, values: NewDecisionEdgeRow) => {
-    const [row] = await db.insert(decisionEdges).values(values).returning();
-    return row!;
+  /** Insert unless a unique index already holds the edge; `undefined` means a concurrent writer won. */
+  insertIgnore: async (db: DbOrTx, values: NewDecisionEdgeRow): Promise<DecisionEdgeRow | undefined> => {
+    const [row] = await db.insert(decisionEdges).values(values).onConflictDoNothing().returning();
+    return row;
   },
 
   delete: (db: DbOrTx, id: string) => db.delete(decisionEdges).where(eq(decisionEdges.id, id)),

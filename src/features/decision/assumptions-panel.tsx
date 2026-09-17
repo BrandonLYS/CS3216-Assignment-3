@@ -135,9 +135,7 @@ export function AssumptionsPanel({
                   size="sm"
                   variant="ghost"
                   disabled={pending}
-                  onClick={() =>
-                    call(() => detachAssumptionAction({ projectId: refs.project.id, decisionId, assumptionId: a.id }))
-                  }
+                  onClick={() => call(() => detachAssumptionAction({ decisionId, assumptionId: a.id }))}
                 >
                   Detach
                 </Button>
@@ -156,6 +154,7 @@ export function AssumptionsPanel({
       )}
       {error && <p className="text-caption text-tag-red">{error}</p>}
       <AssumptionDialog
+        key={creating ? "open" : "closed"}
         open={creating}
         onClose={() => setCreating(false)}
         refs={refs}

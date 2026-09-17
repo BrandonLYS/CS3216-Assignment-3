@@ -24,9 +24,8 @@ export async function updateDecisionAction(fd: FormData) {
   return res;
 }
 export async function deleteDecisionAction(fd: FormData) {
-  const projectId = String(fd.get("projectId"));
   const res = await runAction(z.object({ id: z.string() }), fd, (ctx, { id }) => decisionsService.delete(ctx, id));
-  if (res.ok) revalidateProject(projectId);
+  if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }
 export async function supersedeDecisionAction(input: z.input<typeof supersedeDecisionSchema>) {
@@ -44,9 +43,9 @@ export async function attachAssumptionAction(input: z.input<typeof attachAssumpt
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }
-export async function detachAssumptionAction(input: z.input<typeof attachAssumptionSchema> & { projectId: string }) {
+export async function detachAssumptionAction(input: z.input<typeof attachAssumptionSchema>) {
   const res = await runAction(attachAssumptionSchema, input, (ctx, i) => decisionsService.detachAssumption(ctx, i));
-  if (res.ok) revalidateProject(input.projectId);
+  if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }
 export async function retireAssumptionAction(input: z.input<typeof retireAssumptionSchema>) {
