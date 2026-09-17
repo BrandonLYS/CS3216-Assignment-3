@@ -61,7 +61,10 @@ describe("traceProposals", () => {
     expect(kept).toHaveLength(1);
     expect(kept[0]!.assumptions.map((a) => a.statement)).toEqual(["Priya stays", "Data before UAT", "Rule"]);
     expect(kept[0]!.assumptions[1]).toMatchObject({ targetType: "milestone", targetId: "m1", targetField: "dueDate" });
-    expect(fingerprintOf(kept[0]!.sources[0]!, "switch  TO interviews")).toBe(kept[0]!.fingerprint);
+    expect(fingerprintOf(kept[0]!.sources[0]!)).toBe(kept[0]!.fingerprint);
+    expect(traceProposals([raw({ title: "Another title" })], sources, refs).kept[0]!.fingerprint).toBe(
+      kept[0]!.fingerprint,
+    );
   });
 
   it("caps long fields and validates dates", () => {
@@ -70,5 +73,14 @@ describe("traceProposals", () => {
     expect(kept[0]?.decidedOn).toBeNull();
     expect(traceAssumption({ statement: "", subtype: "external_rule" }, refs)).toBeNull();
     expect(traceAssumption({ statement: "dep", subtype: "dependency" }, refs)).toBeNull();
+    const two = {
+      ...refs,
+      people: [
+        { id: "p1", name: "John Smith" },
+        { id: "p2", name: "John Doe" },
+      ],
+    };
+    expect(traceAssumption({ statement: "j", subtype: "person", targetName: "John" }, two)).toBeNull();
+    expect(traceAssumption({ statement: "j", subtype: "person", targetName: "Doe" }, two)?.targetId).toBe("p2");
   });
 });

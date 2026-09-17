@@ -24,9 +24,10 @@ const cap = (v: string | null | undefined, max: number) => {
 };
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export const fingerprintOf = (primary: ProposedSource, title: string) =>
+/** Idempotency key: the cited passage only, so a retitled extraction of the same sentence is the same Proposal. */
+export const fingerprintOf = (primary: ProposedSource) =>
   createHash("sha1")
-    .update(`${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}|${norm(title)}`)
+    .update(`${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}`)
     .digest("hex");
 
 export function traceSources(raw: RawProposal["sources"], sources: ExtractSource[]): ProposedSource[] | null {
@@ -40,10 +41,14 @@ export function traceSources(raw: RawProposal["sources"], sources: ExtractSource
   return out.length ? out : null;
 }
 
+/** Exact normalised match, else a unique containing match; ambiguous names resolve to nothing. */
 const byName = <T extends { id: string }>(rows: T[], name: string | null | undefined, key: (r: T) => string) => {
   if (!name) return undefined;
   const n = norm(name);
-  return rows.find((r) => norm(key(r)) === n) ?? rows.find((r) => norm(key(r)).includes(n) || n.includes(norm(key(r))));
+  const exact = rows.find((r) => norm(key(r)) === n);
+  if (exact) return exact;
+  const partial = rows.filter((r) => norm(key(r)).includes(n));
+  return partial.length === 1 ? partial[0] : undefined;
 };
 
 /** Resolve a proposed Assumption's target by name; null when it cannot be made valid. */
@@ -102,7 +107,7 @@ export function traceProposals(raw: RawProposal[], sources: ExtractSource[], ref
       discarded++;
       continue;
     }
-    const fingerprint = fingerprintOf(traced[0]!, title);
+    const fingerprint = fingerprintOf(traced[0]!);
     if (seen.has(fingerprint)) continue;
     seen.add(fingerprint);
     kept.push({

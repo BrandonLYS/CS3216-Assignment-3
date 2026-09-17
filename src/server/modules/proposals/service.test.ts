@@ -264,3 +264,57 @@ describe("accept and reject", () => {
     await expect(proposalsService.reject(stranger, prop!.id)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
+
+describe("races and tampering", () => {
+  it("a Proposal rejected before the Decision commits rolls the create back", async () => {
+    const p = await makeProject(ctx, "RCE");
+    const ev = await evidenceService.create(ctx, { projectId: p.id, title: "M", kind: "minutes", body: SENTENCE });
+    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract });
+    const [prop] = await proposalsService.listPending(ctx, p.id);
+    await proposalsRepo.update(ctx.db, prop!.id, { status: "rejected" });
+    await expect(
+      decisionsService.create(ctx, {
+        projectId: p.id,
+        title: "late",
+        decidedOn: "2026-09-12",
+        chosen: "x",
+        sources: [{ kind: "evidence", entityId: ev.id }],
+        proposalId: prop!.id,
+      }),
+    ).rejects.toBeInstanceOf(ConflictError);
+    expect(await decisionsService.list(ctx, p.id)).toHaveLength(0);
+  });
+
+  it("a tampered inline Assumption pointing outside the Project is refused with the Decision", async () => {
+    const p = await makeProject(ctx, "TMP");
+    const ev = await evidenceService.create(ctx, { projectId: p.id, title: "M", kind: "minutes", body: SENTENCE });
+    const other = await makeProject(ctx, "OTP");
+    const outsider = await peopleService.createPerson(ctx, { projectId: other.id, name: "Outsider" });
+    await expect(
+      decisionsService.create(ctx, {
+        projectId: p.id,
+        title: "t",
+        decidedOn: "2026-09-12",
+        chosen: "x",
+        sources: [{ kind: "evidence", entityId: ev.id }],
+        assumptions: [{ statement: "s", subtype: "person", targetType: "person", targetId: outsider.id }],
+      }),
+    ).rejects.toThrow(/Invalid person|Not in this project/);
+    expect(await decisionsService.list(ctx, p.id)).toHaveLength(0);
+  });
+
+  it("two passes over the same text in parallel yield one Proposal", async () => {
+    const p = await makeProject(ctx, "PAR");
+    await evidenceService.create(ctx, {
+      projectId: p.id,
+      title: "M",
+      kind: "minutes",
+      body: "We decided to go live in May.",
+    });
+    await Promise.all([
+      proposalsService.runPass(ctx, p.id, { extract: heuristicExtract }),
+      proposalsService.runPass(ctx, p.id, { extract: heuristicExtract }),
+    ]);
+    expect(await proposalsService.listPending(ctx, p.id)).toHaveLength(1);
+  });
+});

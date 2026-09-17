@@ -357,7 +357,10 @@ export const decisionsService = {
       for (const a of assumptions) {
         await createAndAttach(tx, rec, decision, { ...a, projectId: input.projectId, decisionId: decision.id });
       }
-      if (proposalId) await proposalsRepo.markAccepted(tx, proposalId, decision.id);
+      if (proposalId) {
+        const marked = await proposalsRepo.markAccepted(tx, proposalId, decision.id);
+        if (!marked.length) throw new ConflictError("That proposal was already resolved");
+      }
       return decision;
     }),
 

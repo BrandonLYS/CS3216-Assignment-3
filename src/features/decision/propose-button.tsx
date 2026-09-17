@@ -36,7 +36,7 @@ export function ProposeButton({ projectId }: { projectId: string }) {
           setNote(
             "skipped" in out
               ? SKIPPED_NOTE[out.skipped]
-              : `${out.proposed} proposed from ${out.sourcesPassed} source${out.sourcesPassed === 1 ? "" : "s"}`,
+              : `${out.proposed} proposed${out.discarded ? `, ${out.discarded} discarded` : ""} from ${out.sourcesPassed} source${out.sourcesPassed === 1 ? "" : "s"}`,
           );
           router.refresh();
         }}

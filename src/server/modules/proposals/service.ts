@@ -115,7 +115,8 @@ export const proposalsService = {
     }
     const { kept, discarded } = traceProposals(raw.proposals, candidates, refs);
 
-    // Pass bookkeeping and the new Proposals land together, after the extractor returned.
+    // Pass bookkeeping and the new Proposals land together, after the extractor returned. Two
+    // passes racing on one Project (two quick saves) are safe: the unique keys absorb the loser.
     const inserted = await ctx.db.transaction(async (tx) => {
       await passSourcesRepo.upsertMany(
         tx,
@@ -176,11 +177,15 @@ export const proposalsService = {
     return proposalsRepo.update(ctx.db, id, { status: "rejected", resolvedAt: new Date() });
   },
 
-  /** Acceptance rate per Project: accepted over everything ever proposed. */
+  /**
+   * Extraction-quality metric per Project: `proposed` is everything ever raised; `rate` is
+   * accepted over the Proposals the PM has acted on, so pending ones do not drag it down.
+   */
   stats: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const counts = await proposalsRepo.countsByStatus(ctx.db, projectId);
     const proposed = counts.pending + counts.accepted + counts.rejected;
-    return { ...counts, proposed, rate: proposed ? counts.accepted / proposed : null };
+    const decided = counts.accepted + counts.rejected;
+    return { ...counts, proposed, decided, rate: decided ? counts.accepted / decided : null };
   },
 };
