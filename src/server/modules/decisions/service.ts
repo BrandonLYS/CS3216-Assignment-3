@@ -318,6 +318,7 @@ export const decisionsService = {
 
   /** `kind:entityId` to display label for every citable Source in the Project. */
   sourceLabels: async (ctx: Ctx, projectId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const c = await decisionsService.sourceCandidates(ctx, projectId);
     const out = new Map<string, string>();
     for (const e of c.evidence) out.set(`evidence:${e.id}`, e.title);

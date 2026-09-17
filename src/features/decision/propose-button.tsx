@@ -6,6 +6,12 @@ import * as React from "react";
 import { runProposalPassAction } from "@/server/modules/proposals/actions";
 import { Button } from "@/shared/ui";
 
+const SKIPPED_NOTE = {
+  nothing_new: "Nothing new to read",
+  not_configured: "Assistant not configured",
+  failed: "Pass failed",
+} as const;
+
 /** Runs the Proposal pass now (it also runs after new Evidence and Comments); reports the outcome inline. */
 export function ProposeButton({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -29,11 +35,7 @@ export function ProposeButton({ projectId }: { projectId: string }) {
           const out = res.data;
           setNote(
             "skipped" in out
-              ? out.skipped === "nothing_new"
-                ? "Nothing new to read"
-                : out.skipped === "not_configured"
-                  ? "Assistant not configured"
-                  : "Pass failed"
+              ? SKIPPED_NOTE[out.skipped]
               : `${out.proposed} proposed from ${out.sourcesPassed} source${out.sourcesPassed === 1 ? "" : "s"}`,
           );
           router.refresh();

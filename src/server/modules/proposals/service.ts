@@ -101,10 +101,7 @@ export const proposalsService = {
     let raw: Awaited<ReturnType<Extract>>;
     try {
       raw = await extract({
-        sources: candidates.map(({ textHash: _h, ...s }) => {
-          void _h;
-          return s;
-        }),
+        sources: candidates.map(({ kind, entityId, title, text }) => ({ kind, entityId, title, text })),
         context: {
           people: refs.people.map((p) => p.name),
           milestones: refs.milestones.map((m) => m.name),
