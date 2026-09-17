@@ -76,8 +76,8 @@ A recorded choice made on a Project at a point in time: its title, date, owner (
 _Avoid_: Choice, ADR, resolution, verdict, issue
 
 **Assumption**:
-A condition a Decision rests on, which the Project can later contradict. Its subtype names what can invalidate it: date (a Milestone or Task date), person (a Person staying on the Project), dependency (an existing Dependency) or external-rule (a condition outside the Project, stated in words). It is holding, broken or retired.
-_Avoid_: Premise, precondition, constraint, hypothesis, risk (a Risk is a possibility of harm; an Assumption is a belief a Decision depends on)
+A condition a Decision rests on, which the Project can later contradict; unlike a Risk (a possibility of harm) it is a belief the Decision depends on. Its subtype names what can invalidate it: date (a Milestone or Task date), person (a Person staying on the Project), dependency (an existing Dependency) or external-rule (a condition outside the Project, stated in words). It is holding, broken or retired.
+_Avoid_: Premise, precondition, constraint, hypothesis, risk
 
 **Source**:
 A citation from a Decision or an edge to something already in the Project history: an Evidence item, a Comment or an Activity Event, optionally narrowed to one passage of the Evidence.

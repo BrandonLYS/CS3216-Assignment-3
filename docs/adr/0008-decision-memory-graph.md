@@ -6,7 +6,8 @@ status: accepted
 
 The decision-memory layer records why a Project is the way it is: which choices were made, what they rested on, and what they led to.
 It adds exactly two node types, **Decision** and **Assumption** (CONTEXT.md, "Decision Memory").
-Everything else a Decision relates to (Task, Milestone, Risk, Evidence, Person, Dependency, Activity Event) is reached by a typed edge into an entity that already exists.
+Everything a Decision affects (Task, Milestone, Risk, another Decision) is reached by a typed edge into an entity that already exists.
+What it rests on is an Assumption, what it cites is a Source (Evidence, Comment, Activity Event), its owner is a Person column, and what an Assumption watches (a Task or Milestone date, a Person, a Dependency) is a target column on the Assumption.
 Cause and Consequence are the two directions of an edge, not node types, and Issue stays on the avoid-list.
 The vocabulary is kept this small on purpose: the Assistant's proposal pass has to pick a type for every record it extracts, and extraction accuracy falls as the type count grows.
 Two node types also keep the UI count low; each type needs a form, a list and a history renderer.
@@ -21,7 +22,7 @@ Edges live in one table in `src/server/modules/decisions/schema.ts`, direction a
 
 The direction is what the node-centred graph view renders left to right, and what impact detection walks: from a broken Assumption along `supports` to its Decisions, along `leads_to` to items, then on through `dependencies` with the existing `downstreamOf` helper in `src/server/modules/dependencies/graph.ts`, mapping each edge to `{ predecessorId, successorId }`.
 `dependencies` connects only Tasks and Milestones, so a Risk reached by `leads_to` is a terminal consequence: it is listed as affected but never walked past, and the graph view renders it as a leaf.
-Walks are bounded in depth and terminate on cycles; `wouldCreateCycle` guards `superseded_by` so a Decision cannot supersede its own ancestor.
+`downstreamOf` terminates on cycles but has no depth parameter, so the caller adds the depth guard; `wouldCreateCycle` guards `superseded_by` on insert so a Decision cannot supersede its own ancestor.
 
 The Assumption's own pointer (the Milestone, Task, Person or Dependency named by its subtype) is a column set on the Assumption row, not an edge.
 It is one-to-one, drives deterministic detection, and has no independent source of its own.
@@ -61,8 +62,11 @@ Walks and answers read only confirmed records, and a proposal cannot leak into t
 
 History comes from Activity Events.
 `decision` and `assumption` join `ENTITY_TYPES` so every create, update and delete goes through `mutate` and is recorded like any other write.
-Status transitions (active to superseded, holding to broken) are ordinary `updated` events with `field: "status"`, so the attention surface and the "why did we" answer read them from the feed.
-Breaking an Assumption automatically is a system write with the triggering Activity Event as its Source.
+Decision status transitions (active to superseded, active to revisited) are ordinary `updated` events with `field: "status"`.
+Assumption state transitions (holding to broken, holding to retired) are ordinary `updated` events with `field: "state"`.
+The attention surface and the "why did we" answer read both from the feed.
+Breaking an Assumption automatically is a service write like any other: the detector runs `mutate` under a `Ctx` for the Project owner with `via: "system"` (a new `VIA_ACTORS` value, enum migration in the detection ticket), sets `state` to `broken` and `brokenByEventId` to the id of the triggering Activity Event, and both field changes land in the same `updated` events.
+Sources are never attached to an Assumption state change; the triggering event is reachable through `brokenByEventId`.
 There are no `valid_from` / `valid_to` columns on nodes or edges; a time-slider view is explicitly out of scope.
 
 ## Considered options
@@ -77,8 +81,9 @@ There are no `valid_from` / `valid_to` columns on nodes or edges; a time-slider 
 
 ## Consequences
 
+- `assumptions` carries `state`, `subtype`, `targetType`, `targetId`, `targetField`, `assumedUntil` and `brokenByEventId`.
 - Tables: `decisions`, `assumptions`, `decision_edges` (kinds `supports`, `leads_to`, `superseded_by`), `decision_sources`; all project-scoped, all written through `decisionsService` behind `assertOwnsProject`.
-- `ENTITY_TYPES` gains `decision` and `assumption` (Drizzle enum migration); `DECISION_STATUSES`, `ASSUMPTION_SUBTYPES`, `ASSUMPTION_STATES`, `DECISION_EDGE_KINDS` and `SOURCE_KINDS` are fixed vocabularies in `src/shared/domain/index.ts`.
+- `ENTITY_TYPES` gains `decision` and `assumption` and `VIA_ACTORS` gains `system` (Drizzle enum migrations); `DECISION_STATUSES`, `ASSUMPTION_SUBTYPES`, `ASSUMPTION_STATES`, `DECISION_EDGE_KINDS` and `SOURCE_KINDS` are fixed vocabularies in `src/shared/domain/index.ts`.
 - Impact detection is an `eventBus` subscriber that reads Assumption target columns and reuses `downstreamOf`; it never writes outside the service layer.
 - The Assistant's proposal pass owns its own table, keeps rejected proposals so they are not raised again, and records acceptance rate per Project.
 - Transcript ingestion adds the passage table that `passageId` points at; nothing about `decision_sources` changes when it lands.
