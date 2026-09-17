@@ -18,9 +18,26 @@ const HUMAN_FIELDS: Record<string, string> = {
   reviewDate: "review date",
   sourceDate: "source date",
   evidence: "evidence",
+  decidedOn: "decided on",
+  revisitWhen: "revisit trigger",
+  leadsTo: "consequences",
+  assumedUntil: "assumed-until date",
+  brokenReason: "broken reason",
+  brokenByEventId: "broken-by change",
+  alertDismissedAt: "alert",
 };
 
-const ID_FIELDS = new Set(["statusId", "assigneeId", "ownerId", "milestoneId", "teamId", "labelIds"]);
+/** Fields whose raw values are ids or timestamps the feed should not print. */
+const HIDE_VALUE_FIELDS = new Set([
+  "statusId",
+  "assigneeId",
+  "ownerId",
+  "milestoneId",
+  "teamId",
+  "labelIds",
+  "brokenByEventId",
+  "alertDismissedAt",
+]);
 
 function fmt(v: unknown): string {
   if (v === null || v === undefined || v === "") return "empty";
@@ -34,7 +51,7 @@ export function describeActivity({ event }: Item): string {
   if (event.action === "created") return `created ${what}`;
   if (event.action === "deleted") return `deleted ${what}`;
   const field = HUMAN_FIELDS[event.field ?? ""] ?? labelFor(event.field ?? "field").toLowerCase();
-  if (ID_FIELDS.has(event.field ?? "")) return `changed ${field} on ${what}`;
+  if (HIDE_VALUE_FIELDS.has(event.field ?? "")) return `changed ${field} on ${what}`;
   return `changed ${field} on ${what}: ${fmt(event.oldValue)} → ${fmt(event.newValue)}`;
 }
 

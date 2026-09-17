@@ -20,6 +20,10 @@ export const STATUS_CATEGORIES = [
 ] as const;
 export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
 
+/** Items a Decision may lead to (`leads_to` edge targets, ADR 0008). */
+export const CONSEQUENCE_TYPES = ["task", "milestone", "risk"] as const;
+export type ConsequenceType = (typeof CONSEQUENCE_TYPES)[number];
+
 /** Which kind of item a Status applies to. */
 export const STATUS_SCOPES = ["task", "milestone", "risk"] as const;
 export type StatusScope = (typeof STATUS_SCOPES)[number];
@@ -104,8 +108,8 @@ export type LinkableEntityType = CommentableEntityType;
 export const ACTIVITY_ACTIONS = ["created", "updated", "deleted"] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
-/** Who acted on the User's behalf (ADR 0007); a normal UI action has no `via`. */
-export const VIA_ACTORS = ["assistant", "reflection"] as const;
+/** Who acted on the User's behalf (ADR 0007); `system` is deterministic detection (ADR 0008); a normal UI action has no `via`. */
+export const VIA_ACTORS = ["assistant", "reflection", "system"] as const;
 export type Via = (typeof VIA_ACTORS)[number];
 
 /** Who wrote a Profile or Working Memory version: the User by hand, or Reflection. */
@@ -151,6 +155,7 @@ export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w
 // Attention (issue #7). Order IS severity order; adding a rule is a vocabulary change.
 // ---------------------------------------------------------------------------
 export const ATTENTION_RULES = [
+  "assumption_broken",
   "task_overdue",
   "dependency_late",
   "milestone_past_open",

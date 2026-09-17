@@ -6,6 +6,7 @@ import { milestonesService } from "@/server/modules/milestones/service";
 import { projectsService } from "@/server/modules/projects/service";
 import { risksService } from "@/server/modules/risks/service";
 import { tasksService } from "@/server/modules/tasks/service";
+import { impactService } from "@/server/modules/impact/service";
 import { projectAttention } from "@/server/modules/workspace/queries";
 import { RISK_MID_SEVERITY, RISK_TOP_SEVERITY, TERMINAL_CATEGORIES, labelFor, riskSeverity } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
@@ -15,19 +16,21 @@ import { ActivityRow } from "@/entities/activity/activity-item";
 import { HealthBadge } from "@/entities/project/health";
 import { Avatar } from "@/entities/person/avatar";
 import { AttentionList } from "@/widgets/attention/attention-list";
+import { ImpactAlerts } from "@/widgets/attention/impact-alerts";
 
 export const metadata = { title: "Overview" };
 
 export default async function ProjectOverviewPage({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
   const ctx = await ctxForCurrentUser();
-  const [project, tasks, milestones, risks, activity, counts] = await Promise.all([
+  const [project, tasks, milestones, risks, activity, counts, alerts] = await Promise.all([
     projectsService.get(ctx, projectId),
     tasksService.list(ctx, projectId),
     milestonesService.list(ctx, projectId),
     risksService.list(ctx, projectId),
     activityService.recentForProject(ctx, projectId, 20),
     tasksService.countsByStatusCategory(ctx, projectId),
+    impactService.listAlerts(ctx, projectId),
   ]);
   // Reuse the collections above; only the dependency edges are fetched inside.
   const attention = await projectAttention(ctx, projectId, { rows: { tasks, milestones, risks } });
@@ -91,8 +94,9 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
 
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 flex flex-col gap-6">
-            <section>
-              <SectionTitle className="mb-2">Needs attention</SectionTitle>
+            <section className="flex flex-col gap-3">
+              <SectionTitle>Needs attention</SectionTitle>
+              <ImpactAlerts alerts={alerts} projectId={projectId} />
               <AttentionList result={attention} />
             </section>
 

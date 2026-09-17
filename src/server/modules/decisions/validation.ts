@@ -7,7 +7,13 @@ import {
   requiredDate,
   requiredText,
 } from "@/server/core/validation";
-import { ASSUMPTION_SUBTYPES, ASSUMPTION_TARGET_TYPES, DATE_TARGET_FIELDS, SOURCE_KINDS } from "@/shared/domain";
+import {
+  ASSUMPTION_SUBTYPES,
+  ASSUMPTION_TARGET_TYPES,
+  CONSEQUENCE_TYPES,
+  DATE_TARGET_FIELDS,
+  SOURCE_KINDS,
+} from "@/shared/domain";
 
 export const sourceInputSchema = z.object({
   kind: z.enum(SOURCE_KINDS),
@@ -111,9 +117,23 @@ export const createAssumptionSchema = assumptionShape.superRefine((v, ctx) => {
 
 export const attachAssumptionSchema = z.object({ decisionId: z.string(), assumptionId: z.string() });
 export const retireAssumptionSchema = z.object({ id: z.string() });
+export const breakAssumptionSchema = z.object({
+  id: z.string(),
+  /** Activity Event that contradicted it; absent for a manual break. */
+  brokenByEventId: z.string().nullable().optional(),
+  reason: optionalText,
+});
+export const dismissAlertSchema = z.object({ id: z.string() });
+export const consequenceSchema = z.object({
+  decisionId: z.string(),
+  targetType: z.enum(CONSEQUENCE_TYPES),
+  targetId: z.string().min(1),
+});
 
 export type CreateDecisionInput = z.infer<typeof createDecisionSchema>;
 export type UpdateDecisionInput = z.infer<typeof updateDecisionSchema>;
 export type SupersedeDecisionInput = z.infer<typeof supersedeDecisionSchema>;
 export type CreateAssumptionInput = z.infer<typeof createAssumptionSchema>;
 export type AttachAssumptionInput = z.infer<typeof attachAssumptionSchema>;
+export type BreakAssumptionInput = z.infer<typeof breakAssumptionSchema>;
+export type ConsequenceInput = z.infer<typeof consequenceSchema>;

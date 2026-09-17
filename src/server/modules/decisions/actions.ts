@@ -6,7 +6,10 @@ import { revalidateProject } from "@/server/core/revalidate";
 import { decisionsService } from "./service";
 import {
   attachAssumptionSchema,
+  breakAssumptionSchema,
+  consequenceSchema,
   createAssumptionSchema,
+  dismissAlertSchema,
   createDecisionSchema,
   retireAssumptionSchema,
   supersedeDecisionSchema,
@@ -52,6 +55,26 @@ export async function retireAssumptionAction(input: z.input<typeof retireAssumpt
   const res = await runAction(retireAssumptionSchema, input, (ctx, { id }) =>
     decisionsService.retireAssumption(ctx, id),
   );
+  if (res.ok) revalidateProject(res.data.projectId);
+  return res;
+}
+export async function breakAssumptionAction(input: z.input<typeof breakAssumptionSchema>) {
+  const res = await runAction(breakAssumptionSchema, input, (ctx, i) => decisionsService.breakAssumption(ctx, i));
+  if (res.ok) revalidateProject(res.data.projectId);
+  return res;
+}
+export async function dismissAlertAction(input: z.input<typeof dismissAlertSchema>) {
+  const res = await runAction(dismissAlertSchema, input, (ctx, { id }) => decisionsService.dismissAlert(ctx, id));
+  if (res.ok) revalidateProject(res.data.projectId);
+  return res;
+}
+export async function addConsequenceAction(input: z.input<typeof consequenceSchema>) {
+  const res = await runAction(consequenceSchema, input, (ctx, i) => decisionsService.addConsequence(ctx, i));
+  if (res.ok) revalidateProject(res.data.projectId);
+  return res;
+}
+export async function removeConsequenceAction(input: z.input<typeof consequenceSchema>) {
+  const res = await runAction(consequenceSchema, input, (ctx, i) => decisionsService.removeConsequence(ctx, i));
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }

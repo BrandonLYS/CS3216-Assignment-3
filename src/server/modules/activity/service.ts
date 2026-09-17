@@ -34,6 +34,9 @@ export const activityRepo = {
           .limit(limit)
       : Promise.resolve([]),
 
+  findByIds: (db: DbOrTx, ids: string[]): Promise<ActivityEventRow[]> =>
+    ids.length ? db.select().from(activityEvents).where(inArray(activityEvents.id, ids)) : Promise.resolve([]),
+
   findById: async (db: DbOrTx, id: string): Promise<ActivityEventRow | undefined> => {
     const [row] = await db.select().from(activityEvents).where(eq(activityEvents.id, id));
     return row;

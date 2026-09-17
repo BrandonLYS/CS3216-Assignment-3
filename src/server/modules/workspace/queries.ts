@@ -9,7 +9,8 @@ import { risksRepo } from "@/server/modules/risks/repository";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { TERMINAL_CATEGORIES, type AttentionRule } from "@/shared/domain";
 import { today } from "@/shared/lib/dates";
-import { compareAttention, evaluateAttention, type AttentionItem } from "./attention";
+import { assumptionsRepo, edgesRepo } from "@/server/modules/decisions/repository";
+import { compareAttention, evaluateAttention, type AttentionInput, type AttentionItem } from "./attention";
 
 export type { AttentionGroup, AttentionItem, AttentionResult } from "./attention";
 
@@ -43,13 +44,41 @@ export async function projectAttention(
 ) {
   const project = await assertOwnsProject(ctx.db, ctx.userId, projectId);
   const { rows } = opts;
-  const [tasks, milestones, risks, dependencies] = await Promise.all([
+  const [tasks, milestones, risks, dependencies, assumptions] = await Promise.all([
     rows?.tasks ?? tasksRepo.listByProject(ctx.db, projectId),
     rows?.milestones ?? milestonesRepo.listByProject(ctx.db, projectId),
     rows?.risks ?? risksRepo.listByProject(ctx.db, projectId),
     rows?.dependencies ?? dependenciesRepo.listByProject(ctx.db, projectId),
+    brokenAssumptions(ctx.db, [projectId]),
   ]);
-  return evaluateAttention({ today: opts.today ?? today(), project, tasks, milestones, risks, dependencies });
+  return evaluateAttention({
+    today: opts.today ?? today(),
+    project,
+    tasks,
+    milestones,
+    risks,
+    dependencies,
+    assumptions: assumptions.get(projectId) ?? [],
+  });
+}
+
+/** Broken, undismissed Assumptions per Project with how many Decisions rest on each (issue #38). */
+async function brokenAssumptions(db: Ctx["db"], projectIds: string[]) {
+  const rows = await assumptionsRepo.listAlertsByProjects(db, projectIds);
+  const out = new Map<string, NonNullable<AttentionInput["assumptions"]>>();
+  if (!rows.length) return out;
+  const supports = await edgesRepo.listByKindForProjects(db, projectIds, "supports");
+  for (const a of rows) {
+    const list = out.get(a.projectId) ?? [];
+    list.push({
+      id: a.id,
+      statement: a.statement,
+      brokenReason: a.brokenReason,
+      affectedDecisions: supports.filter((e) => e.fromId === a.id).length,
+    });
+    out.set(a.projectId, list);
+  }
+  return out;
 }
 
 function bucket<T>(rows: T[], key: (row: T) => string) {
@@ -77,12 +106,13 @@ export async function workspaceOverview(ctx: Ctx, opts: { today?: string } = {})
   const horizon = iso(addDays(todayDate, UPCOMING_MILESTONE_DAYS));
   const weekAgo = addDays(todayDate, -7);
 
-  const [openTasks, milestones, risks, dependencies, activity] = await Promise.all([
+  const [openTasks, milestones, risks, dependencies, activity, assumptions] = await Promise.all([
     tasksRepo.listOpenByProjects(ctx.db, ids),
     milestonesRepo.listByProjects(ctx.db, ids),
     risksRepo.listByProjects(ctx.db, ids),
     dependenciesRepo.listByProjects(ctx.db, ids),
     activityRepo.recentForProjects(ctx.db, ids, weekAgo, 30),
+    brokenAssumptions(ctx.db, ids),
   ]);
 
   const byId = new Map(projects.map((p) => [p.id, p]));
@@ -102,6 +132,7 @@ export async function workspaceOverview(ctx: Ctx, opts: { today?: string } = {})
       milestones: milestonesByProject.get(project.id) ?? [],
       risks: risksByProject.get(project.id) ?? [],
       dependencies: dependenciesByProject.get(project.id) ?? [],
+      assumptions: assumptions.get(project.id) ?? [],
     });
     const total = result.groups.reduce((n, g) => n + g.items.length, 0);
     byProject.set(project.id, { counts: result.counts, total });

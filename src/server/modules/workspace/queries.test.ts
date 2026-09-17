@@ -123,6 +123,7 @@ describe("projectAttention", () => {
     expect(both.reasons).toEqual(["Due 12 Sep, 3 days ago", "Blocked (Blocked)"]);
 
     expect(r.counts).toEqual({
+      assumption_broken: 0,
       task_overdue: 2,
       dependency_late: 2,
       milestone_past_open: 1,
@@ -183,6 +184,7 @@ describe("workspaceOverview", () => {
     expect(o.attention.byProject.has(archived.id)).toBe(false);
     expect(o.attention.byProject.get(active.id)).toEqual({
       counts: {
+        assumption_broken: 0,
         task_overdue: 12,
         dependency_late: 0,
         milestone_past_open: 0,

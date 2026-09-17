@@ -10,6 +10,13 @@ export const ATTENTION_RULE_META: Record<
   AttentionRule,
   { label: string; singular: string; plural: string; text: string; bg: string }
 > = {
+  assumption_broken: {
+    label: "Broken assumption",
+    singular: "broken assumption",
+    plural: "broken assumptions",
+    text: "text-tag-red",
+    bg: "bg-tag-red/10",
+  },
   task_overdue: { label: "Overdue", singular: "overdue", plural: "overdue", text: "text-tag-red", bg: "bg-tag-red/10" },
   dependency_late: {
     label: "Late dependency",

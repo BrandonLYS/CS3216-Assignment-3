@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { Tx } from "@/server/db/client";
 import { activityEvents, type NewActivityEventRow } from "@/server/modules/activity/schema";
 import { eventBus, type DomainEvent, type DomainEventName } from "@/server/events/bus";
+import { ensureSubscribers } from "@/server/events/subscribers";
 import type { EntityType, Via } from "@/shared/domain";
 import type { Ctx } from "./context";
 import type { FieldChange } from "./diff";
@@ -73,6 +75,8 @@ export class Recorder {
   }
 
   async flush(tx: Tx) {
+    // One row per created/deleted event and one per change of an updated event. Ids are
+    // generated here so each event/change knows its row without relying on RETURNING order.
     const rows: NewActivityEventRow[] = this.pending.flatMap((e) => {
       const base = {
         projectId: e.projectId,
@@ -85,20 +89,21 @@ export class Recorder {
         occurredAt: e.occurredAt,
       };
       if (e.action !== "updated") {
-        if (e.snapshot === undefined) return [base];
-        return [{ ...base, ...(e.action === "created" ? { newValue: e.snapshot } : { oldValue: e.snapshot }) }];
+        e.activityEventId = randomUUID();
+        const row = { ...base, id: e.activityEventId };
+        if (e.snapshot === undefined) return [row];
+        return [{ ...row, ...(e.action === "created" ? { newValue: e.snapshot } : { oldValue: e.snapshot }) }];
       }
-      return e.changes.map((c) => ({
-        ...base,
-        field: c.field,
-        oldValue: c.oldValue,
-        newValue: c.newValue,
-      }));
+      return e.changes.map((c) => {
+        c.activityEventId = randomUUID();
+        return { ...base, id: c.activityEventId, field: c.field, oldValue: c.oldValue, newValue: c.newValue };
+      });
     });
     if (rows.length) await tx.insert(activityEvents).values(rows);
   }
 
   async publish() {
+    await ensureSubscribers();
     const events = [...this.pending, ...this.signals];
     this.pending = [];
     this.signals = [];

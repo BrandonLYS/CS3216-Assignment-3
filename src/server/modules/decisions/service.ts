@@ -5,6 +5,7 @@ import { mutate, type Recorder } from "@/server/core/mutation";
 import { nextNumber } from "@/server/core/sequence";
 import type { DbOrTx, Tx } from "@/server/db/client";
 import { activityRepo } from "@/server/modules/activity/service";
+import { risksRepo } from "@/server/modules/risks/repository";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { wouldCreateCycle } from "@/server/modules/dependencies/graph";
 import { dependenciesRepo } from "@/server/modules/dependencies/repository";
@@ -26,6 +27,8 @@ import {
 import {
   assumptionFieldErrors,
   type AttachAssumptionInput,
+  type BreakAssumptionInput,
+  type ConsequenceInput,
   type CreateAssumptionInput,
   type CreateDecisionInput,
   type SourceInput,
@@ -172,6 +175,37 @@ async function deleteIfOrphan(tx: Tx, rec: Recorder, assumption: AssumptionRow) 
   return true;
 }
 
+/** Display label of a `leads_to` target, verifying it lives in the Project. */
+async function consequenceLabel(tx: Tx, projectId: string, type: ConsequenceInput["targetType"], id: string) {
+  const invalid = () => new ValidationError("Item not in this project", { targetId: ["Not in this project"] });
+  if (type === "task") {
+    const t = await tasksRepo.findById(tx, id);
+    if (!t || t.projectId !== projectId) throw invalid();
+    return t.title;
+  }
+  if (type === "milestone") {
+    const m = await milestonesRepo.findById(tx, id);
+    if (!m || m.projectId !== projectId) throw invalid();
+    return m.name;
+  }
+  const r = await risksRepo.findById(tx, id);
+  if (!r || r.projectId !== projectId) throw invalid();
+  return r.title;
+}
+
+async function consequenceLabels(tx: Tx, decision: DecisionRow) {
+  const edges = await edgesRepo.listFrom(tx, "leads_to", decision.id);
+  const labels: string[] = [];
+  for (const e of edges) {
+    labels.push(
+      await consequenceLabel(tx, decision.projectId, e.toType as ConsequenceInput["targetType"], e.toId).catch(
+        () => `${labelFor(e.toType)} (deleted)`,
+      ),
+    );
+  }
+  return labels;
+}
+
 const statusChange = (from: DecisionRow["status"], to: DecisionRow["status"]): FieldChange[] => [
   { field: "status", oldValue: from, newValue: to },
 ];
@@ -247,6 +281,9 @@ export const decisionsService = {
       sources: decisionSources.filter((s) => s.decisionId === decision.id),
       supersededById: edges.find((e) => e.kind === "superseded_by" && e.fromId === decision.id)?.toId ?? null,
       supersedesId: edges.find((e) => e.kind === "superseded_by" && e.toId === decision.id)?.fromId ?? null,
+      consequences: edges
+        .filter((e) => e.kind === "leads_to" && e.fromId === decision.id)
+        .map((e) => ({ type: e.toType as ConsequenceInput["targetType"], id: e.toId })),
     }));
   },
 
@@ -382,6 +419,77 @@ export const decisionsService = {
       ]);
       await deleteIfOrphan(tx, rec, assumption);
       return assumption;
+    }),
+
+  /**
+   * Mark an Assumption broken. The detector passes the contradicting Activity Event and a
+   * reason under `via: "system"`; the PM breaks an external-rule Assumption by hand.
+   */
+  breakAssumption: (ctx: Ctx, { id, brokenByEventId, reason }: BreakAssumptionInput) =>
+    mutate(ctx, async (tx, rec) => {
+      const a = await getOwnedAssumption(tx, ctx.userId, id);
+      if (a.state === "broken") return a;
+      if (a.state === "retired") {
+        throw new ValidationError("A retired assumption cannot break", { state: ["Retired"] });
+      }
+      const patch = compactPatch({
+        state: "broken" as const,
+        brokenByEventId: brokenByEventId ?? undefined,
+        brokenReason: reason ?? undefined,
+      });
+      const after = await assumptionsRepo.update(tx, id, patch);
+      rec.updated("assumption", a.projectId, id, firstLine(a.statement, LABEL_MAX), diffFields(a, patch));
+      return after;
+    }),
+
+  /** Hide the impact alert. Never touches `state`: a dismissed Assumption stays broken. */
+  dismissAlert: (ctx: Ctx, id: string) =>
+    mutate(ctx, async (tx, rec) => {
+      const a = await getOwnedAssumption(tx, ctx.userId, id);
+      if (a.state !== "broken")
+        throw new ValidationError("Only a broken assumption has an alert", { state: ["Not broken"] });
+      if (a.alertDismissedAt) return a;
+      const patch = { alertDismissedAt: new Date() };
+      const after = await assumptionsRepo.update(tx, id, patch);
+      rec.updated("assumption", a.projectId, id, firstLine(a.statement, LABEL_MAX), diffFields(a, patch));
+      return after;
+    }),
+
+  /** Record that a Decision leads to a Task, Milestone or Risk (`leads_to` edge with copied Sources). */
+  addConsequence: (ctx: Ctx, { decisionId, targetType, targetId }: ConsequenceInput) =>
+    mutate(ctx, async (tx, rec) => {
+      const decision = await getOwned(tx, ctx.userId, decisionId);
+      const label = await consequenceLabel(tx, decision.projectId, targetType, targetId);
+      const before = await consequenceLabels(tx, decision);
+      const edge = await edgesRepo.insertIgnore(tx, {
+        projectId: decision.projectId,
+        kind: "leads_to",
+        fromType: "decision",
+        fromId: decision.id,
+        toType: targetType,
+        toId: targetId,
+      });
+      if (!edge) return decision;
+      const sources = await sourcesRepo.listForDecisions(tx, [decision.id]);
+      await sourcesRepo.insertMany(tx, copyToEdge(sources, edge.id));
+      rec.updated("decision", decision.projectId, decision.id, decision.title, [
+        { field: "leadsTo", oldValue: before, newValue: [...before, label] },
+      ]);
+      return decision;
+    }),
+
+  removeConsequence: (ctx: Ctx, { decisionId, targetType, targetId }: ConsequenceInput) =>
+    mutate(ctx, async (tx, rec) => {
+      const decision = await getOwned(tx, ctx.userId, decisionId);
+      const edge = await edgesRepo.find(tx, "leads_to", decision.id, targetId);
+      if (!edge || edge.toType !== targetType) return decision;
+      const before = await consequenceLabels(tx, decision);
+      const label = await consequenceLabel(tx, decision.projectId, targetType, targetId).catch(() => targetId);
+      await edgesRepo.delete(tx, edge.id);
+      rec.updated("decision", decision.projectId, decision.id, decision.title, [
+        { field: "leadsTo", oldValue: before, newValue: before.filter((l) => l !== label) },
+      ]);
+      return decision;
     }),
 
   retireAssumption: (ctx: Ctx, id: string) =>

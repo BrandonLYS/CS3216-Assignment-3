@@ -307,7 +307,8 @@ describe("supersede", () => {
     expect(edge).toBeDefined();
     expect(await sourcesRepo.listForEdges(ctx.db, [edge!.id])).toHaveLength(1);
     const statusEv = captured.find((e) => e.entityId === older.id && e.action === "updated");
-    expect(statusEv?.changes).toEqual([{ field: "status", oldValue: "active", newValue: "superseded" }]);
+    expect(statusEv?.changes).toMatchObject([{ field: "status", oldValue: "active", newValue: "superseded" }]);
+    expect(statusEv?.changes[0]?.activityEventId).toMatch(/[0-9a-f-]{36}/);
     const list = await decisionsService.list(ctx, projectId);
     expect(list.find((r) => r.decision.id === older.id)?.supersededById).toBe(newer.id);
     expect(list.find((r) => r.decision.id === newer.id)?.supersedesId).toBe(older.id);
@@ -421,5 +422,93 @@ describe("ownership", () => {
       decisionsService.attachAssumption(ctx, { decisionId: d.id, assumptionId: foreignAssumption.id }),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(await edgesRepo.find(ctx.db, "supports", foreignAssumption.id, d.id)).toBeUndefined();
+  });
+});
+
+describe("break, dismiss and consequences (#38)", () => {
+  it("breakAssumption records state, trigger and reason; idempotent; retired cannot break", async () => {
+    const d = await mk();
+    const a = await mkAssumption(d.id);
+    captured.length = 0;
+    const [ev] = await activityRepo.forEntity(ctx.db, milestone.id);
+    const broken = await decisionsService.breakAssumption(
+      { ...ctx, via: "system" },
+      { id: a.id, brokenByEventId: ev!.event.id, reason: "UAT moved" },
+    );
+    expect(broken).toMatchObject({ state: "broken", brokenByEventId: ev!.event.id, brokenReason: "UAT moved" });
+    const upd = captured.find((e) => e.entityId === a.id && e.action === "updated");
+    expect(upd?.via).toBe("system");
+    expect(upd?.changes.map((c) => c.field)).toEqual(["state", "brokenByEventId", "brokenReason"]);
+    captured.length = 0;
+    await decisionsService.breakAssumption(ctx, { id: a.id, reason: "again" });
+    expect(captured.filter((e) => e.entityId === a.id)).toHaveLength(0);
+    const r = await mkAssumption(d.id, { statement: "retire me" });
+    await decisionsService.retireAssumption(ctx, r.id);
+    await expect(decisionsService.breakAssumption(ctx, { id: r.id })).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("manual break omits the trigger change", async () => {
+    const d = await mk();
+    const a = await mkAssumption(d.id, {
+      subtype: "external_rule",
+      targetType: null,
+      targetId: null,
+      targetField: null,
+      assumedUntil: null,
+    });
+    captured.length = 0;
+    await decisionsService.breakAssumption(ctx, { id: a.id });
+    const upd = captured.find((e) => e.entityId === a.id && e.action === "updated");
+    expect(upd?.changes.map((c) => c.field)).toEqual(["state"]);
+  });
+
+  it("dismissAlert hides the alert and leaves the Assumption broken", async () => {
+    const d = await mk();
+    const a = await mkAssumption(d.id);
+    await expect(decisionsService.dismissAlert(ctx, a.id)).rejects.toBeInstanceOf(ValidationError);
+    await decisionsService.breakAssumption(ctx, { id: a.id, reason: "x" });
+    expect(await assumptionsRepo.listAlertsByProjects(ctx.db, [projectId])).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: a.id })]),
+    );
+    const dismissed = await decisionsService.dismissAlert(ctx, a.id);
+    expect(dismissed.state).toBe("broken");
+    expect(dismissed.alertDismissedAt).toBeInstanceOf(Date);
+    expect((await assumptionsRepo.listAlertsByProjects(ctx.db, [projectId])).some((x) => x.id === a.id)).toBe(false);
+  });
+
+  it("addConsequence records a leads_to edge with copied Sources; remove drops it", async () => {
+    const d = await mk();
+    captured.length = 0;
+    await decisionsService.addConsequence(ctx, { decisionId: d.id, targetType: "milestone", targetId: milestone.id });
+    const edge = await edgesRepo.find(ctx.db, "leads_to", d.id, milestone.id);
+    expect(edge?.toType).toBe("milestone");
+    expect(await sourcesRepo.listForEdges(ctx.db, [edge!.id])).toHaveLength(1);
+    const upd = captured.find((e) => e.entityId === d.id && e.action === "updated");
+    expect(upd?.changes[0]).toMatchObject({ field: "leadsTo", newValue: ["UAT begins"] });
+    const item = (await decisionsService.list(ctx, projectId)).find((r) => r.decision.id === d.id);
+    expect(item?.consequences).toEqual([{ type: "milestone", id: milestone.id }]);
+    await expect(
+      decisionsService.addConsequence(ctx, { decisionId: d.id, targetType: "task", targetId: milestone.id }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    await decisionsService.removeConsequence(ctx, {
+      decisionId: d.id,
+      targetType: "milestone",
+      targetId: milestone.id,
+    });
+    expect(await edgesRepo.find(ctx.db, "leads_to", d.id, milestone.id)).toBeUndefined();
+  });
+
+  it("refuses break, dismiss and consequences to a stranger", async () => {
+    const d = await mk();
+    const a = await mkAssumption(d.id);
+    const stranger = await makeCtx();
+    await expect(decisionsService.breakAssumption(stranger, { id: a.id })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(decisionsService.dismissAlert(stranger, a.id)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      decisionsService.addConsequence(stranger, { decisionId: d.id, targetType: "task", targetId: task.id }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      decisionsService.removeConsequence(stranger, { decisionId: d.id, targetType: "task", targetId: task.id }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
