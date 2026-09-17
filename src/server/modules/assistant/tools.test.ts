@@ -43,6 +43,7 @@ describe("assistant tool registry", () => {
       "list_tasks",
       "list_teams",
       "remove_dependency",
+      "search_decisions",
       "set_task_labels",
       "update_milestone",
       "update_project",
@@ -222,6 +223,51 @@ describe("assistant tools over the rest of the Project", () => {
     await expect(run("list_people", { projectId: foreignProject })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(run("set_task_labels", { id: theirTask.id, labelIds: [] })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(run("list_evidence", { projectId: foreignProject })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(run("search_decisions", { projectId: foreignProject, query: "why anything" })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+  });
+
+  it("search_decisions returns confirmed Decisions with an href on every Source and no Proposals", async () => {
+    const { decisionsService } = await import("@/server/modules/decisions/service");
+    const { proposalsRepo } = await import("@/server/modules/proposals/repository");
+    const projectId = (await makeProject(ctx, "WHY")).id;
+    const ev = await evidenceService.create(ctx, {
+      projectId,
+      title: "Minutes",
+      kind: "minutes",
+      body: "We chose Adyen.",
+    });
+    const d = await decisionsService.create(ctx, {
+      projectId,
+      title: "Use Adyen",
+      decidedOn: "2026-09-01",
+      chosen: "Adyen",
+      sources: [{ kind: "evidence", entityId: ev.id }],
+    });
+    await proposalsRepo.insertMany(ctx.db, [
+      {
+        projectId,
+        fingerprint: "x",
+        title: "Use Adyen later",
+        chosen: "Adyen",
+        sources: [{ kind: "evidence", entityId: ev.id, excerpt: "We chose Adyen." }],
+        assumptions: [],
+        extractor: "heuristic",
+      },
+    ]);
+    const out = (await run("search_decisions", { projectId, query: "why did we choose adyen" })) as {
+      decisions: Array<{ id: string; sources: Array<{ href: string }> }>;
+      nearestEvidence: unknown[];
+    };
+    expect(out.decisions.map((x) => x.id)).toEqual([d.id]);
+    expect(out.decisions[0]!.sources.every((s) => s.href.startsWith("/projects/"))).toBe(true);
+    const none = (await run("search_decisions", { projectId, query: "why did we pick the minutes format" })) as {
+      decisions: unknown[];
+      nearestEvidence: Array<{ id: string }>;
+    };
+    expect(none.decisions).toEqual([]);
+    expect(none.nearestEvidence.map((e) => e.id)).toEqual([ev.id]);
   });
 });
 

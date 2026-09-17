@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { milestones } from "@/server/modules/milestones/schema";
 import { risks } from "@/server/modules/risks/schema";
@@ -20,6 +20,21 @@ export const evidenceRepo = {
       .from(evidence)
       .where(eq(evidence.projectId, projectId))
       .orderBy(desc(evidence.sourceDate), desc(evidence.createdAt)),
+
+  /** Evidence whose title, body or extracted text contains any term (literal match), newest first, capped. */
+  searchByTerms: (db: DbOrTx, projectId: string, terms: string[], limit: number): Promise<EvidenceRow[]> => {
+    if (!terms.length) return Promise.resolve([]);
+    const mentions = terms.map((t) => {
+      const pattern = `%${t.replace(/[\\%_]/g, "\\$&")}%`;
+      return or(ilike(evidence.title, pattern), ilike(evidence.body, pattern), ilike(evidence.extractedText, pattern));
+    });
+    return db
+      .select()
+      .from(evidence)
+      .where(and(eq(evidence.projectId, projectId), or(...mentions)))
+      .orderBy(desc(evidence.sourceDate), desc(evidence.createdAt))
+      .limit(limit);
+  },
 
   findById: async (db: DbOrTx, id: string): Promise<EvidenceRow | undefined> => {
     const [row] = await db.select().from(evidence).where(eq(evidence.id, id));

@@ -17,6 +17,8 @@ import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { SOURCE_EXCERPT_MAX, labelFor } from "@/shared/domain";
 import { firstLine } from "@/shared/lib/text";
+import { decisionHref, evidenceHref } from "@/shared/lib/hrefs";
+import { citation, queryTerms, rankDecisions, rankEvidence, sourceHref } from "./answers";
 import { assumptionsRepo, decisionsRepo, edgesRepo, sourceCandidatesRepo, sourcesRepo } from "./repository";
 import {
   decisions,
@@ -30,6 +32,7 @@ import {
   type AttachAssumptionInput,
   type BreakAssumptionInput,
   type ConsequenceInput,
+  type SearchDecisionsInput,
   type CreateAssumptionInput,
   type CreateDecisionInput,
   type SourceInput,
@@ -278,6 +281,15 @@ async function linkSupersedes(tx: Tx, rec: Recorder, newer: DecisionRow, olderId
   ]);
 }
 
+/** Upper bound on Evidence rows loaded for the "nearest Evidence" fallback of `search`. */
+const EVIDENCE_CANDIDATES = 50;
+
+/** Sources plus the joined citation the model appends after each claim about the Decision. */
+const cited = <S extends { cite: string }>(sources: S[]) => ({
+  sources,
+  sourceCitations: sources.map((s) => s.cite).join(" "),
+});
+
 export const decisionsService = {
   /** Decisions with owner, their Assumptions, Sources and supersede links, newest first. */
   list: async (ctx: Ctx, projectId: string) => {
@@ -309,6 +321,81 @@ export const decisionsService = {
   },
 
   get: (ctx: Ctx, id: string) => getOwned(ctx.db, ctx.userId, id),
+
+  /**
+   * "Why did we" read model (issue #40): confirmed Decisions matching the question, each with
+   * its Sources linked, or the nearest Evidence when nothing matches. Pending Proposals live in
+   * their own table and are never read here.
+   */
+  search: async (ctx: Ctx, { projectId, query, limit }: SearchDecisionsInput) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    const items = await decisionsService.list(ctx, projectId);
+    const terms = queryTerms(query);
+    const ranked = rankDecisions(items, terms).slice(0, limit);
+    const sources = ranked.flatMap((r) => r.sources);
+    const [comments, events] = await Promise.all([
+      commentsRepo.findByIds(
+        ctx.db,
+        sources.filter((s) => s.kind === "comment").map((s) => s.entityId),
+      ),
+      activityRepo.findByIds(
+        ctx.db,
+        sources.filter((s) => s.kind === "activity_event").map((s) => s.entityId),
+      ),
+    ]);
+    const lookups = {
+      comments: new Map(comments.map((c) => [c.id, c])),
+      events: new Map(events.map((e) => [e.id, e])),
+    };
+    const byId = new Map(items.map((r) => [r.decision.id, r]));
+    const ref = (id: string | null) => {
+      const r = id ? byId.get(id) : undefined;
+      return r
+        ? {
+            id: r.decision.id,
+            number: r.decision.number,
+            title: r.decision.title,
+            href: decisionHref(projectId, r.decision.id),
+          }
+        : null;
+    };
+    const decisions = ranked.map((r) => ({
+      id: r.decision.id,
+      number: r.decision.number,
+      title: r.decision.title,
+      href: decisionHref(projectId, r.decision.id),
+      cite: citation(`D-${r.decision.number} ${r.decision.title}`, decisionHref(projectId, r.decision.id)),
+      status: r.decision.status,
+      decidedOn: r.decision.decidedOn,
+      owner: r.owner?.name ?? null,
+      context: r.decision.context,
+      chosen: r.decision.chosen,
+      alternatives: r.decision.alternatives,
+      revisitWhen: r.decision.revisitWhen,
+      supersededBy: ref(r.supersededById),
+      supersedes: ref(r.supersedesId),
+      assumptions: r.assumptions.map((a) => ({ statement: a.statement, subtype: a.subtype, state: a.state })),
+      ...cited(
+        r.sources.map((s) => {
+          const href = sourceHref(projectId, r.decision.id, s, lookups);
+          return { kind: s.kind, label: s.label, excerpt: s.excerpt, href, cite: citation(s.label, href) };
+        }),
+      ),
+    }));
+    // Only Evidence that mentions a term is loaded, capped, then ranked in memory.
+    const nearestEvidence = decisions.length
+      ? []
+      : rankEvidence(await evidenceRepo.searchByTerms(ctx.db, projectId, terms, EVIDENCE_CANDIDATES), terms).map(
+          (e) => ({
+            id: e.id,
+            title: e.title,
+            kind: e.kind,
+            href: evidenceHref(projectId, e.id),
+            cite: citation(e.title, evidenceHref(projectId, e.id)),
+          }),
+        );
+    return { decisions, nearestEvidence };
+  },
 
   /** Every Assumption in the Project, for the "attach existing" picker. */
   listAssumptions: async (ctx: Ctx, projectId: string) => {

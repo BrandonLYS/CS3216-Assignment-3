@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { user } from "@/server/auth/schema";
 import type { DbOrTx } from "@/server/db/client";
 import { people } from "@/server/modules/people/schema";
@@ -21,6 +21,9 @@ export const commentsRepo = {
   /** Every Comment in a Project, oldest first (the Proposal pass reads them as Sources). */
   listByProject: (db: DbOrTx, projectId: string) =>
     db.select().from(comments).where(eq(comments.projectId, projectId)).orderBy(asc(comments.createdAt)),
+
+  findByIds: (db: DbOrTx, ids: string[]): Promise<CommentRow[]> =>
+    ids.length ? db.select().from(comments).where(inArray(comments.id, ids)) : Promise.resolve([]),
 
   findById: async (db: DbOrTx, id: string): Promise<CommentRow | undefined> => {
     const [row] = await db.select().from(comments).where(eq(comments.id, id));

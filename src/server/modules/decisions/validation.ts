@@ -133,6 +133,13 @@ export const inlineAssumptionSchema = assumptionShape
   });
 export type InlineAssumptionInput = z.infer<typeof inlineAssumptionSchema>;
 
+export const searchDecisionsSchema = z.object({
+  projectId: z.string(),
+  query: z.string().trim().min(2, "Ask a fuller question").max(200),
+  limit: z.coerce.number().int().min(1).max(20).default(5),
+});
+export type SearchDecisionsInput = z.infer<typeof searchDecisionsSchema>;
+
 export const attachAssumptionSchema = z.object({ decisionId: z.string(), assumptionId: z.string() });
 export const retireAssumptionSchema = z.object({ id: z.string() });
 export const breakAssumptionSchema = z.object({

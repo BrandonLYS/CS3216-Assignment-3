@@ -13,9 +13,7 @@ export const EVIDENCE_KIND_COLOR: Record<string, string> = {
   other: "var(--color-tag-gray)",
 };
 
-/** Where a linked Evidence chip points: the Evidence page with the record selected and anchored. */
-export const evidenceHref = (projectId: string, evidenceId: string) =>
-  `/projects/${projectId}/evidence?item=${evidenceId}#evidence-${evidenceId}`;
+export { evidenceHref } from "@/shared/lib/hrefs";
 
 /** One linked Evidence record: kind dot, title (link), kind label and an optional unlink control. */
 export function EvidenceChip({

@@ -15,6 +15,7 @@ import { useShell } from "@/shared/lib/shell-context";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 import { cn } from "@/shared/lib/cn";
 import { Button, Textarea } from "@/shared/ui";
+import { LinkedText } from "./linked-text";
 
 const FRIENDLY: Record<string, string> = {
   [ASSISTANT_NOT_CONFIGURED]: "The Assistant is not configured. Set OPENAI_API_KEY to enable it.",
@@ -22,6 +23,7 @@ const FRIENDLY: Record<string, string> = {
 };
 
 const TOOL_LABEL: Record<string, string> = {
+  search_decisions: "Searched decisions",
   get_project_summary: "Read the Project",
   list_tasks: "Listed Tasks",
   get_task: "Read a Task",
@@ -204,7 +206,7 @@ function Part({
   part: UIMessage["parts"][number];
   onAnswer: (approvalId: string, approved: boolean) => void;
 }) {
-  if (part.type === "text") return <p className="whitespace-pre-wrap">{part.text}</p>;
+  if (part.type === "text") return <LinkedText text={part.text} />;
   if (!isToolUIPart(part)) return null;
   if (part.state === "approval-requested") {
     return <ConfirmCard approvalId={part.approval.id} reason={part.approval.requestReason} onAnswer={onAnswer} />;

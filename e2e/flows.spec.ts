@@ -739,6 +739,14 @@ test.describe("history", () => {
     await page.keyboard.press("ArrowLeft");
     await expect(dialog.getByRole("tab", { name: "Details" })).toHaveAttribute("aria-selected", "true");
     await shot(page, "keyboard-back-to-details");
+
+    // A cited change (issue #40) deep-links straight onto the History tab.
+    const url = new URL(page.url());
+    const taskId = url.searchParams.get("task");
+    await page.goto(`${url.pathname}?task=${taskId}&tab=history`);
+    await expect(dialog.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByRole("tabpanel", { name: "History" }).getByText("Created", { exact: true })).toBeVisible();
+    await shot(page, "deep-link-history-tab");
   });
 });
 

@@ -4,6 +4,8 @@ import { NotFoundError } from "@/server/core/errors";
 import { hexColor } from "@/server/core/validation";
 import { commentsService } from "@/server/modules/comments/service";
 import { createCommentSchema } from "@/server/modules/comments/validation";
+import { decisionsService } from "@/server/modules/decisions/service";
+import { searchDecisionsSchema } from "@/server/modules/decisions/validation";
 import { createDependencySchema, dependenciesService } from "@/server/modules/dependencies/service";
 import type { EvidenceRow } from "@/server/modules/evidence/schema";
 import { evidenceService } from "@/server/modules/evidence/service";
@@ -246,6 +248,13 @@ export const PROJECT_TOOLS: ToolDef[] = [
         note: text ? undefined : "Text unavailable for this Evidence (unsupported file or nothing extracted).",
       };
     },
+  }),
+  defineTool({
+    name: "search_decisions",
+    description:
+      "The only source for 'why did we...' questions. Searches the Project's confirmed Decisions (pending proposals are never included) and returns each with context, what was chosen, the alternatives rejected, status, the Decision that superseded it if any, its Assumptions and its Sources. Every Source has an href: cite it as a Markdown link [label](href). When `decisions` is empty, `nearestEvidence` lists the closest Evidence with hrefs; say no decision is recorded and point there instead of guessing.",
+    input: searchDecisionsSchema,
+    handler: (ctx, input) => decisionsService.search(ctx, input),
   }),
   defineTool({
     name: "link_evidence",
