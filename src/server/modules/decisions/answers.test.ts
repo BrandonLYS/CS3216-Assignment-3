@@ -99,7 +99,7 @@ describe("sourceHref", () => {
       "/projects/p/timeline?milestone=m1&tab=history",
     );
     expect(sourceHref("p", "d", { kind: "activity_event", entityId: "e3" }, lookups)).toBe(
-      "/projects/p/evidence?item=ev1",
+      "/projects/p/evidence?item=ev1#evidence-ev1",
     );
     expect(sourceHref("p", "d", { kind: "activity_event", entityId: "e2" }, lookups)).toBe("/projects/p");
     expect(sourceHref("p", "d", { kind: "activity_event", entityId: "missing" }, lookups)).toBe("/projects/p");

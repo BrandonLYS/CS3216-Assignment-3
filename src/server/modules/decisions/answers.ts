@@ -99,7 +99,7 @@ const ITEM_PATH: Record<string, (p: string, id: string) => string> = {
   risk: (p, id) => `/projects/${p}/risks?risk=${id}&tab=history`,
   milestone: (p, id) => `/projects/${p}/timeline?milestone=${id}&tab=history`,
   decision: (p, id) => `/projects/${p}/decisions?decision=${id}&tab=history`,
-  evidence: (p, id) => `/projects/${p}/evidence?item=${id}`,
+  evidence: evidenceHref,
 };
 
 /**
