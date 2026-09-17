@@ -12,11 +12,13 @@ import type { SourceCandidates } from "@/server/modules/decisions/repository";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
+import type { RiskListItem } from "@/server/modules/risks/repository";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { ActionForm, Button, Dialog, FormRow, SelectField, TextField, TextareaField, enumOptions } from "@/shared/ui";
 import { Field, Select } from "@/shared/ui/input";
 import { ItemDialogTabs } from "@/features/history/item-dialog-tabs";
 import { AssumptionsPanel } from "./assumptions-panel";
+import { ConsequencesPanel } from "./consequences-panel";
 import { SourcePicker, type PickedSource } from "./source-picker";
 
 export function DecisionDialog({
@@ -28,6 +30,7 @@ export function DecisionDialog({
   candidates,
   tasks,
   dependencies,
+  risks,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,6 +40,7 @@ export function DecisionDialog({
   candidates: SourceCandidates;
   tasks: TaskListItem[];
   dependencies: DependencyRow[];
+  risks: RiskListItem[];
 }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const d = item?.decision;
@@ -203,6 +207,15 @@ export function DecisionDialog({
                 all={allAssumptions}
                 tasks={tasks}
                 dependencies={dependencies}
+              />
+            )}
+            {d && (
+              <ConsequencesPanel
+                refs={refs}
+                decisionId={d.id}
+                consequences={item?.consequences ?? []}
+                tasks={tasks}
+                risks={risks}
               />
             )}
           </ActionForm>

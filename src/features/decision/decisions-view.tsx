@@ -7,6 +7,7 @@ import type { SourceCandidates } from "@/server/modules/decisions/repository";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
+import type { RiskListItem } from "@/server/modules/risks/repository";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { fmtDate } from "@/shared/lib/dates";
 import { Button, EmptyState } from "@/shared/ui";
@@ -21,12 +22,14 @@ export function DecisionsView({
   candidates,
   tasks,
   dependencies,
+  risks,
 }: {
   refs: ProjectRefs;
   decisions: DecisionListItem[];
   candidates: SourceCandidates;
   tasks: TaskListItem[];
   dependencies: DependencyRow[];
+  risks: RiskListItem[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -133,6 +136,7 @@ export function DecisionsView({
         candidates={candidates}
         tasks={tasks}
         dependencies={dependencies}
+        risks={risks}
       />
     </div>
   );

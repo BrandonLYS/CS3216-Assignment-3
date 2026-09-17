@@ -5,6 +5,7 @@ import * as React from "react";
 import type { ActionResult } from "@/server/core/action";
 import {
   attachAssumptionAction,
+  breakAssumptionAction,
   detachAssumptionAction,
   retireAssumptionAction,
 } from "@/server/modules/decisions/actions";
@@ -118,7 +119,22 @@ export function AssumptionsPanel({
                       <span className={a.state === "broken" ? "text-tag-red" : undefined}> · {labelFor(a.state)}</span>
                     )}
                   </p>
+                  {a.state === "broken" && a.brokenReason && (
+                    <p className="text-caption text-tag-red/80">{a.brokenReason}</p>
+                  )}
                 </div>
+                {a.state === "holding" && a.subtype === "external_rule" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-tag-red hover:text-tag-red"
+                    disabled={pending}
+                    onClick={() => call(() => breakAssumptionAction({ id: a.id, reason: "Marked broken by hand" }))}
+                  >
+                    Mark broken
+                  </Button>
+                )}
                 {!retired && (
                   <Button
                     type="button"
