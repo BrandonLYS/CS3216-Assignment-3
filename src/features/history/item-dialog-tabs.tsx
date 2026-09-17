@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import { listEntityHistoryAction } from "@/server/modules/activity/actions";
 import type { HistoryEntry } from "@/server/modules/activity/enrich";
@@ -24,7 +25,9 @@ export function ItemDialogTabs({
   history: { projectId: string; entityType: HistoryEntityType; entityId: string } | null;
   children: React.ReactNode;
 }) {
-  const [tab, setTab] = React.useState<TabId>("details");
+  // `?tab=history` (a cited change, issue #40) opens straight on History.
+  const initialTab: TabId = useSearchParams().get("tab") === "history" && history ? "history" : "details";
+  const [tab, setTab] = React.useState<TabId>(initialTab);
   const [entries, setEntries] = React.useState<HistoryEntry[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -32,26 +35,30 @@ export function ItemDialogTabs({
   // toggles) and never setState after the dialog has unmounted mid-flight.
   const requestId = React.useRef(0);
   const mounted = React.useRef(false);
-  React.useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  if (!history) return <>{children}</>;
-  const target = history;
-
   async function load() {
+    if (!history) return;
     const id = ++requestId.current;
     setLoading(true);
     setError(null);
-    const res = await listEntityHistoryAction(target);
+    const res = await listEntityHistoryAction(history);
     if (!mounted.current || id !== requestId.current) return;
     setLoading(false);
     if (!res.ok) return setError(res.error);
     setEntries(res.data);
   }
+
+  React.useEffect(() => {
+    mounted.current = true;
+    // Deferred so the first render commits before the fetch flips `loading`.
+    if (initialTab === "history") void Promise.resolve().then(load);
+    return () => {
+      mounted.current = false;
+    };
+    // Mount-only: the initial tab is read once, when the dialog opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!history) return <>{children}</>;
 
   const change = (v: string) => {
     setTab(v as TabId);
