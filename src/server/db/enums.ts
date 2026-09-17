@@ -1,6 +1,12 @@
 import { pgEnum } from "drizzle-orm/pg-core";
 import {
   ACTIVITY_ACTIONS,
+  ASSUMPTION_STATES,
+  ASSUMPTION_SUBTYPES,
+  ASSUMPTION_TARGET_TYPES,
+  DATE_TARGET_FIELDS,
+  DECISION_EDGE_KINDS,
+  DECISION_STATUSES,
   DEPENDENCY_ITEM_TYPES,
   DEPENDENCY_TYPES,
   ENTITY_TYPES,
@@ -11,6 +17,7 @@ import {
   PRIORITIES,
   PROJECT_STATUSES,
   SCALE_LEVELS,
+  SOURCE_KINDS,
   STATUS_CATEGORIES,
   STATUS_SCOPES,
   VIA_ACTORS,
@@ -30,3 +37,10 @@ export const activityActionEnum = pgEnum("activity_action", ACTIVITY_ACTIONS);
 export const viaActorEnum = pgEnum("via_actor", VIA_ACTORS);
 export const messageRoleEnum = pgEnum("message_role", MESSAGE_ROLES);
 export const memoryAuthorEnum = pgEnum("memory_author", MEMORY_AUTHORS);
+export const decisionStatusEnum = pgEnum("decision_status", DECISION_STATUSES);
+export const assumptionSubtypeEnum = pgEnum("assumption_subtype", ASSUMPTION_SUBTYPES);
+export const assumptionStateEnum = pgEnum("assumption_state", ASSUMPTION_STATES);
+export const assumptionTargetTypeEnum = pgEnum("assumption_target_type", ASSUMPTION_TARGET_TYPES);
+export const dateTargetFieldEnum = pgEnum("date_target_field", DATE_TARGET_FIELDS);
+export const decisionEdgeKindEnum = pgEnum("decision_edge_kind", DECISION_EDGE_KINDS);
+export const sourceKindEnum = pgEnum("source_kind", SOURCE_KINDS);

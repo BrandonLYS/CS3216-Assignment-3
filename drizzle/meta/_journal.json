@@ -50,6 +50,13 @@
       "when": 1789599041206,
       "tag": "0006_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789629047237,
+      "tag": "0007_decisions",
+      "breakpoints": true
     }
   ]
 }
