@@ -1,6 +1,7 @@
 import type { Tx } from "@/server/db/client";
 import { activityEvents, type NewActivityEventRow } from "@/server/modules/activity/schema";
 import { eventBus, type DomainEvent, type DomainEventName } from "@/server/events/bus";
+import { ensureSubscribers } from "@/server/events/subscribers";
 import type { EntityType, Via } from "@/shared/domain";
 import type { Ctx } from "./context";
 import type { FieldChange } from "./diff";
@@ -103,6 +104,7 @@ export class Recorder {
   }
 
   async publish() {
+    await ensureSubscribers();
     const events = [...this.pending, ...this.signals];
     this.pending = [];
     this.signals = [];
