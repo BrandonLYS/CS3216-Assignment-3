@@ -64,7 +64,10 @@ export const assumptions = pgTable(
     brokenByEventId: text("broken_by_event_id"),
     ...timestamps,
   },
-  (t) => [index("assumptions_project_idx").on(t.projectId), index("assumptions_target_idx").on(t.targetType, t.targetId)],
+  (t) => [
+    index("assumptions_project_idx").on(t.projectId),
+    index("assumptions_target_idx").on(t.targetType, t.targetId),
+  ],
 );
 
 export type AssumptionRow = typeof assumptions.$inferSelect;

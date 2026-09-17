@@ -9,7 +9,7 @@ import { assertOwnsProject } from "@/server/modules/projects/service";
 import { statusesRepo } from "@/server/modules/statuses/repository";
 import type { HistoryEntityType } from "@/shared/domain";
 import { enrichHistory, type HistoryEntry } from "./enrich";
-import { activityEvents } from "./schema";
+import { activityEvents, type ActivityEventRow } from "./schema";
 import type { ListEntityHistoryInput } from "./validation";
 
 const select = (db: DbOrTx) =>
@@ -33,6 +33,11 @@ export const activityRepo = {
           .orderBy(desc(activityEvents.occurredAt))
           .limit(limit)
       : Promise.resolve([]),
+
+  findById: async (db: DbOrTx, id: string): Promise<ActivityEventRow | undefined> => {
+    const [row] = await db.select().from(activityEvents).where(eq(activityEvents.id, id));
+    return row;
+  },
 
   forEntity: (db: DbOrTx, entityId: string) =>
     select(db).where(eq(activityEvents.entityId, entityId)).orderBy(desc(activityEvents.occurredAt)),
