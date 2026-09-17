@@ -8,14 +8,30 @@ const LINK = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
 /** Same-app paths only: no scheme, no protocol-relative `//`, so a model cannot send the User elsewhere. */
 export const isInternalHref = (href: string) => href.startsWith("/") && !href.startsWith("//");
 
+/**
+ * Models sometimes "absolutise" a relative href with an invented host. Keep only the in-app
+ * part (path, query, hash) of an http(s) URL whose path is an app route; anything else is null.
+ */
+export function internalHref(href: string): string | null {
+  if (isInternalHref(href)) return href;
+  if (!/^https?:\/\//i.test(href)) return null;
+  try {
+    const u = new URL(href);
+    return u.pathname.startsWith("/projects/") ? `${u.pathname}${u.search}${u.hash}` : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Split Assistant text into plain runs and internal Markdown links; anything else stays literal text. */
 export function splitLinks(text: string): TextChunk[] {
   const out: TextChunk[] = [];
   let last = 0;
   for (const m of text.matchAll(LINK)) {
-    const [whole, label, href] = m as unknown as [string, string, string];
+    const [whole, label, raw] = m as unknown as [string, string, string];
     const start = m.index ?? 0;
-    if (!isInternalHref(href)) continue;
+    const href = internalHref(raw);
+    if (!href) continue;
     if (start > last) out.push({ type: "text", text: text.slice(last, start) });
     out.push({ type: "link", label, href });
     last = start + whole.length;

@@ -19,6 +19,16 @@ describe("splitLinks", () => {
     }
   });
 
+  it("keeps only the in-app part of an absolutised app URL", () => {
+    expect(splitLinks("see [D-1](https://example.com/projects/p/decisions?decision=d#x)")).toEqual([
+      { type: "text", text: "see " },
+      { type: "link", label: "D-1", href: "/projects/p/decisions?decision=d#x" },
+    ]);
+    expect(splitLinks("see [x](https://example.com/admin)")).toEqual([
+      { type: "text", text: "see [x](https://example.com/admin)" },
+    ]);
+  });
+
   it("handles several links, no links and empty text", () => {
     expect(splitLinks("[A](/a) and [B](/b?x=1)")).toEqual([
       { type: "link", label: "A", href: "/a" },

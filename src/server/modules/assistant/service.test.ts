@@ -40,6 +40,17 @@ describe("assistantService conversations", () => {
     expect(messages[1]?.parts).toEqual([{ type: "text", text: "Done: created 3 Tasks" }]);
   });
 
+  it("tolerates the same Message id twice in one save (last occurrence wins)", async () => {
+    const { conversation } = await assistantService.conversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, conversation.id, [
+      msg("dup", "user", "first"),
+      msg("dup", "user", "second"),
+      msg("m3", "assistant", "ok"),
+    ]);
+    const { messages } = await assistantService.conversation(ctx, projectId);
+    expect(messages.find((m) => m.id === "dup")?.parts).toEqual([{ type: "text", text: "second" }]);
+  });
+
   it("keeps Message ids scoped to their Conversation", async () => {
     const other = await makeCtx();
     const otherProject = (await makeProject(other, "OTH")).id;
@@ -50,7 +61,7 @@ describe("assistantService conversations", () => {
   });
 
   it("counts only this User's turns today", async () => {
-    expect(await assistantService.turnsToday(ctx)).toBe(1);
+    expect(await assistantService.turnsToday(ctx)).toBe(2); // "m1" and "dup" (deduped) user turns
     const other = await makeCtx();
     expect(await assistantService.turnsToday(other)).toBe(0);
   });

@@ -353,6 +353,7 @@ export const decisionsService = {
       number: r.decision.number,
       title: r.decision.title,
       href: `/projects/${projectId}/decisions?decision=${r.decision.id}`,
+      cite: `[D-${r.decision.number} ${r.decision.title}](/projects/${projectId}/decisions?decision=${r.decision.id})`,
       status: r.decision.status,
       decidedOn: r.decision.decidedOn,
       owner: r.owner?.name ?? null,
@@ -363,13 +364,15 @@ export const decisionsService = {
       supersededBy: ref(r.supersededById),
       supersedes: ref(r.supersedesId),
       assumptions: r.assumptions.map((a) => ({ statement: a.statement, subtype: a.subtype, state: a.state })),
-      sources: r.sources.map((s) => ({
-        kind: s.kind,
-        label: s.label,
-        excerpt: s.excerpt,
-        href: sourceHref(projectId, r.decision.id, s, lookups),
-      })),
+      sources: r.sources.map((s) => {
+        const href = sourceHref(projectId, r.decision.id, s, lookups);
+        return { kind: s.kind, label: s.label, excerpt: s.excerpt, href, cite: `[${s.label}](${href})` };
+      }),
     }));
+    // Ready-made citation for the model to append after each claim about this Decision.
+    for (const d of decisions) {
+      Object.assign(d, { sourceCitations: d.sources.map((s) => s.cite).join(" ") });
+    }
     const nearestEvidence = decisions.length
       ? []
       : rankEvidence(await evidenceRepo.listByProject(ctx.db, projectId), terms).map((e) => ({
@@ -377,6 +380,7 @@ export const decisionsService = {
           title: e.title,
           kind: e.kind,
           href: `/projects/${projectId}/evidence?item=${e.id}#evidence-${e.id}`,
+          cite: `[${e.title}](/projects/${projectId}/evidence?item=${e.id}#evidence-${e.id})`,
         }));
     return { decisions, nearestEvidence };
   },

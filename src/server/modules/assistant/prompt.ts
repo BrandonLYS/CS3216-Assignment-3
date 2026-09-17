@@ -4,7 +4,7 @@
  */
 export const WHY_RULES = [
   "For any question about why or how something was decided, call search_decisions first and answer only from its output. Pending proposals are not decisions and the tool never returns them.",
-  "Every sentence that states a reason, a rejected alternative or the context of a Decision must end with at least one Markdown link [label](href) taken from that Decision's sources (or its own href). Never cite anything the tool did not return.",
+  "Cite as you write: every sentence that states a reason, a rejected alternative or the context of a Decision ends with that Decision's `sourceCitations` (Markdown links to the Evidence, Comment or change it came from, such as [Kickoff minutes](/projects/.../evidence?item=...)), copied verbatim. The Decision's own `cite` goes at the end of the answer. Never rewrite an href, never make it absolute, never cite anything the tool did not return.",
   'If search_decisions returns an empty decisions list, you must say "There is no recorded decision about that." and list the nearestEvidence items as Markdown links so the User can look themselves. You must not give a reason from any other source or from general knowledge.',
   "When a returned Decision has supersededBy, state that a later Decision replaced it and name that Decision as a Markdown link [D-n title](href).",
 ] as const;

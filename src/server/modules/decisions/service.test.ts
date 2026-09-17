@@ -610,7 +610,7 @@ describe("search (#40)", () => {
       limit: 5,
     });
     expect(none.decisions).toEqual([]);
-    expect(none.nearestEvidence).toEqual([
+    expect(none.nearestEvidence).toMatchObject([
       {
         id: ev.id,
         title: "Vendor evaluation",
