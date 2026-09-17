@@ -432,19 +432,13 @@ export const decisionsService = {
       if (a.state === "retired") {
         throw new ValidationError("A retired assumption cannot break", { state: ["Retired"] });
       }
-      const patch = {
+      const patch = compactPatch({
         state: "broken" as const,
-        brokenByEventId: brokenByEventId ?? null,
-        brokenReason: reason ?? null,
-      };
+        brokenByEventId: brokenByEventId ?? undefined,
+        brokenReason: reason ?? undefined,
+      });
       const after = await assumptionsRepo.update(tx, id, patch);
-      const changes: FieldChange[] = [{ field: "state", oldValue: a.state, newValue: "broken" }];
-      if (patch.brokenByEventId) {
-        changes.push({ field: "brokenByEventId", oldValue: a.brokenByEventId, newValue: patch.brokenByEventId });
-      }
-      if (patch.brokenReason)
-        changes.push({ field: "brokenReason", oldValue: a.brokenReason, newValue: patch.brokenReason });
-      rec.updated("assumption", a.projectId, id, firstLine(a.statement, LABEL_MAX), changes);
+      rec.updated("assumption", a.projectId, id, firstLine(a.statement, LABEL_MAX), diffFields(a, patch));
       return after;
     }),
 
@@ -455,11 +449,9 @@ export const decisionsService = {
       if (a.state !== "broken")
         throw new ValidationError("Only a broken assumption has an alert", { state: ["Not broken"] });
       if (a.alertDismissedAt) return a;
-      const now = new Date();
-      const after = await assumptionsRepo.update(tx, id, { alertDismissedAt: now });
-      rec.updated("assumption", a.projectId, id, firstLine(a.statement, LABEL_MAX), [
-        { field: "alertDismissedAt", oldValue: null, newValue: now.toISOString() },
-      ]);
+      const patch = { alertDismissedAt: new Date() };
+      const after = await assumptionsRepo.update(tx, id, patch);
+      rec.updated("assumption", a.projectId, id, firstLine(a.statement, LABEL_MAX), diffFields(a, patch));
       return after;
     }),
 

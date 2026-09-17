@@ -27,7 +27,8 @@ const HUMAN_FIELDS: Record<string, string> = {
   alertDismissedAt: "alert",
 };
 
-const ID_FIELDS = new Set([
+/** Fields whose raw values are ids or timestamps the feed should not print. */
+const HIDE_VALUE_FIELDS = new Set([
   "statusId",
   "assigneeId",
   "ownerId",
@@ -50,7 +51,7 @@ export function describeActivity({ event }: Item): string {
   if (event.action === "created") return `created ${what}`;
   if (event.action === "deleted") return `deleted ${what}`;
   const field = HUMAN_FIELDS[event.field ?? ""] ?? labelFor(event.field ?? "field").toLowerCase();
-  if (ID_FIELDS.has(event.field ?? "")) return `changed ${field} on ${what}`;
+  if (HIDE_VALUE_FIELDS.has(event.field ?? "")) return `changed ${field} on ${what}`;
   return `changed ${field} on ${what}: ${fmt(event.oldValue)} → ${fmt(event.newValue)}`;
 }
 

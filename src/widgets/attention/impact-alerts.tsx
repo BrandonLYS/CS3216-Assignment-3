@@ -1,13 +1,12 @@
-import { AlertOctagon, Diamond, FileText, ListTodo, AlertTriangle } from "lucide-react";
+import { AlertOctagon, FileText } from "lucide-react";
 import Link from "next/link";
 import type { ImpactAlert } from "@/server/modules/impact/service";
 import { labelFor } from "@/shared/domain";
 import { fmtDate } from "@/shared/lib/dates";
 import { Panel } from "@/shared/ui";
 import { ASSUMPTION_ICON } from "@/entities/decision/assumption-chip";
+import { CONSEQUENCE_ICON } from "@/entities/decision/consequence-icon";
 import { DismissAlertButton } from "./dismiss-alert-button";
-
-const ITEM_ICON = { task: ListTodo, milestone: Diamond, risk: AlertTriangle } as const;
 
 /**
  * Impact alerts on the Project Overview (issue #38): one panel per broken, undismissed
@@ -89,7 +88,7 @@ export function ImpactAlerts({ alerts, projectId }: { alerts: ImpactAlert[]; pro
                 {alert.items.length === 0 && <p className="text-caption text-ink-tertiary">Nothing downstream</p>}
                 <ul className="flex flex-col gap-1">
                   {alert.items.map((i) => {
-                    const ItemIcon = ITEM_ICON[i.type];
+                    const ItemIcon = CONSEQUENCE_ICON[i.type];
                     return (
                       <li key={`${i.type}:${i.id}`}>
                         <Link href={i.href} className="flex items-center gap-2 text-ink hover:underline">

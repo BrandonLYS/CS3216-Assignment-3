@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Diamond, ListTodo, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import * as React from "react";
 import type { ActionResult } from "@/server/core/action";
 import { addConsequenceAction, removeConsequenceAction } from "@/server/modules/decisions/actions";
@@ -9,8 +9,7 @@ import type { RiskListItem } from "@/server/modules/risks/repository";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import type { ConsequenceType } from "@/shared/domain";
 import { Button, CommandPicker } from "@/shared/ui";
-
-const ICON = { task: ListTodo, milestone: Diamond, risk: AlertTriangle } as const;
+import { CONSEQUENCE_ICON } from "@/entities/decision/consequence-icon";
 
 /**
  * "Leads to" section of the Decision dialog: the Tasks, Milestones and Risks this Decision
@@ -78,7 +77,7 @@ export function ConsequencesPanel({
         <div className="flex flex-wrap gap-1.5">
           {consequences.map((c) => {
             const o = all.find((x) => x.type === c.type && x.id === c.id);
-            const Icon = ICON[c.type];
+            const Icon = CONSEQUENCE_ICON[c.type];
             return (
               <span
                 key={`${c.type}:${c.id}`}
