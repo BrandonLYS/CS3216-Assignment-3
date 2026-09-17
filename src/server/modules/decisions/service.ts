@@ -17,7 +17,8 @@ import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { SOURCE_EXCERPT_MAX, labelFor } from "@/shared/domain";
 import { firstLine } from "@/shared/lib/text";
-import { rankDecisions, rankEvidence, scoreTerms, sourceHref } from "./answers";
+import { decisionHref, evidenceHref } from "@/shared/lib/hrefs";
+import { queryTerms, rankDecisions, rankEvidence, sourceHref } from "./answers";
 import { assumptionsRepo, decisionsRepo, edgesRepo, sourceCandidatesRepo, sourcesRepo } from "./repository";
 import {
   decisions,
@@ -319,7 +320,7 @@ export const decisionsService = {
    */
   search: async (ctx: Ctx, { projectId, query, limit }: SearchDecisionsInput) => {
     const items = await decisionsService.list(ctx, projectId);
-    const terms = scoreTerms(query);
+    const terms = queryTerms(query);
     const ranked = rankDecisions(items, terms).slice(0, limit);
     const sources = ranked.flatMap((r) => r.sources);
     const [comments, events] = await Promise.all([
@@ -344,7 +345,7 @@ export const decisionsService = {
             id: r.decision.id,
             number: r.decision.number,
             title: r.decision.title,
-            href: `/projects/${projectId}/decisions?decision=${r.decision.id}`,
+            href: decisionHref(projectId, r.decision.id),
           }
         : null;
     };
@@ -352,8 +353,8 @@ export const decisionsService = {
       id: r.decision.id,
       number: r.decision.number,
       title: r.decision.title,
-      href: `/projects/${projectId}/decisions?decision=${r.decision.id}`,
-      cite: `[D-${r.decision.number} ${r.decision.title}](/projects/${projectId}/decisions?decision=${r.decision.id})`,
+      href: decisionHref(projectId, r.decision.id),
+      cite: `[D-${r.decision.number} ${r.decision.title}](${decisionHref(projectId, r.decision.id)})`,
       status: r.decision.status,
       decidedOn: r.decision.decidedOn,
       owner: r.owner?.name ?? null,
@@ -379,8 +380,8 @@ export const decisionsService = {
           id: e.id,
           title: e.title,
           kind: e.kind,
-          href: `/projects/${projectId}/evidence?item=${e.id}#evidence-${e.id}`,
-          cite: `[${e.title}](/projects/${projectId}/evidence?item=${e.id}#evidence-${e.id})`,
+          href: evidenceHref(projectId, e.id),
+          cite: `[${e.title}](${evidenceHref(projectId, e.id)})`,
         }));
     return { decisions, nearestEvidence };
   },

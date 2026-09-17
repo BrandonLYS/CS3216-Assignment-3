@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankDecisions, rankEvidence, scoreTerms, sourceHref } from "./answers";
+import { rankDecisions, rankEvidence, queryTerms, sourceHref } from "./answers";
 
 const d = (
   over: Partial<{
@@ -23,11 +23,11 @@ const d = (
   assumptions: statements.map((statement) => ({ statement })),
 });
 
-describe("scoreTerms", () => {
+describe("queryTerms", () => {
   it("drops stop words, punctuation and single characters, and dedupes", () => {
-    expect(scoreTerms("Why did we switch from surveys to interviews?")).toEqual(["switch", "surveys", "interviews"]);
-    expect(scoreTerms("a b interviews interviews")).toEqual(["interviews"]);
-    expect(scoreTerms("why did we")).toEqual([]);
+    expect(queryTerms("Why did we switch from surveys to interviews?")).toEqual(["switch", "surveys", "interviews"]);
+    expect(queryTerms("a b interviews interviews")).toEqual(["interviews"]);
+    expect(queryTerms("why did we")).toEqual([]);
   });
 });
 

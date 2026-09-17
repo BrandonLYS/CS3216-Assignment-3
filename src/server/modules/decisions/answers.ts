@@ -1,6 +1,6 @@
 import type { ActivityEventRow } from "@/server/modules/activity/schema";
 import type { CommentRow } from "@/server/modules/comments/schema";
-import { evidenceHref } from "@/shared/lib/hrefs";
+import { decisionHref, evidenceHref } from "@/shared/lib/hrefs";
 import type { DecisionSourceRow } from "./schema";
 
 /**
@@ -14,7 +14,7 @@ const STOP_WORDS = new Set(
 );
 
 /** Lowercased, de-punctuated query terms without stop words or single characters. */
-export function scoreTerms(query: string): string[] {
+export function queryTerms(query: string): string[] {
   return [
     ...new Set(
       query
@@ -75,7 +75,7 @@ export interface RankableEvidence {
 export function rankEvidence<T extends RankableEvidence>(rows: T[], terms: string[], limit = 3): T[] {
   if (!terms.length) return [];
   return rows
-    .map((e) => ({ e, score: 3 * hits(e.title, terms) + hits(e.body ?? e.extractedText, terms) }))
+    .map((e) => ({ e, score: 3 * hits(e.title, terms) + hits(e.body || e.extractedText, terms) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
@@ -110,7 +110,7 @@ export function sourceHref(
   if (source.kind === "comment") {
     const c = lookups.comments.get(source.entityId);
     const path = c && ITEM_PATH[c.entityType];
-    return path ? path(projectId, c.entityId) : `/projects/${projectId}/decisions?decision=${decisionId}`;
+    return path ? path(projectId, c.entityId) : decisionHref(projectId, decisionId);
   }
   const ev = lookups.events.get(source.entityId);
   const path = ev && ITEM_PATH[ev.entityType];
