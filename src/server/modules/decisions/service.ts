@@ -5,6 +5,7 @@ import { mutate, type Recorder } from "@/server/core/mutation";
 import { nextNumber } from "@/server/core/sequence";
 import type { DbOrTx, Tx } from "@/server/db/client";
 import { activityRepo } from "@/server/modules/activity/service";
+import { proposalsRepo } from "@/server/modules/proposals/repository";
 import { risksRepo } from "@/server/modules/risks/repository";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { wouldCreateCycle } from "@/server/modules/dependencies/graph";
@@ -71,20 +72,23 @@ async function resolveSources(
     if (seen.has(key)) continue;
     seen.add(key);
     const base = { projectId, kind: s.kind, entityId: s.entityId, passageId: s.passageId ?? null };
+    // A caller-supplied excerpt is kept only when it really occurs in the Source text.
+    const quoted = (text: string) => {
+      const q = s.excerpt?.replace(/\s+/g, " ").trim();
+      return q && text.replace(/\s+/g, " ").toLowerCase().includes(q.toLowerCase())
+        ? q.slice(0, SOURCE_EXCERPT_MAX)
+        : firstLine(text, SOURCE_EXCERPT_MAX);
+    };
     if (s.kind === "evidence") {
       const e = await evidenceRepo.findById(tx, s.entityId);
       if (!e || e.projectId !== projectId) throw bad();
       const text = e.body ?? e.extractedText ?? e.notes ?? "";
-      out.push({ ...base, label: e.title, excerpt: firstLine(text, SOURCE_EXCERPT_MAX) });
+      out.push({ ...base, label: e.title, excerpt: quoted(text) });
     } else if (s.kind === "comment") {
       const c = await commentsRepo.findById(tx, s.entityId);
       if (!c || c.projectId !== projectId) throw bad();
       const who = c.saidByName ? `${c.saidByName}: ` : "";
-      out.push({
-        ...base,
-        label: firstLine(`${who}${c.body}`, LABEL_MAX),
-        excerpt: firstLine(c.body, SOURCE_EXCERPT_MAX),
-      });
+      out.push({ ...base, label: firstLine(`${who}${c.body}`, LABEL_MAX), excerpt: quoted(c.body) });
     } else {
       const ev = await activityRepo.findById(tx, s.entityId);
       if (!ev || ev.projectId !== projectId) throw bad();
@@ -163,6 +167,23 @@ async function attach(tx: Tx, rec: Recorder, decision: DecisionRow, assumption: 
     { field: "assumptions", oldValue: before, newValue: [...before, assumption.statement] },
   ]);
   return edge;
+}
+
+/** Validate, insert and attach one Assumption to a Decision (shared by the create paths). */
+async function createAndAttach(tx: Tx, rec: Recorder, decision: DecisionRow, input: CreateAssumptionInput) {
+  await assertTargetInProject(tx, input);
+  const { decisionId: _decisionId, ...values } = input;
+  void _decisionId;
+  const assumption = await assumptionsRepo.insert(tx, {
+    ...values,
+    targetType: values.targetType ?? null,
+    targetId: values.targetId ?? null,
+    targetField: values.targetField ?? null,
+    assumedUntil: values.assumedUntil ?? null,
+  });
+  rec.created("assumption", input.projectId, assumption.id, firstLine(assumption.statement, LABEL_MAX));
+  await attach(tx, rec, decision, assumption);
+  return assumption;
 }
 
 /** Delete an Assumption that no longer supports any Decision. */
@@ -300,11 +321,20 @@ export const decisionsService = {
     return sourceCandidatesRepo.list(ctx.db, projectId);
   },
 
-  create: (ctx: Ctx, { sources, supersedesId, ...input }: CreateDecisionInput) =>
+  /**
+   * Create a Decision with its Sources, optionally its typed Assumptions and, when it confirms
+   * a Proposal (issue #39), mark that Proposal accepted - all in one transaction.
+   */
+  create: (ctx: Ctx, { sources, supersedesId, proposalId, assumptions = [], ...input }: CreateDecisionInput) =>
     mutate(ctx, async (tx, rec) => {
       await assertOwnsProject(tx, ctx.userId, input.projectId);
       await assertPersonInProject(tx, input.projectId, input.ownerId, "ownerId");
       const resolved = await resolveSources(tx, input.projectId, sources);
+      if (proposalId) {
+        const p = await proposalsRepo.findById(tx, proposalId);
+        if (!p || p.projectId !== input.projectId) throw new NotFoundError("Proposal");
+        if (p.status !== "pending") throw new ConflictError("That proposal was already resolved");
+      }
       const number = await nextNumber(tx, input.projectId, decisions, decisions.number, decisions.projectId);
       const decision = await decisionsRepo.insert(tx, { ...input, number });
       await sourcesRepo.insertMany(
@@ -313,6 +343,10 @@ export const decisionsService = {
       );
       rec.created("decision", input.projectId, decision.id, decision.title);
       if (supersedesId) await linkSupersedes(tx, rec, decision, supersedesId);
+      for (const a of assumptions) {
+        await createAndAttach(tx, rec, decision, { ...a, projectId: input.projectId, decisionId: decision.id });
+      }
+      if (proposalId) await proposalsRepo.markAccepted(tx, proposalId, decision.id);
       return decision;
     }),
 
@@ -381,19 +415,7 @@ export const decisionsService = {
     mutate(ctx, async (tx, rec) => {
       const decision = await getOwned(tx, ctx.userId, input.decisionId);
       if (decision.projectId !== input.projectId) throw new NotFoundError("Decision");
-      await assertTargetInProject(tx, input);
-      const { decisionId: _decisionId, ...values } = input;
-      void _decisionId;
-      const assumption = await assumptionsRepo.insert(tx, {
-        ...values,
-        targetType: values.targetType ?? null,
-        targetId: values.targetId ?? null,
-        targetField: values.targetField ?? null,
-        assumedUntil: values.assumedUntil ?? null,
-      });
-      rec.created("assumption", input.projectId, assumption.id, firstLine(assumption.statement, LABEL_MAX));
-      await attach(tx, rec, decision, assumption);
-      return assumption;
+      return createAndAttach(tx, rec, decision, input);
     }),
 
   attachAssumption: (ctx: Ctx, { decisionId, assumptionId }: AttachAssumptionInput) =>

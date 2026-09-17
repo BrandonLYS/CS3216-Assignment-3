@@ -18,6 +18,10 @@ export const commentsRepo = {
       )
       .orderBy(asc(comments.createdAt), asc(comments.id)),
 
+  /** Every Comment in a Project, oldest first (the Proposal pass reads them as Sources). */
+  listByProject: (db: DbOrTx, projectId: string) =>
+    db.select().from(comments).where(eq(comments.projectId, projectId)).orderBy(asc(comments.createdAt)),
+
   findById: async (db: DbOrTx, id: string): Promise<CommentRow | undefined> => {
     const [row] = await db.select().from(comments).where(eq(comments.id, id));
     return row;

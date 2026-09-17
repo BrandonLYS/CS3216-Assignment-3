@@ -19,6 +19,8 @@ export const sourceInputSchema = z.object({
   kind: z.enum(SOURCE_KINDS),
   entityId: z.string().min(1),
   passageId: z.string().nullable().optional(),
+  /** Verbatim passage the caller cites; kept only when it is found in the Source text. */
+  excerpt: z.string().max(2000).nullable().optional(),
 });
 export type SourceInput = z.infer<typeof sourceInputSchema>;
 
@@ -38,6 +40,10 @@ export const createDecisionSchema = z.object({
   revisitWhen: optionalText,
   supersedesId: optionalId,
   sources: sourcesField,
+  /** Proposal this Decision confirms (issue #39); marked accepted in the same transaction. */
+  proposalId: optionalId,
+  /** Typed Assumptions created and attached together with the Decision. */
+  assumptions: z.preprocess(parseJsonIfString, z.array(z.lazy(() => inlineAssumptionSchema)).optional()),
 });
 
 export const updateDecisionSchema = z.object({
@@ -110,10 +116,22 @@ export function assumptionFieldErrors(v: AssumptionShape): Record<string, string
   return errors;
 }
 
-export const createAssumptionSchema = assumptionShape.superRefine((v, ctx) => {
-  for (const [path, messages] of Object.entries(assumptionFieldErrors(v)))
-    for (const message of messages) ctx.addIssue({ code: "custom", path: [path], message });
-});
+const refineAssumption = <T extends z.ZodType<AssumptionShape>>(schema: T) =>
+  schema.superRefine((v, ctx) => {
+    for (const [path, messages] of Object.entries(assumptionFieldErrors(v)))
+      for (const message of messages) ctx.addIssue({ code: "custom", path: [path], message });
+  });
+
+export const createAssumptionSchema = refineAssumption(assumptionShape);
+
+/** An Assumption posted together with its Decision; `projectId`/`decisionId` come from the Decision. */
+export const inlineAssumptionSchema = assumptionShape
+  .omit({ projectId: true, decisionId: true })
+  .superRefine((v, ctx) => {
+    for (const [path, messages] of Object.entries(assumptionFieldErrors({ ...v, projectId: "", decisionId: "" })))
+      for (const message of messages) ctx.addIssue({ code: "custom", path: [path], message });
+  });
+export type InlineAssumptionInput = z.infer<typeof inlineAssumptionSchema>;
 
 export const attachAssumptionSchema = z.object({ decisionId: z.string(), assumptionId: z.string() });
 export const retireAssumptionSchema = z.object({ id: z.string() });
