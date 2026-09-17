@@ -62,6 +62,10 @@ export const assumptions = pgTable(
     targetField: dateTargetFieldEnum("target_field"),
     assumedUntil: date("assumed_until"),
     brokenByEventId: text("broken_by_event_id"),
+    /** Human sentence composed by the detector (or the PM) when the Assumption broke. */
+    brokenReason: text("broken_reason"),
+    /** Set when the PM dismisses the impact alert; never clears `state`. */
+    alertDismissedAt: timestamp("alert_dismissed_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

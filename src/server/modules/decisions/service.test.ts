@@ -307,7 +307,8 @@ describe("supersede", () => {
     expect(edge).toBeDefined();
     expect(await sourcesRepo.listForEdges(ctx.db, [edge!.id])).toHaveLength(1);
     const statusEv = captured.find((e) => e.entityId === older.id && e.action === "updated");
-    expect(statusEv?.changes).toEqual([{ field: "status", oldValue: "active", newValue: "superseded" }]);
+    expect(statusEv?.changes).toMatchObject([{ field: "status", oldValue: "active", newValue: "superseded" }]);
+    expect(statusEv?.changes[0]?.activityEventId).toMatch(/[0-9a-f-]{36}/);
     const list = await decisionsService.list(ctx, projectId);
     expect(list.find((r) => r.decision.id === older.id)?.supersededById).toBe(newer.id);
     expect(list.find((r) => r.decision.id === newer.id)?.supersedesId).toBe(older.id);

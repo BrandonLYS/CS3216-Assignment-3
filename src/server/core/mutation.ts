@@ -73,6 +73,9 @@ export class Recorder {
   }
 
   async flush(tx: Tx) {
+    // One row per created/deleted event and one per change of an updated event; `owners`
+    // remembers, in insertion order, where each returned id goes.
+    const owners: Array<(id: string) => void> = [];
     const rows: NewActivityEventRow[] = this.pending.flatMap((e) => {
       const base = {
         projectId: e.projectId,
@@ -85,17 +88,18 @@ export class Recorder {
         occurredAt: e.occurredAt,
       };
       if (e.action !== "updated") {
+        owners.push((id) => (e.activityEventId = id));
         if (e.snapshot === undefined) return [base];
         return [{ ...base, ...(e.action === "created" ? { newValue: e.snapshot } : { oldValue: e.snapshot }) }];
       }
-      return e.changes.map((c) => ({
-        ...base,
-        field: c.field,
-        oldValue: c.oldValue,
-        newValue: c.newValue,
-      }));
+      return e.changes.map((c) => {
+        owners.push((id) => (c.activityEventId = id));
+        return { ...base, field: c.field, oldValue: c.oldValue, newValue: c.newValue };
+      });
     });
-    if (rows.length) await tx.insert(activityEvents).values(rows);
+    if (!rows.length) return;
+    const inserted = await tx.insert(activityEvents).values(rows).returning({ id: activityEvents.id });
+    inserted.forEach((r, i) => owners[i]?.(r.id));
   }
 
   async publish() {

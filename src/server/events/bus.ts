@@ -20,6 +20,8 @@ export interface DomainEvent {
   changes: FieldChange[];
   /** Optional payload for created/deleted events (e.g. a Comment's body); mirrors the Activity Event's new/old value. */
   snapshot?: unknown;
+  /** Activity Event row id for created/deleted events; `updated` events carry one id per change instead. */
+  activityEventId?: string;
   occurredAt: Date;
 }
 

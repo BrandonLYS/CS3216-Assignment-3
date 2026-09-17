@@ -208,8 +208,10 @@ describe("evaluateAttention", () => {
       milestones: [milestone("m1", "2026-09-05")],
       risks: [risk("rb", "high", "high", OPEN, "Beta"), risk("ra", "high", "high", OPEN, "Alpha")],
       dependencies: [edge("task", "up1", "task", "d-small"), edge("task", "up2", "task", "d-big")],
+      assumptions: [{ id: "a1", statement: "Dataset arrives before UAT", brokenReason: "Moved", affectedDecisions: 1 }],
     });
     expect(r.groups.map((g) => g.rule)).toEqual([...ATTENTION_RULES]);
+    expect(group(r, "assumption_broken")!.items.map((i) => i.entityId)).toEqual(["a1"]);
     expect(group(r, "task_overdue")!.items.map((i) => i.entityId)).toEqual(["o2", "o1"]);
     expect(group(r, "dependency_late")!.items.map((i) => i.entityId)).toEqual(["d-big", "d-small"]);
     expect(group(r, "milestone_past_open")!.items.map((i) => i.entityId)).toEqual(["m1"]);
@@ -217,6 +219,7 @@ describe("evaluateAttention", () => {
     expect(group(r, "risk_top")!.items.map((i) => i.label)).toEqual(["Alpha", "Beta"]);
     expect(group(r, "task_due_soon")!.items.map((i) => i.entityId)).toEqual(["s1", "s2"]);
     expect(r.counts).toEqual({
+      assumption_broken: 1,
       task_overdue: 2,
       dependency_late: 2,
       milestone_past_open: 1,
@@ -253,6 +256,7 @@ describe("evaluateAttention", () => {
     const r = run({});
     expect(Object.keys(r.counts).sort()).toEqual([...ATTENTION_RULES].sort());
     expect(r.counts).toEqual({
+      assumption_broken: 0,
       task_overdue: 0,
       dependency_late: 0,
       milestone_past_open: 0,

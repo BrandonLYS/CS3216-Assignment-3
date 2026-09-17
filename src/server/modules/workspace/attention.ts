@@ -26,7 +26,7 @@ export interface AttentionItem {
   matched: AttentionRule[];
   /** One human sentence per matched rule, same order as `matched`. */
   reasons: string[];
-  entityType: "task" | "milestone" | "risk";
+  entityType: "task" | "milestone" | "risk" | "assumption";
   entityId: string;
   /** Task title / Milestone name / Risk title. */
   label: string;
@@ -81,6 +81,14 @@ export interface AttentionInput {
     predecessorId: string;
     successorType: DependencyItemType;
     successorId: string;
+  }>;
+  /** Broken, undismissed Assumptions (issue #38); the caller filters state and dismissal. */
+  assumptions?: Array<{
+    id: string;
+    statement: string;
+    brokenReason: string | null;
+    /** Decisions resting on it; more affected sorts first. */
+    affectedDecisions: number;
   }>;
 }
 
@@ -252,6 +260,24 @@ export function evaluateAttention(input: AttentionInput): AttentionResult {
         } ${fmtDate(anchor)}`,
         urgency: -slip,
         date: anchor,
+      },
+    );
+  }
+
+  for (const a of input.assumptions ?? []) {
+    hit(
+      `assumption:${a.id}`,
+      {
+        entityType: "assumption",
+        entityId: a.id,
+        label: a.statement,
+        href: `/projects/${project.id}#impact`,
+        projectId: project.id,
+      },
+      {
+        rule: "assumption_broken",
+        reason: a.brokenReason ?? "Broken by hand",
+        urgency: -a.affectedDecisions,
       },
     );
   }

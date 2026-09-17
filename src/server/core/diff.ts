@@ -2,6 +2,8 @@ export interface FieldChange {
   field: string;
   oldValue: unknown;
   newValue: unknown;
+  /** Id of the Activity Event row for this change; set by the Recorder after flush. */
+  activityEventId?: string;
 }
 
 const normalise = (v: unknown) => (v instanceof Date ? v.toISOString() : (v ?? null));
