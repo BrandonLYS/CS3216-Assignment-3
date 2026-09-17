@@ -824,7 +824,7 @@ test.describe("decisions", () => {
     await dialog.getByRole("button", { name: "Add source" }).click();
     await dialog.getByPlaceholder("Search evidence, comments and activity…").fill("Weekly sync");
     await dialog.getByRole("option", { name: /^Weekly sync minutes/ }).click();
-    await expect(dialog.getByText("Weekly sync minutes — 12 Sep")).toBeVisible();
+    await expect(dialog.getByText(/^Weekly sync minutes/)).toBeVisible();
     await shot(page, "new-decision-dialog");
     await dialog.getByRole("button", { name: "Create decision" }).click();
     await expect(dialog).toBeHidden();

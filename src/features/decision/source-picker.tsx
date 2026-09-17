@@ -6,6 +6,7 @@ import type { SourceCandidates } from "@/server/modules/decisions/repository";
 import type { SourceInput } from "@/server/modules/decisions/validation";
 import { labelFor, type SourceKind } from "@/shared/domain";
 import { fmtDate } from "@/shared/lib/dates";
+import { firstLine } from "@/shared/lib/text";
 import { Button, CommandPicker, useActionForm, useFieldError, type CommandPickerItem } from "@/shared/ui";
 
 export interface PickedSource extends SourceInput {
@@ -17,12 +18,6 @@ const KIND_ICON: Record<SourceKind, typeof FileText> = {
   comment: MessageSquare,
   activity_event: Activity,
 };
-
-const firstLine = (s: string) =>
-  s
-    .split(/\r?\n/)
-    .find((l) => l.trim())
-    ?.trim() ?? "";
 
 /** Flatten the three candidate lists into picker items; the id encodes the kind. */
 export function candidateItems(c: SourceCandidates): CommandPickerItem[] {

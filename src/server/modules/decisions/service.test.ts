@@ -15,7 +15,8 @@ import type { TaskRow } from "@/server/modules/tasks/schema";
 import { tasksService } from "@/server/modules/tasks/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { assumptionsRepo, edgesRepo, sourcesRepo } from "./repository";
-import { decisionsService, firstLine } from "./service";
+import { firstLine } from "@/shared/lib/text";
+import { decisionsService } from "./service";
 import type { CreateAssumptionInput, CreateDecisionInput } from "./validation";
 
 let ctx: Ctx;

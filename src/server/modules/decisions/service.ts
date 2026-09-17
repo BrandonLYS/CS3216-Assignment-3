@@ -14,6 +14,7 @@ import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { SOURCE_EXCERPT_MAX, labelFor } from "@/shared/domain";
+import { firstLine } from "@/shared/lib/text";
 import { assumptionsRepo, decisionsRepo, edgesRepo, sourceCandidatesRepo, sourcesRepo } from "./repository";
 import {
   decisions,
@@ -33,17 +34,6 @@ import {
 } from "./validation";
 
 const LABEL_MAX = 120;
-
-/** First non-empty line, truncated by code point so emoji are never split. */
-export function firstLine(text: string, max: number): string {
-  const line =
-    text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .find((l) => l.length > 0) ?? "";
-  const chars = Array.from(line);
-  return chars.length <= max ? line : `${chars.slice(0, max - 1).join("")}…`;
-}
 
 async function getOwned(db: DbOrTx, userId: string, id: string): Promise<DecisionRow> {
   const d = await decisionsRepo.findById(db, id);

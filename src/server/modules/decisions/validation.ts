@@ -50,14 +50,17 @@ export const supersedeDecisionSchema = z.object({
   supersedesId: z.string().nullable(),
 });
 
+/** Form selects post "" for "nothing chosen"; treat it as null so the subtype matrix reports the real error. */
+const emptyToNull = <T extends z.ZodType>(schema: T) => z.preprocess((v) => (v === "" ? null : v), schema);
+
 const assumptionShape = z.object({
   projectId: z.string(),
   decisionId: z.string(),
   statement: requiredText("Statement", 500),
   subtype: z.enum(ASSUMPTION_SUBTYPES, { message: "Choose a subtype" }),
-  targetType: z.enum(ASSUMPTION_TARGET_TYPES).nullable().optional(),
+  targetType: emptyToNull(z.enum(ASSUMPTION_TARGET_TYPES).nullable().optional()),
   targetId: optionalId,
-  targetField: z.enum(DATE_TARGET_FIELDS).nullable().optional(),
+  targetField: emptyToNull(z.enum(DATE_TARGET_FIELDS).nullable().optional()),
   assumedUntil: optionalDate,
 });
 type AssumptionShape = z.infer<typeof assumptionShape>;
