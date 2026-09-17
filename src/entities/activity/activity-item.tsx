@@ -18,9 +18,25 @@ const HUMAN_FIELDS: Record<string, string> = {
   reviewDate: "review date",
   sourceDate: "source date",
   evidence: "evidence",
+  decidedOn: "decided on",
+  revisitWhen: "revisit trigger",
+  leadsTo: "consequences",
+  assumedUntil: "assumed-until date",
+  brokenReason: "broken reason",
+  brokenByEventId: "broken-by change",
+  alertDismissedAt: "alert",
 };
 
-const ID_FIELDS = new Set(["statusId", "assigneeId", "ownerId", "milestoneId", "teamId", "labelIds"]);
+const ID_FIELDS = new Set([
+  "statusId",
+  "assigneeId",
+  "ownerId",
+  "milestoneId",
+  "teamId",
+  "labelIds",
+  "brokenByEventId",
+  "alertDismissedAt",
+]);
 
 function fmt(v: unknown): string {
   if (v === null || v === undefined || v === "") return "empty";

@@ -884,3 +884,64 @@ test.describe("decisions", () => {
     await shot(page, "list-with-superseded");
   });
 });
+
+test.describe("impact", () => {
+  const shot = shots("impact");
+
+  const moveUat = async (page: Page, date: string) => {
+    await page.getByRole("main").getByRole("link", { name: "Timeline", exact: true }).click();
+    await expect(page).toHaveURL(/\/timeline$/);
+    await page.getByRole("link", { name: "UAT begins" }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("Name")).toHaveValue("UAT begins");
+    await dialog.getByLabel("Due date").fill(date);
+    await dialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog).toBeHidden();
+  };
+
+  test("moving a Milestone date past a date Assumption raises a dismissible impact alert", async ({ page }) => {
+    await openProject(page, "Decisions");
+    // D-1 (superseded by D-2 in the decisions flow) still rests on the UAT date Assumption.
+    await page.getByLabel("Show superseded").check();
+    await page.getByText("Switch from surveys to interviews").click();
+    const edit = page.getByRole("dialog", { name: "D-1" });
+    await edit.getByRole("button", { name: "Add item" }).click();
+    await edit.getByPlaceholder("Search tasks, milestones and risks…").fill("Load-test");
+    await edit.getByRole("option", { name: /Load-test the new gateway/ }).click();
+    await expect(edit.getByText("Load-test the new gateway")).toBeVisible();
+    await shot(page, "leads-to");
+    await edit.getByRole("button", { name: "Cancel" }).click();
+
+    // First move stays before the assumed date (1 Oct): nothing breaks.
+    await moveUat(page, "2026-09-25");
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page.getByText("Needs attention")).toBeVisible();
+    await expect(page.getByTestId("impact-alerts")).toHaveCount(0);
+
+    await moveUat(page, "2026-10-20");
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    const alerts = page.getByTestId("impact-alerts");
+    await expect(alerts).toBeVisible();
+    await expect(alerts.getByText("Merchant dataset arrives before UAT")).toBeVisible();
+    await expect(alerts.getByTestId("impact-reason")).toContainText("20 Oct 2026");
+    await expect(alerts.getByTestId("impact-reason")).toContainText("past the assumed 1 Oct 2026");
+    await expect(alerts.getByText("Affects 1 decision")).toBeVisible();
+    await expect(alerts.getByRole("link", { name: /D-1 Switch from surveys to interviews/ })).toBeVisible();
+    await expect(alerts.getByText(/Weekly sync minutes/)).toBeVisible();
+    await expect(alerts.getByRole("link", { name: /UAT begins/ })).toBeVisible();
+    await expect(alerts.getByRole("link", { name: /Load-test the new gateway/ })).toBeVisible();
+    const list = page.locator("section", { hasText: "Needs attention" }).first();
+    await expect(list.getByText("Broken assumption", { exact: true }).first()).toBeVisible();
+    await shot(page, "alert");
+
+    await alerts.getByRole("button", { name: "Dismiss" }).click();
+    await expect(page.getByTestId("impact-alerts")).toHaveCount(0);
+    await expect(list.getByText("Broken assumption", { exact: true })).toHaveCount(0);
+    await shot(page, "dismissed");
+
+    await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+    await page.getByLabel("Show superseded").check();
+    await expect(page.getByRole("row").filter({ hasText: "D-1" }).getByText("Broken")).toBeVisible();
+    await shot(page, "decision-still-broken");
+  });
+});
