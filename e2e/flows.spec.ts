@@ -1041,3 +1041,104 @@ test.describe("proposals", () => {
     await expect(cards).toHaveCount(0);
   });
 });
+
+test.describe("graph", () => {
+  const shot = shots("graph");
+
+  test("the graph centres on a Decision, re-centres on its broken Assumption and opens from an alert", async ({
+    page,
+  }) => {
+    await openProject(page, "Decisions");
+    await page.getByLabel("Show superseded").check();
+    // From the Decision list: D-1 rests on the date Assumption the impact flow broke (alert dismissed, still broken).
+    await page.getByRole("link", { name: "Show why D-1" }).click();
+    await expect(page).toHaveURL(/\/graph\?node=decision:[0-9a-f-]{36}$/);
+    const centre = page.getByTestId("graph-centre");
+    const causes = page.getByTestId("graph-causes");
+    const consequences = page.getByTestId("graph-consequences");
+    await expect(centre).toContainText("D-1");
+    await expect(centre).toContainText("Switch from surveys to interviews");
+    await expect(page.getByTestId("graph-broken-note")).toBeVisible();
+    const broken = causes.getByTestId("graph-node").filter({ hasText: "Merchant dataset arrives before UAT" });
+    await expect(broken).toHaveAttribute("data-highlighted", "true");
+    await expect(broken.getByTestId("graph-edge")).toHaveAttribute("data-highlighted", "true");
+    await expect(broken.getByRole("link", { name: /Weekly sync minutes/ })).toBeVisible();
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: "Load-test the new gateway" })).toContainText(
+      "leads to this",
+    );
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: "D-2" })).toContainText("superseded by this");
+    await shot(page, "centred-on-decision");
+
+    // Re-centre on the Assumption: nothing leads to it; the watched Milestone and both Decisions follow.
+    await broken.getByRole("link", { name: "Centre here" }).click();
+    await expect(page).toHaveURL(/\/graph\?node=assumption:[0-9a-f-]{36}$/);
+    await expect(centre).toContainText("Merchant dataset arrives before UAT");
+    await expect(causes).toContainText("Nothing recorded leads here");
+    await expect(consequences.getByTestId("graph-node")).toHaveCount(4);
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: "UAT begins" })).toContainText(
+      "No source recorded",
+    );
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: "Load-test the new gateway" })).toContainText(
+      "2 steps away",
+    );
+    await shot(page, "recentred-on-assumption");
+
+    // From an alert: break an external-rule Assumption on D-2 by hand and follow "Show me why".
+    await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+    await expect(page).toHaveURL(/\/decisions$/);
+    await page
+      .getByRole("row")
+      .filter({ hasText: "Interviews plus a short exit survey" })
+      .getByRole("cell")
+      .nth(1)
+      .click();
+    const edit = page.getByRole("dialog", { name: "D-2" });
+    await expect(edit).toBeVisible();
+    await edit.getByRole("button", { name: "New assumption" }).click();
+    const assumption = page.getByRole("dialog", { name: "New assumption" });
+    await assumption.getByLabel("Statement").fill("Vendor contract renews in Q4");
+    await assumption.getByLabel("Subtype").selectOption("external_rule");
+    await assumption.getByRole("button", { name: "Add assumption" }).click();
+    await expect(assumption).toBeHidden();
+    await edit
+      .getByRole("listitem")
+      .filter({ hasText: "Vendor contract renews in Q4" })
+      .getByRole("button", { name: "Mark broken" })
+      .click();
+    await expect(edit.getByRole("listitem").filter({ hasText: "Vendor contract renews in Q4" })).toContainText(
+      "Broken",
+    );
+    await edit.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    const alerts = page.getByTestId("impact-alerts");
+    await expect(alerts.getByText("Vendor contract renews in Q4")).toBeVisible();
+    await alerts.getByRole("link", { name: "Show me why" }).click();
+    await expect(page).toHaveURL(/\/graph\?node=assumption:[0-9a-f-]{36}$/);
+    await expect(centre).toContainText("Vendor contract renews in Q4");
+    await expect(centre).toContainText("Broken");
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: "D-2" })).toBeVisible();
+    await shot(page, "opened-from-alert");
+
+    // Re-centre on D-2: the new Assumption is a highlighted cause one step back; D-1 two steps back is
+    // highlighted too because the broken UAT Assumption reaches D-2 through it, while the retired
+    // person Assumption is not.
+    await consequences
+      .getByTestId("graph-node")
+      .filter({ hasText: "D-2" })
+      .getByRole("link", { name: "Centre here" })
+      .click();
+    await expect(centre).toContainText("Interviews plus a short exit survey");
+    await expect(causes.getByTestId("graph-node").filter({ hasText: "Vendor contract renews in Q4" })).toHaveAttribute(
+      "data-highlighted",
+      "true",
+    );
+    const d1 = causes.locator('[data-testid="graph-node"][data-node^="decision:"]');
+    await expect(d1).toContainText("D-1");
+    await expect(d1).toContainText("superseded by D-2");
+    await expect(d1).toHaveAttribute("data-highlighted", "true");
+    await expect(
+      causes.getByTestId("graph-node").filter({ hasText: "Priya stays on the project" }),
+    ).not.toHaveAttribute("data-highlighted", "true");
+    await shot(page, "broken-path-highlight");
+  });
+});
