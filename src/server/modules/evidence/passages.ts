@@ -18,8 +18,8 @@ const TIME = String.raw`\[?(\d{1,2}:\d{2}(?::\d{2})?)\]?`;
 const LABEL = new RegExp(String.raw`^(?:${TIME}\s*[-–]?\s*)?([A-Z][\w .'-]{0,40}?)\s*:\s*(.*)$`);
 /** A line that is only a timestamp: the next lines are the turn. */
 const TIME_ONLY = new RegExp(String.raw`^${TIME}\s*$`);
-/** `[00:00:01] text` with no speaker. */
-const TIME_LEAD = new RegExp(String.raw`^${TIME}\s*[-–]?\s*(.*)$`);
+/** `[00:00:01] text` or `00:00:01 - text` with no speaker; a bare `12:30 meeting moved` is prose. */
+const TIME_LEAD = new RegExp(String.raw`^(?:\[(\d{1,2}:\d{2}(?::\d{2})?)\]|(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–])\s*(.*)$`);
 /** SRT sequence numbers and SRT/WebVTT cue timing lines carry no text. */
 const SRT_NOISE = /^(\d+|\d{1,2}:\d{2}(?::\d{2})?[.,]\d{1,3}\s*-->.*|WEBVTT.*)$/;
 
@@ -47,7 +47,7 @@ function labelled(lines: string[]): Draft[] {
     }
     const lead = TIME_LEAD.exec(line);
     if (lead) {
-      start({ speaker: null, timestamp: lead[1]!, text: lead[2]!.trim() });
+      start({ speaker: null, timestamp: (lead[1] ?? lead[2])!, text: lead[3]!.trim() });
       continue;
     }
     const last = cur();

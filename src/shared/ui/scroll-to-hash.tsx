@@ -21,6 +21,7 @@ export function ScrollToHash({ prefix }: { prefix: string }) {
       const el = document.getElementById(id);
       if (!el) return;
       el.scrollIntoView({ block: "center" });
+      if (timer) clearTimeout(timer);
       el.classList.add(...HIGHLIGHT);
       timer = setTimeout(() => el.classList.remove(...HIGHLIGHT), 2500);
     };

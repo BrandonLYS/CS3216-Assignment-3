@@ -3,7 +3,6 @@ import type { DbOrTx } from "@/server/db/client";
 import { activityEvents } from "@/server/modules/activity/schema";
 import { comments } from "@/server/modules/comments/schema";
 import { evidence } from "@/server/modules/evidence/schema";
-import { passagesRepo } from "@/server/modules/evidence/repository";
 import { people } from "@/server/modules/people/schema";
 import type { AssumptionTargetType, DecisionEdgeKind } from "@/shared/domain";
 import {
@@ -194,7 +193,7 @@ export const sourcesRepo = {
 /** What the Source picker can cite: light rows, newest first, bounded. */
 export const sourceCandidatesRepo = {
   list: async (db: DbOrTx, projectId: string, limit = 200) => {
-    const [ev, cm, ae, passages] = await Promise.all([
+    const [ev, cm, ae] = await Promise.all([
       db
         .select({ id: evidence.id, title: evidence.title, kind: evidence.kind, sourceDate: evidence.sourceDate })
         .from(evidence)
@@ -228,21 +227,9 @@ export const sourceCandidatesRepo = {
         .where(and(eq(activityEvents.projectId, projectId), ne(activityEvents.entityType, "decision")))
         .orderBy(desc(activityEvents.occurredAt))
         .limit(limit),
-      passagesRepo.listForProject(db, projectId),
     ]);
-    // Passages ride along with their transcript so the picker can narrow a citation (issue #42).
-    return {
-      evidence: ev.map((e) => ({
-        ...e,
-        passages: passages
-          .filter((p) => p.evidenceId === e.id)
-          .map(({ id, ordinal, speaker, timestamp, text }) => ({ id, ordinal, speaker, timestamp, text })),
-      })),
-      comments: cm,
-      activityEvents: ae,
-    };
+    return { evidence: ev, comments: cm, activityEvents: ae };
   },
 };
 
 export type DecisionListItem = Awaited<ReturnType<typeof decisionsRepo.listByProject>>[number];
-export type SourceCandidates = Awaited<ReturnType<typeof sourceCandidatesRepo.list>>;

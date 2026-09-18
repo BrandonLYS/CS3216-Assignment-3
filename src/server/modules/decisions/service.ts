@@ -16,7 +16,7 @@ import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import { SOURCE_EXCERPT_MAX, labelFor } from "@/shared/domain";
-import { firstLine } from "@/shared/lib/text";
+import { firstLine, passageWhere } from "@/shared/lib/text";
 import { decisionHref, evidenceHref } from "@/shared/lib/hrefs";
 import { citation, queryTerms, rankDecisions, rankEvidence, sourceHref } from "./answers";
 import { assumptionsRepo, decisionsRepo, edgesRepo, sourceCandidatesRepo, sourcesRepo } from "./repository";
@@ -55,9 +55,6 @@ async function getOwnedAssumption(db: DbOrTx, userId: string, id: string): Promi
   await assertOwnsProject(db, userId, a.projectId);
   return a;
 }
-
-/** How a cited Passage is named after its Evidence title: the speaker, else its position. */
-export const passageWhere = (p: { speaker: string | null; ordinal: number }) => p.speaker ?? `passage ${p.ordinal + 1}`;
 
 /**
  * Turn Source inputs into rows: each must live in this Project, and `label` / `excerpt` are
@@ -435,9 +432,22 @@ export const decisionsService = {
     return out;
   },
 
+  /** What the Source picker can cite; a transcript carries its Passages so a citation can be narrowed (issue #42). */
   sourceCandidates: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
-    return sourceCandidatesRepo.list(ctx.db, projectId);
+    const [base, passages] = await Promise.all([
+      sourceCandidatesRepo.list(ctx.db, projectId),
+      passagesRepo.listForProject(ctx.db, projectId),
+    ]);
+    return {
+      ...base,
+      evidence: base.evidence.map((e) => ({
+        ...e,
+        passages: passages
+          .filter((p) => p.evidenceId === e.id)
+          .map(({ id, ordinal, speaker, timestamp, text }) => ({ id, ordinal, speaker, timestamp, text })),
+      })),
+    };
   },
 
   /**
@@ -649,3 +659,5 @@ export const decisionsService = {
 };
 
 export type DecisionListItem = Awaited<ReturnType<typeof decisionsService.list>>[number];
+
+export type SourceCandidates = Awaited<ReturnType<typeof decisionsService.sourceCandidates>>;

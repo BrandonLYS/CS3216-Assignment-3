@@ -3,12 +3,12 @@
 import { Activity, ExternalLink, FileText, MessageSquare, Plus, X } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
-import type { SourceCandidates } from "@/server/modules/decisions/repository";
+import type { SourceCandidates } from "@/server/modules/decisions/service";
 import type { SourceInput } from "@/server/modules/decisions/validation";
 import { labelFor, type SourceKind } from "@/shared/domain";
 import { fmtDate } from "@/shared/lib/dates";
 import { evidenceHref, passageHref } from "@/shared/lib/hrefs";
-import { firstLine } from "@/shared/lib/text";
+import { firstLine, passageWhere } from "@/shared/lib/text";
 import { Button, CommandPicker, useActionForm, useFieldError, type CommandPickerItem } from "@/shared/ui";
 
 export interface PickedSource extends SourceInput {
@@ -24,9 +24,6 @@ const KIND_ICON: Record<SourceKind, typeof FileText> = {
 const WHOLE = "whole";
 const sourceKey = (s: Pick<SourceInput, "kind" | "entityId" | "passageId">) =>
   `${s.kind}:${s.entityId}:${s.passageId ?? ""}`;
-
-/** How a cited Passage is named after its Evidence title: the speaker, else its position. */
-const passageWhere = (p: { speaker: string | null; ordinal: number }) => p.speaker ?? `passage ${p.ordinal + 1}`;
 
 /** Flatten the three candidate lists into picker items; the id encodes the kind. */
 export function candidateItems(c: SourceCandidates): CommandPickerItem[] {

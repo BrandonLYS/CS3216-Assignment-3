@@ -8,6 +8,7 @@ import { decisionsService } from "@/server/modules/decisions/service";
 import type { CreateDecisionInput } from "@/server/modules/decisions/validation";
 import { transcriptText } from "@/server/modules/evidence/passages";
 import { evidenceRepo, passagesRepo } from "@/server/modules/evidence/repository";
+import { evidenceText } from "@/server/modules/evidence/service";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
@@ -23,7 +24,6 @@ export type PassOutcome =
   | { extractor: ProposalExtractor; sourcesPassed: number; proposed: number; discarded: number };
 
 const hashOf = (text: string) => createHash("sha1").update(text).digest("hex");
-const evidenceText = (e: { body: string | null; extractedText: string | null }) => e.body ?? e.extractedText ?? "";
 
 const transcriptOf = (messages: UIMessage[]) =>
   messages

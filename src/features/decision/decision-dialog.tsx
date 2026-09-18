@@ -9,7 +9,7 @@ import {
   supersedeDecisionAction,
   updateDecisionAction,
 } from "@/server/modules/decisions/actions";
-import type { SourceCandidates } from "@/server/modules/decisions/repository";
+import type { SourceCandidates } from "@/server/modules/decisions/service";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
 import type { ProposalRow } from "@/server/modules/proposals/schema";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";

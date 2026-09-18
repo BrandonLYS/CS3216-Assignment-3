@@ -94,6 +94,8 @@ describe("segmentTranscript", () => {
     );
     expect(out.map((p) => p.speaker)).toEqual(["Priya", "Marcus", "Priya"]);
     expect(out[0]!.text).toBe("see https://example.com/notes for the 12:30 meeting");
+    const prose = segmentTranscript("12:30 meeting moved to Friday.\n\n12:45 room booked.");
+    expect(prose.map((p) => p.timestamp)).toEqual([null, null]);
   });
 });
 

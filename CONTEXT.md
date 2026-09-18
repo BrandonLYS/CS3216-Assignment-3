@@ -70,7 +70,7 @@ A source artifact attached to a Project (plan, minutes, transcript, status updat
 _Avoid_: Document, file, attachment, upload
 
 **Passage**:
-One ordered segment of a transcript: its text, plus the speaker and timestamp when the transcript has them. A Source may cite a Passage instead of the whole Evidence; when the Passage is gone, the Source degrades to the whole Evidence.
+One ordered part of a transcript: its text, plus the speaker and timestamp when the transcript has them. A Source may cite a Passage instead of the whole Evidence; when the Passage is gone, the Source degrades to the whole Evidence.
 _Avoid_: Chunk, snippet, segment (as a noun), quote
 
 ### Decision Memory
@@ -84,7 +84,7 @@ A condition a Decision rests on, which the Project can later contradict; unlike 
 _Avoid_: Premise, precondition, constraint, hypothesis, risk
 
 **Source**:
-A citation from a Decision or an edge to something already in the Project history: an Evidence item, a Comment or an Activity Event, optionally narrowed to one passage of the Evidence.
+A citation from a Decision or an edge to something already in the Project history: an Evidence item, a Comment or an Activity Event, optionally narrowed to one Passage of the Evidence.
 _Avoid_: Reference, link (see Dependency and Evidence link), attachment, footnote
 
 **Proposal**:
