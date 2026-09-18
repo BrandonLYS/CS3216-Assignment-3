@@ -135,6 +135,22 @@ describe("neighbourhood", () => {
     expect(r.brokenReachesCentre).toBe(true);
   });
 
+  it("follows a broken path longer than maxDepth through sideways edges between cause nodes", () => {
+    // a1 -> d1 -> t0 puts every node within the bound, but the break also reaches t0 along the
+    // five-edge chain a1 -> d1 -> t1 -> t2 -> t3 -> t0; three passes would leave t3 unmarked.
+    const r = neighbourhood({
+      centre: { type: "task", id: "t0" },
+      edges: [supports("a1", "d1"), leadsTo("d1", "task", "t0"), leadsTo("d1", "task", "t1")],
+      assumptions: [assumption("a1", { state: "broken", subtype: "external_rule" })],
+      dependencies: [dep("t1", "t2"), dep("t2", "t3"), dep("t3", "t0")],
+      known: known("assumption:a1", "decision:d1", "task:t0", "task:t1", "task:t2", "task:t3"),
+    });
+    expect(ids(r.causes)).toEqual(["d1@1", "t3@1", "a1@2", "t2@2", "t1@3"]);
+    expect(r.causes.every((n) => n.onBrokenPath)).toBe(true);
+    expect(r.causeEdges.every((e) => e.highlighted)).toBe(true);
+    expect(r.brokenReachesCentre).toBe(true);
+  });
+
   it("does not highlight a broken Assumption on the consequence side", () => {
     const r = neighbourhood({
       ...base,

@@ -1042,6 +1042,7 @@ test.describe("proposals", () => {
   });
 });
 
+// Runs after `decisions` and `impact`: D-1 must exist, be superseded by D-2 and rest on the broken UAT date Assumption.
 test.describe("graph", () => {
   const shot = shots("graph");
 

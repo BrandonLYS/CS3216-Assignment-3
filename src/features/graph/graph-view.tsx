@@ -42,7 +42,7 @@ export function GraphView({ graph, projectId }: { graph: GraphNeighbourhood; pro
   };
   return (
     <div className="flex-1 overflow-y-auto px-6 py-5">
-      <div className="grid grid-cols-[1fr_minmax(16rem,1.2fr)_1fr] gap-6">
+      <div className="grid gap-6 lg:grid-cols-[1fr_minmax(16rem,1.2fr)_1fr]">
         <Column
           title="Causes"
           empty="Nothing recorded leads here"
@@ -156,7 +156,7 @@ function NodeCard({
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-baseline gap-x-2 text-body-sm text-ink">
             {node.code && <span className="font-mono text-caption text-ink-tertiary">{node.code}</span>}
-            <span className={cn(centre && "font-medium")}>{node.label}</span>
+            <span className={cn("break-words", centre && "font-medium")}>{node.label}</span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-caption">
             {node.decision && <DecisionStatusBadge status={node.decision.status} />}

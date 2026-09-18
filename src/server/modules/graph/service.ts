@@ -80,7 +80,9 @@ export const graphService = {
       if (n.type === "assumption") {
         const a = assumptions.find((x) => x.id === n.id);
         if (!a) return null;
-        const supported = edges.find((e) => e.kind === "supports" && e.fromId === a.id)?.toId;
+        const supported = edges.find(
+          (e) => e.kind === "supports" && e.fromType === "assumption" && e.fromId === a.id && e.toType === "decision",
+        )?.toId;
         const person = a.targetType === "person" ? people.find((p) => p.id === a.targetId) : undefined;
         return {
           ...n,

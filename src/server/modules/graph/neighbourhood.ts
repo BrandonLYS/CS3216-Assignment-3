@@ -124,8 +124,8 @@ export function neighbourhood({
     }
     const found = new Map<string, GraphNode>();
     const queue: Array<{ ref: GraphNodeRef; depth: number }> = [{ ref: centre, depth: 0 }];
-    while (queue.length) {
-      const cur = queue.shift()!;
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i]!;
       if (cur.depth >= maxDepth) continue;
       for (const e of next.get(nodeKey(cur.ref)) ?? []) {
         const n = direction === "in" ? e.from : e.to;
@@ -145,13 +145,23 @@ export function neighbourhood({
   const causes = walk("in");
   const consequences = walk("out");
 
-  // Fixpoint: a cause node is on a broken path if it is a broken Assumption or an on-path node points at it.
+  // Reachability from every broken Assumption forwards over the cause subgraph: every cause node
+  // reaches the centre by construction, so whatever a broken Assumption reaches lies on a path
+  // from the break to the centre. A worklist, not a bounded number of passes, because sideways
+  // edges between cause nodes can make that path longer than `maxDepth`.
   const broken = new Set(assumptions.filter((a) => a.state === "broken").map((a) => `assumption:${a.id}`));
-  for (const n of causes.nodes.values()) n.onBrokenPath = broken.has(nodeKey(n));
-  for (let pass = 0; pass < maxDepth; pass++) {
-    for (const e of causes.edges) {
-      const to = causes.nodes.get(nodeKey(e.to));
-      if (to && causes.nodes.get(nodeKey(e.from))?.onBrokenPath) to.onBrokenPath = true;
+  const out = new Map<string, GraphNode[]>();
+  for (const e of causes.edges) {
+    const to = causes.nodes.get(nodeKey(e.to));
+    if (to) out.set(nodeKey(e.from), [...(out.get(nodeKey(e.from)) ?? []), to]);
+  }
+  const worklist = [...causes.nodes.values()].filter((n) => broken.has(nodeKey(n)));
+  for (const n of worklist) n.onBrokenPath = true;
+  for (let i = 0; i < worklist.length; i++) {
+    for (const to of out.get(nodeKey(worklist[i]!)) ?? []) {
+      if (to.onBrokenPath) continue;
+      to.onBrokenPath = true;
+      worklist.push(to);
     }
   }
   const causeEdges = causes.edges.map((e) => ({
