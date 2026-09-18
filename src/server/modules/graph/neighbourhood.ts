@@ -3,8 +3,9 @@ import type { AssumptionState, AssumptionSubtype, DecisionEdgeKind } from "@/sha
 /**
  * Pure node-centred neighbourhood (issue #41, ADR 0008). One bounded, cycle-safe BFS backwards
  * over incoming edges (causes) and one forwards over outgoing edges (consequences), then a
- * fixpoint over the cause side that marks every node and edge a broken Assumption reaches the
- * centre through. No I/O: the service loads rows and describes the nodes afterwards.
+ * reachability walk from every broken Assumption over the cause side that marks every node and
+ * edge the break reaches the centre through. No I/O: the service loads rows and describes the
+ * nodes afterwards.
  */
 
 export const GRAPH_NODE_TYPES = ["decision", "assumption", "task", "milestone", "risk"] as const;
