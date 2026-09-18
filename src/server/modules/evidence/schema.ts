@@ -1,4 +1,4 @@
-import { date, index, integer, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import { date, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { id, timestamps } from "@/server/db/columns";
 import { entityTypeEnum, evidenceKindEnum } from "@/server/db/enums";
 import { projects } from "@/server/modules/projects/schema";
@@ -32,6 +32,31 @@ export const evidence = pgTable(
 
 export type EvidenceRow = typeof evidence.$inferSelect;
 export type NewEvidenceRow = typeof evidence.$inferInsert;
+
+/**
+ * One ordered Passage of a transcript (issue #42): the turn's text with its speaker and timestamp
+ * when the input had them. A projection of the Evidence text, rewritten whole whenever that text
+ * changes, so it carries no Activity Events of its own; `decision_sources.passageId` points here.
+ */
+export const evidencePassages = pgTable(
+  "evidence_passages",
+  {
+    id: id(),
+    evidenceId: text("evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "cascade" }),
+    ordinal: integer("ordinal").notNull(),
+    speaker: text("speaker"),
+    /** Kept as written in the transcript (`00:12:34`, `12:34`); never parsed into a duration. */
+    timestamp: text("timestamp"),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("evidence_passages_ordinal_uq").on(t.evidenceId, t.ordinal)],
+);
+
+export type EvidencePassageRow = typeof evidencePassages.$inferSelect;
+export type NewEvidencePassageRow = typeof evidencePassages.$inferInsert;
 
 /**
  * Many-to-many between Evidence and Tasks/Risks/Milestones. The item side is

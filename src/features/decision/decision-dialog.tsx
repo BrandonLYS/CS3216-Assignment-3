@@ -9,7 +9,7 @@ import {
   supersedeDecisionAction,
   updateDecisionAction,
 } from "@/server/modules/decisions/actions";
-import type { SourceCandidates } from "@/server/modules/decisions/repository";
+import type { SourceCandidates } from "@/server/modules/decisions/service";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
 import type { ProposalRow } from "@/server/modules/proposals/schema";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
@@ -57,8 +57,12 @@ export function DecisionDialog({
       : (draft?.sources ?? []).map((s) => ({
           kind: s.kind,
           entityId: s.entityId,
+          passageId: s.passageId ?? null,
           excerpt: s.excerpt,
-          label: draft?.sourceLabels.get(`${s.kind}:${s.entityId}`) ?? s.excerpt,
+          label:
+            (s.passageId ? draft?.sourceLabels.get(`${s.kind}:${s.entityId}:${s.passageId}`) : undefined) ??
+            draft?.sourceLabels.get(`${s.kind}:${s.entityId}`) ??
+            s.excerpt,
         })),
   );
   // Field defaults come from the Decision being edited or, on the confirm path, the Proposal.
@@ -250,7 +254,7 @@ export function DecisionDialog({
                   />
                 )}
               </FormRow>
-              <SourcePicker candidates={candidates} value={sources} onChange={setSources} />
+              <SourcePicker projectId={refs.project.id} candidates={candidates} value={sources} onChange={setSources} />
               {draft && draft.assumptions.length > 0 && (
                 <div className="flex flex-col gap-1.5 rounded-md border border-hairline bg-surface-1 p-3">
                   <span className="text-caption font-medium text-ink-subtle">

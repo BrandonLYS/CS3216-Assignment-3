@@ -4,7 +4,7 @@ import { Download, FileText, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { createEvidenceAction, deleteEvidenceAction, updateEvidenceAction } from "@/server/modules/evidence/actions";
-import type { EvidenceRow } from "@/server/modules/evidence/schema";
+import type { EvidencePassageRow, EvidenceRow } from "@/server/modules/evidence/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { EVIDENCE_KINDS, labelFor } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
@@ -18,6 +18,7 @@ import {
   Field,
   FormRow,
   Input,
+  ScrollToHash,
   SelectField,
   TextField,
   TextareaField,
@@ -36,9 +37,12 @@ export function EvidenceView({
   refs,
   items,
   targets,
+  passages,
 }: {
   refs: ProjectRefs;
   items: EvidenceRow[];
+  /** Passages of the selected item (a transcript), in order; empty for other kinds. */
+  passages: EvidencePassageRow[];
   /** Every linkable Task/Risk/Milestone in the project, for the "Link item" picker. */
   targets: LinkTarget[];
 }) {
@@ -144,7 +148,32 @@ export function EvidenceView({
               <LinkedItems key={selected.id} refs={refs} evidenceId={selected.id} targets={targets} />
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              {selected.body ? (
+              {passages.length > 0 && passages[0]!.evidenceId === selected.id ? (
+                <>
+                  <ScrollToHash prefix="passage-" />
+                  <ol className="flex max-w-3xl flex-col gap-3" data-testid="passages">
+                    {passages.map((p) => (
+                      <li key={p.id} id={`passage-${p.id}`} data-testid="passage" className="px-2 py-1">
+                        {(p.speaker || p.timestamp) && (
+                          <p className="mb-0.5 flex items-baseline gap-2 text-caption text-ink-subtle">
+                            {p.speaker && <span className="font-medium text-ink-muted">{p.speaker}</span>}
+                            {p.timestamp && <span className="font-mono text-ink-tertiary">{p.timestamp}</span>}
+                          </p>
+                        )}
+                        <p className="font-mono text-mono leading-relaxed whitespace-pre-wrap text-ink-muted">
+                          {p.text}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                  <details className="mt-6 max-w-3xl">
+                    <summary className="cursor-pointer text-caption text-ink-subtle select-none">Full text</summary>
+                    <pre className="mt-3 font-mono text-mono leading-relaxed whitespace-pre-wrap text-ink-muted">
+                      {selected.body ?? selected.extractedText}
+                    </pre>
+                  </details>
+                </>
+              ) : selected.body ? (
                 <pre className="max-w-3xl font-mono text-mono leading-relaxed whitespace-pre-wrap text-ink-muted">
                   {selected.body}
                 </pre>

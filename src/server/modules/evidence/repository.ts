@@ -7,9 +7,12 @@ import type { LinkableEntityType } from "@/shared/domain";
 import {
   evidence,
   evidenceLinks,
+  evidencePassages,
   type EvidenceLinkRow,
+  type EvidencePassageRow,
   type EvidenceRow,
   type NewEvidenceLinkRow,
+  type NewEvidencePassageRow,
   type NewEvidenceRow,
 } from "./schema";
 
@@ -52,6 +55,48 @@ export const evidenceRepo = {
   },
 
   delete: (db: DbOrTx, id: string) => db.delete(evidence).where(eq(evidence.id, id)),
+};
+
+/** Passages of transcripts (issue #42); a projection of the Evidence text, replaced whole on each text change. */
+export const passagesRepo = {
+  listForEvidence: (db: DbOrTx, evidenceId: string): Promise<EvidencePassageRow[]> =>
+    db
+      .select()
+      .from(evidencePassages)
+      .where(eq(evidencePassages.evidenceId, evidenceId))
+      .orderBy(asc(evidencePassages.ordinal)),
+
+  /** Every Passage in the Project, for the Source picker and the Proposal pass. */
+  listForProject: (db: DbOrTx, projectId: string): Promise<EvidencePassageRow[]> =>
+    db
+      .select({
+        id: evidencePassages.id,
+        evidenceId: evidencePassages.evidenceId,
+        ordinal: evidencePassages.ordinal,
+        speaker: evidencePassages.speaker,
+        timestamp: evidencePassages.timestamp,
+        text: evidencePassages.text,
+        createdAt: evidencePassages.createdAt,
+      })
+      .from(evidencePassages)
+      .innerJoin(evidence, eq(evidence.id, evidencePassages.evidenceId))
+      .where(eq(evidence.projectId, projectId))
+      .orderBy(asc(evidencePassages.evidenceId), asc(evidencePassages.ordinal)),
+
+  findById: async (db: DbOrTx, id: string): Promise<EvidencePassageRow | undefined> => {
+    const [row] = await db.select().from(evidencePassages).where(eq(evidencePassages.id, id));
+    return row;
+  },
+
+  /** Delete then insert: citing Sources lose their `passageId` through the FK, which is the intended degrade. */
+  replaceForEvidence: async (db: DbOrTx, evidenceId: string, rows: Omit<NewEvidencePassageRow, "evidenceId">[]) => {
+    await db.delete(evidencePassages).where(eq(evidencePassages.evidenceId, evidenceId));
+    if (!rows.length) return [];
+    return db
+      .insert(evidencePassages)
+      .values(rows.map((r) => ({ ...r, evidenceId })))
+      .returning();
+  },
 };
 
 /** Every link lookup carries the Project: ownership is asserted on `projectId`, so ids alone must never select a row. */

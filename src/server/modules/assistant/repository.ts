@@ -3,18 +3,21 @@ import type { DbOrTx } from "@/server/db/client";
 import { conversations, messages, type ConversationRow } from "./schema";
 
 export const conversationsRepo = {
+  /** Race-safe: two callers creating the same Conversation at once both get the one row (unique key, nulls not distinct). */
   findOrCreate: async (db: DbOrTx, userId: string, projectId: string | null): Promise<ConversationRow> => {
-    const [existing] = await db
-      .select()
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.userId, userId),
-          projectId ? eq(conversations.projectId, projectId) : isNull(conversations.projectId),
-        ),
-      );
+    const where = and(
+      eq(conversations.userId, userId),
+      projectId ? eq(conversations.projectId, projectId) : isNull(conversations.projectId),
+    );
+    const [existing] = await db.select().from(conversations).where(where);
     if (existing) return existing;
-    const [row] = await db.insert(conversations).values({ userId, projectId }).returning();
+    const [inserted] = await db
+      .insert(conversations)
+      .values({ userId, projectId })
+      .onConflictDoNothing({ target: [conversations.userId, conversations.projectId] })
+      .returning();
+    if (inserted) return inserted;
+    const [row] = await db.select().from(conversations).where(where);
     return row!;
   },
 

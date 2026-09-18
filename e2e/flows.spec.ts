@@ -1143,3 +1143,105 @@ test.describe("graph", () => {
     await shot(page, "broken-path-highlight");
   });
 });
+
+// Runs after `proposals` and `graph`: it adds Evidence and a Decision that the earlier flows must not see.
+test.describe("transcripts", () => {
+  const shot = shots("transcripts");
+  const TRANSCRIPT = [
+    "[00:01:10] Priya: The merchant dataset slipped again, so the pilot cannot start on the 1st.",
+    "[00:02:30] Marcus: Then we cannot ship the export in the same release.",
+    "[00:03:45] Marcus: We decided to freeze scope after the pilot instead of adding the export.",
+    "[00:04:10] Priya: Agreed, revisit once the dataset lands.",
+  ].join("\n");
+
+  test("ingests a transcript as passages, cites one passage, opens it, proposes from it and degrades cleanly", async ({
+    page,
+  }) => {
+    await openProject(page, "Evidence");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    const add = page.getByRole("dialog");
+    await add.getByLabel("Title").fill("Steering meeting transcript");
+    await add.getByLabel("Kind").selectOption("transcript");
+    await add.getByLabel("Source date").fill("2026-09-16");
+    await add.getByLabel("Pasted text").fill(TRANSCRIPT);
+    await add.getByRole("button", { name: "Add evidence" }).click();
+    await expect(add).toBeHidden();
+    await page.getByRole("button", { name: "Steering meeting transcript" }).click();
+    await expect(page).toHaveURL(/\/evidence\?item=/);
+    const passages = page.getByTestId("passage");
+    await expect(passages).toHaveCount(4);
+    await expect(passages.nth(2)).toContainText("Marcus");
+    await expect(passages.nth(2)).toContainText("00:03:45");
+    await expect(passages.nth(2)).toContainText("We decided to freeze scope after the pilot");
+    await expect(passages.nth(2)).not.toContainText("[00:03:45]");
+    await shot(page, "transcript-passages");
+
+    // Cite Marcus's turn from a new Decision.
+    await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+    await expect(page).toHaveURL(/\/decisions$/);
+    await page.getByRole("button", { name: "New decision" }).click();
+    const dialog = page.getByRole("dialog", { name: "New decision" });
+    await dialog.getByLabel("Title").fill("Freeze scope after the pilot");
+    await dialog.getByLabel("Decided on").fill("2026-09-16");
+    await dialog.getByLabel("Chosen").fill("Freeze scope; the export waits for the next release");
+    await dialog.getByRole("button", { name: "Add source" }).click();
+    await dialog.getByPlaceholder("Search evidence, comments and activity…").fill("Steering meeting");
+    await dialog.getByRole("option", { name: /^Steering meeting transcript/ }).click();
+    await expect(dialog.getByPlaceholder(/Which passage of/)).toBeVisible();
+    await dialog.getByPlaceholder(/Which passage of/).fill("freeze scope");
+    await dialog.getByRole("option", { name: /We decided to freeze scope/ }).click();
+    const chip = dialog.getByTestId("source-chip");
+    await expect(chip).toContainText("Steering meeting transcript · Marcus");
+    await shot(page, "passage-source-picked");
+    await dialog.getByRole("button", { name: "Create decision" }).click();
+    await expect(dialog).toBeHidden();
+
+    // Opening the Source lands on the cited Passage.
+    await page.getByRole("row").filter({ hasText: "Freeze scope after the pilot" }).getByRole("cell").nth(1).click();
+    const edit = page.getByRole("dialog", { name: /D-\d+/ });
+    await expect(edit.getByTestId("source-chip")).toContainText("Steering meeting transcript · Marcus");
+    await edit.getByRole("link", { name: /Open source Steering meeting transcript · Marcus/ }).click();
+    await expect(page).toHaveURL(/\/evidence\?item=[0-9a-f-]{36}#passage-[0-9a-f-]{36}$/);
+    const cited = page.locator(`[id="${new URL(page.url()).hash.slice(1)}"]`);
+    await expect(cited).toContainText("We decided to freeze scope after the pilot");
+    await expect(cited).toBeInViewport();
+    await expect(cited).toHaveClass(/ring-1/);
+    await shot(page, "citation-opens-passage");
+
+    // The Assistant's pass (already run after the ingest; the button confirms nothing is left) cites the Passage too.
+    await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+    await expect(page).toHaveURL(/\/decisions$/);
+    await page.getByTestId("propose-from-evidence").click();
+    await expect(page.getByText(/proposed from|Nothing new/)).toBeVisible();
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    const card = page.getByTestId("proposal-card").filter({ hasText: "freeze scope after the pilot" });
+    await expect(card).toContainText("Steering meeting transcript · Marcus");
+    await shot(page, "proposal-cites-passage");
+    await card.getByTestId("reject-proposal").click();
+    await expect(card).toHaveCount(0);
+
+    // Editing the transcript re-segments it; the citation degrades to the whole item, never an error.
+    await page.getByRole("main").getByRole("link", { name: "Evidence", exact: true }).click();
+    await page.getByRole("button", { name: "Steering meeting transcript" }).click();
+    await expect(page).toHaveURL(/\/evidence\?item=/);
+    await expect(page.getByRole("heading", { name: "Steering meeting transcript" })).toBeVisible();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const editEvidence = page.getByRole("dialog", { name: "Edit evidence" });
+    await editEvidence.getByLabel("Pasted text").fill(`${TRANSCRIPT}\n[00:05:00] Marcus: Noted.`);
+    await editEvidence.getByRole("button", { name: "Save changes" }).click();
+    await expect(editEvidence).toBeHidden();
+    await expect(page.getByTestId("passage")).toHaveCount(5);
+    await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+    await page.getByRole("row").filter({ hasText: "Freeze scope after the pilot" }).getByRole("cell").nth(1).click();
+    const degraded = page.getByRole("dialog", { name: /D-\d+/ }).getByTestId("source-chip");
+    await expect(degraded).toHaveText(/^Steering meeting transcript\s*Evidence$/);
+    await expect(degraded).not.toContainText("Marcus");
+    await page
+      .getByRole("dialog", { name: /D-\d+/ })
+      .getByRole("link", { name: /Open source/ })
+      .click();
+    await expect(page).toHaveURL(/\/evidence\?item=[0-9a-f-]{36}#evidence-[0-9a-f-]{36}$/);
+    await expect(page.getByRole("heading", { name: "Steering meeting transcript" })).toBeVisible();
+    await shot(page, "degraded-to-whole-document");
+  });
+});

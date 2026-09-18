@@ -4,7 +4,7 @@ import { Crosshair, GitBranch, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
-import type { SourceCandidates } from "@/server/modules/decisions/repository";
+import type { SourceCandidates } from "@/server/modules/decisions/service";
 import type { DecisionListItem } from "@/server/modules/decisions/service";
 import type { DependencyRow } from "@/server/modules/dependencies/schema";
 import type { ProjectRefs } from "@/server/modules/projects/refs";

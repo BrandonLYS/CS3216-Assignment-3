@@ -630,3 +630,74 @@ describe("search (#40)", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
+
+describe("passage-level Sources (#42)", () => {
+  const TRANSCRIPT = [
+    "[00:01:10] Priya: The merchant dataset slipped again.",
+    "[00:03:45] Marcus: We decided to freeze scope after the pilot instead of adding the export.",
+  ].join("\n");
+
+  it("snapshots the Passage text and names the speaker, and links to the Passage", async () => {
+    const p = await makeProject(ctx, "PAS");
+    const ev = await evidenceService.create(ctx, {
+      projectId: p.id,
+      title: "Steering call",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    const [, marcus] = await evidenceService.passages(ctx, ev.id);
+    const d = await decisionsService.create(ctx, {
+      projectId: p.id,
+      title: "Freeze scope",
+      decidedOn: "2026-09-10",
+      chosen: "Freeze",
+      sources: [{ kind: "evidence", entityId: ev.id, passageId: marcus!.id }],
+    });
+    const [source] = await sourcesRepo.listForDecisions(ctx.db, [d.id]);
+    expect(source).toMatchObject({
+      passageId: marcus!.id,
+      label: "Steering call · Marcus",
+      excerpt: "We decided to freeze scope after the pilot instead of adding the export.",
+    });
+    const out = await decisionsService.search(ctx, { projectId: p.id, query: "why freeze scope", limit: 5 });
+    expect(out.decisions[0]!.sources[0]!.href).toBe(`/projects/${p.id}/evidence?item=${ev.id}#passage-${marcus!.id}`);
+    const labels = await decisionsService.sourceLabels(ctx, p.id);
+    expect(labels.get(`evidence:${ev.id}:${marcus!.id}`)).toBe("Steering call · Marcus");
+    expect(labels.get(`evidence:${ev.id}`)).toBe("Steering call");
+
+    // Re-segmenting the transcript nulls the citation's passageId; the Source degrades to the whole item.
+    await evidenceService.update(ctx, { id: ev.id, body: `${TRANSCRIPT}\nPriya: Agreed.` });
+    const [after] = await sourcesRepo.listForDecisions(ctx.db, [d.id]);
+    expect(after!.passageId).toBeNull();
+    expect(after!.label).toBe("Steering call · Marcus");
+    const degraded = await decisionsService.search(ctx, { projectId: p.id, query: "why freeze scope", limit: 5 });
+    expect(degraded.decisions[0]!.sources[0]!.href).toBe(`/projects/${p.id}/evidence?item=${ev.id}#evidence-${ev.id}`);
+  });
+
+  it("rejects a Passage of another Evidence and degrades a Passage that no longer exists", async () => {
+    const p = await makeProject(ctx, "PAX");
+    const a = await evidenceService.create(ctx, {
+      projectId: p.id,
+      title: "Call A",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    const b = await evidenceService.create(ctx, {
+      projectId: p.id,
+      title: "Call B",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    const [aFirst] = await evidenceService.passages(ctx, a.id);
+    const base = { projectId: p.id, title: "X", decidedOn: "2026-09-10", chosen: "X" };
+    await expect(
+      decisionsService.create(ctx, { ...base, sources: [{ kind: "evidence", entityId: b.id, passageId: aFirst!.id }] }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    const d = await decisionsService.create(ctx, {
+      ...base,
+      sources: [{ kind: "evidence", entityId: a.id, passageId: "00000000-0000-0000-0000-000000000000" }],
+    });
+    const [source] = await sourcesRepo.listForDecisions(ctx.db, [d.id]);
+    expect(source).toMatchObject({ passageId: null, label: "Call A" });
+  });
+});

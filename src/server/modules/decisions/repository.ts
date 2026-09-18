@@ -233,4 +233,3 @@ export const sourceCandidatesRepo = {
 };
 
 export type DecisionListItem = Awaited<ReturnType<typeof decisionsRepo.listByProject>>[number];
-export type SourceCandidates = Awaited<ReturnType<typeof sourceCandidatesRepo.list>>;
