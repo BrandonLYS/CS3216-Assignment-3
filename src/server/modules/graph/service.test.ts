@@ -80,7 +80,7 @@ describe("graphService.neighbourhood", () => {
       type: "decision",
       label: "Switch to interviews",
       code: "D-1",
-      status: "superseded",
+      decision: { status: "superseded" },
       href: `/projects/${projectId}/decisions?decision=${older.id}`,
       onBrokenPath: true,
     });
@@ -89,7 +89,7 @@ describe("graphService.neighbourhood", () => {
         type: "assumption",
         id: assumption.id,
         label: "Dataset arrives before UAT",
-        status: "broken",
+        decision: null,
         depth: 1,
         onBrokenPath: true,
         href: `/projects/${projectId}/decisions?decision=${older.id}`,

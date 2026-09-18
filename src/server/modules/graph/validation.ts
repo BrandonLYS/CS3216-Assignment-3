@@ -1,10 +1,7 @@
 import { z } from "zod";
+import { GRAPH_CENTRE_TYPES } from "@/shared/domain";
 
-/** The node types the graph page can be centred on (issue #41); Tasks appear as nodes but only open their record. */
-export const CENTRE_TYPES = ["decision", "assumption", "milestone", "risk"] as const;
-export type CentreType = (typeof CENTRE_TYPES)[number];
-
-export const graphNodeSchema = z.object({ type: z.enum(CENTRE_TYPES), id: z.string().min(1) });
+export const graphNodeSchema = z.object({ type: z.enum(GRAPH_CENTRE_TYPES), id: z.string().min(1) });
 export type GraphCentre = z.infer<typeof graphNodeSchema>;
 
 /** `?node=<type>:<id>` -> centre, or null for anything malformed or not a centre type. */

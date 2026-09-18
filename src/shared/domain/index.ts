@@ -144,6 +144,10 @@ export type DateTargetField = (typeof DATE_TARGET_FIELDS)[number];
 export const DECISION_EDGE_KINDS = ["supports", "leads_to", "superseded_by"] as const;
 export type DecisionEdgeKind = (typeof DECISION_EDGE_KINDS)[number];
 
+/** Nodes the graph view can be centred on (issue #41); Tasks appear as nodes but only open their record. */
+export const GRAPH_CENTRE_TYPES = ["decision", "assumption", "milestone", "risk"] as const;
+export type GraphCentreType = (typeof GRAPH_CENTRE_TYPES)[number];
+
 /** What a Source may cite; its own vocabulary because an Activity Event is not an entity type. */
 export const SOURCE_KINDS = ["evidence", "comment", "activity_event"] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];

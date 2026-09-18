@@ -11,16 +11,16 @@ import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { risksRepo } from "@/server/modules/risks/repository";
 import { tasksRepo } from "@/server/modules/tasks/repository";
+import type { DecisionStatus } from "@/shared/domain";
 import { decisionHref, milestoneHref, riskHref, taskHref } from "@/shared/lib/hrefs";
-import { neighbourhood, nodeKey, type GraphEdge, type GraphNode, type GraphNodeRef } from "./neighbourhood";
+import { neighbourhood, type GraphEdge, type GraphNode, type GraphNodeRef } from "./neighbourhood";
 import type { GraphCentre } from "./validation";
 
 export interface DescribedNode extends GraphNodeRef {
   label: string;
   /** `D-n`, `KEY-n`, `R-n`; Assumptions and Milestones have none. */
   code: string | null;
-  /** Decision status or Assumption state; null for items. */
-  status: string | null;
+  decision: { status: DecisionStatus } | null;
   href: string;
   assumption: (Pick<AssumptionRow, "subtype" | "state" | "brokenReason"> & { targetLabel: string | null }) | null;
   depth: number;
@@ -63,19 +63,19 @@ export const graphService = {
       peopleRepo.listByProject(ctx.db, projectId),
     ]);
 
-    const describeRef = (n: GraphNodeRef): Omit<DescribedNode, "depth" | "onBrokenPath"> | null | undefined => {
+    const describeRef = (n: GraphNodeRef): Omit<DescribedNode, "depth" | "onBrokenPath"> | null => {
       if (n.type === "decision") {
         const d = decisions.find((x) => x.decision.id === n.id)?.decision;
-        return (
-          d && {
-            ...n,
-            label: d.title,
-            code: `D-${d.number}`,
-            status: d.status,
-            href: decisionHref(projectId, d.id),
-            assumption: null,
-          }
-        );
+        return !d
+          ? null
+          : {
+              ...n,
+              label: d.title,
+              code: `D-${d.number}`,
+              decision: { status: d.status },
+              href: decisionHref(projectId, d.id),
+              assumption: null,
+            };
       }
       if (n.type === "assumption") {
         const a = assumptions.find((x) => x.id === n.id);
@@ -86,7 +86,7 @@ export const graphService = {
           ...n,
           label: a.statement,
           code: null,
-          status: a.state,
+          decision: null,
           href: supported ? decisionHref(projectId, supported) : `/projects/${projectId}/decisions`,
           assumption: {
             subtype: a.subtype,
@@ -98,34 +98,34 @@ export const graphService = {
       }
       if (n.type === "task") {
         const t = tasks.find((x) => x.task.id === n.id)?.task;
-        return (
-          t && {
-            ...n,
-            label: t.title,
-            code: `${project.key}-${t.number}`,
-            status: null,
-            href: taskHref(projectId, t.id),
-            assumption: null,
-          }
-        );
+        return !t
+          ? null
+          : {
+              ...n,
+              label: t.title,
+              code: `${project.key}-${t.number}`,
+              decision: null,
+              href: taskHref(projectId, t.id),
+              assumption: null,
+            };
       }
       if (n.type === "milestone") {
         const m = milestones.find((x) => x.milestone.id === n.id)?.milestone;
-        return (
-          m && { ...n, label: m.name, code: null, status: null, href: milestoneHref(projectId, m.id), assumption: null }
-        );
+        return !m
+          ? null
+          : { ...n, label: m.name, code: null, decision: null, href: milestoneHref(projectId, m.id), assumption: null };
       }
       const r = risks.find((x) => x.risk.id === n.id)?.risk;
-      return (
-        r && {
-          ...n,
-          label: r.title,
-          code: `R-${r.number}`,
-          status: null,
-          href: riskHref(projectId, r.id),
-          assumption: null,
-        }
-      );
+      return !r
+        ? null
+        : {
+            ...n,
+            label: r.title,
+            code: `R-${r.number}`,
+            decision: null,
+            href: riskHref(projectId, r.id),
+            assumption: null,
+          };
     };
 
     const centreDescribed = describeRef(centre);
@@ -140,7 +140,8 @@ export const graphService = {
     ];
     const graph = neighbourhood({ centre, edges, assumptions, dependencies, known });
 
-    // Sources on the stored edges; a deleted Comment falls back to the edge's Decision.
+    // Sources on the stored edges; a deleted Comment falls back to the Decision the Sources were copied from:
+    // the Decision a `supports` edge points at, the newer Decision of a `superseded_by`, the Decision a `leads_to` leaves.
     const edgeIds = [...graph.causeEdges, ...graph.consequenceEdges].flatMap((e) => (e.edgeId ? [e.edgeId] : []));
     const sources = await sourcesRepo.listForEdges(ctx.db, edgeIds);
     const [comments, events] = await Promise.all([
@@ -158,7 +159,7 @@ export const graphService = {
       events: new Map(events.map((e) => [e.id, e])),
     };
     const describeEdge = (e: GraphEdge): DescribedEdge => {
-      const decisionId = e.kind === "supports" ? e.to.id : e.from.id;
+      const decisionId = e.kind === "leads_to" ? e.from.id : e.to.id;
       return {
         ...e,
         sources: sources
@@ -189,5 +190,3 @@ export const graphService = {
     return result;
   },
 };
-
-export { nodeKey };

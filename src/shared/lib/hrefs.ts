@@ -1,3 +1,5 @@
+import type { GraphCentreType } from "@/shared/domain";
+
 /** The Decisions page with one Decision's dialog open. */
 export const decisionHref = (projectId: string, decisionId: string) =>
   `/projects/${projectId}/decisions?decision=${decisionId}`;
@@ -14,5 +16,5 @@ export const milestoneHref = (projectId: string, milestoneId: string) =>
 export const riskHref = (projectId: string, riskId: string) => `/projects/${projectId}/risks?risk=${riskId}`;
 
 /** The node-centred graph page (issue #41) centred on one Decision, Assumption, Milestone or Risk. */
-export const graphHref = (projectId: string, type: "decision" | "assumption" | "milestone" | "risk", id: string) =>
+export const graphHref = (projectId: string, type: GraphCentreType, id: string) =>
   `/projects/${projectId}/graph?node=${type}:${id}`;

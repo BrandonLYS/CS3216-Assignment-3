@@ -2,8 +2,7 @@ import { Crosshair, FileText, GitBranch } from "lucide-react";
 import Link from "next/link";
 import type { GraphEdgeKind, GraphNodeRef } from "@/server/modules/graph/neighbourhood";
 import type { DescribedEdge, DescribedNode, GraphNeighbourhood } from "@/server/modules/graph/service";
-import { CENTRE_TYPES } from "@/server/modules/graph/validation";
-import { labelFor, type AssumptionState, type DecisionStatus } from "@/shared/domain";
+import { GRAPH_CENTRE_TYPES, labelFor, type GraphCentreType } from "@/shared/domain";
 import { cn } from "@/shared/lib/cn";
 import { graphHref } from "@/shared/lib/hrefs";
 import { Panel, SectionTitle } from "@/shared/ui";
@@ -26,8 +25,8 @@ const NO_SOURCE_REASON: Partial<Record<GraphEdgeKind, string>> = {
 };
 
 const key = (n: GraphNodeRef) => `${n.type}:${n.id}`;
-const isCentreType = (t: GraphNodeRef["type"]): t is (typeof CENTRE_TYPES)[number] =>
-  (CENTRE_TYPES as readonly string[]).includes(t);
+const isCentreType = (t: GraphNodeRef["type"]): t is GraphCentreType =>
+  (GRAPH_CENTRE_TYPES as readonly string[]).includes(t);
 
 /**
  * Node-centred graph page body (issue #41): causes on the left, the selected node in the
@@ -160,13 +159,13 @@ function NodeCard({
             <span className={cn(centre && "font-medium")}>{node.label}</span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-caption">
-            {node.type === "decision" && node.status && <DecisionStatusBadge status={node.status as DecisionStatus} />}
+            {node.decision && <DecisionStatusBadge status={node.decision.status} />}
             {node.assumption && (
               <AssumptionChip
                 assumption={{
                   statement: labelFor(node.assumption.subtype),
                   subtype: node.assumption.subtype,
-                  state: node.assumption.state as AssumptionState,
+                  state: node.assumption.state,
                 }}
               />
             )}
