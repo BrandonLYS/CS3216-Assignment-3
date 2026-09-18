@@ -1,6 +1,7 @@
 "use client";
 
-import { GitBranch, Plus } from "lucide-react";
+import { Crosshair, GitBranch, Plus } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import type { SourceCandidates } from "@/server/modules/decisions/repository";
@@ -12,6 +13,7 @@ import type { proposalsService } from "@/server/modules/proposals/service";
 import type { RiskListItem } from "@/server/modules/risks/repository";
 import type { TaskListItem } from "@/server/modules/tasks/repository";
 import { fmtDate } from "@/shared/lib/dates";
+import { graphHref } from "@/shared/lib/hrefs";
 import { Button, EmptyState } from "@/shared/ui";
 import { AssumptionChip } from "@/entities/decision/assumption-chip";
 import { DecisionStatusBadge } from "@/entities/decision/decision-status-badge";
@@ -120,7 +122,20 @@ export function DecisionsView({
                     onClick={() => router.replace(`${base}?decision=${decision.id}`, { scroll: false })}
                     className="cursor-pointer border-b border-hairline/60 transition-colors hover:bg-surface-1 [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
                   >
-                    <td className="pl-6! font-mono text-caption text-ink-tertiary">D-{decision.number}</td>
+                    <td className="pl-6! font-mono text-caption text-ink-tertiary">
+                      <span className="flex items-center gap-1.5">
+                        D-{decision.number}
+                        <Link
+                          href={graphHref(refs.project.id, "decision", decision.id)}
+                          aria-label={`Show why D-${decision.number}`}
+                          title="Show why"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-ink-tertiary hover:text-primary"
+                        >
+                          <Crosshair className="size-3" />
+                        </Link>
+                      </span>
+                    </td>
                     <td>
                       <p className="text-ink">{decision.title}</p>
                       <p className="mt-0.5 line-clamp-1 text-caption text-ink-tertiary">{decision.chosen}</p>
