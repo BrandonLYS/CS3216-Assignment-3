@@ -1,8 +1,9 @@
-import { AlertOctagon, FileText } from "lucide-react";
+import { AlertOctagon, Crosshair, FileText } from "lucide-react";
 import Link from "next/link";
 import type { ImpactAlert } from "@/server/modules/impact/service";
 import { labelFor } from "@/shared/domain";
 import { fmtDate } from "@/shared/lib/dates";
+import { graphHref } from "@/shared/lib/hrefs";
 import { Panel } from "@/shared/ui";
 import { ASSUMPTION_ICON } from "@/entities/decision/assumption-chip";
 import { CONSEQUENCE_ICON } from "@/entities/decision/consequence-icon";
@@ -42,6 +43,12 @@ export function ImpactAlerts({ alerts, projectId }: { alerts: ImpactAlert[]; pro
                   )}
                 </p>
               </div>
+              <Link
+                href={graphHref(projectId, "assumption", alert.assumption.id)}
+                className="inline-flex shrink-0 items-center gap-1 text-caption text-primary hover:underline"
+              >
+                <Crosshair className="size-3" /> Show me why
+              </Link>
               <DismissAlertButton assumptionId={alert.assumption.id} />
             </div>
             <div className="grid grid-cols-2 gap-4 border-t border-hairline px-4 py-3 text-body-sm">
