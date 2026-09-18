@@ -104,6 +104,13 @@ describe("segmentTranscript", () => {
     ]);
   });
 
+  it("hard-cuts a single token with no whitespace and loses nothing", () => {
+    const blob = "x".repeat(3000);
+    const out = segmentTranscript(blob);
+    expect(out.map((p) => p.text.length)).toEqual([1200, 1200, 600]);
+    expect(out.map((p) => p.text).join("")).toBe(blob);
+  });
+
   it("never emits a passage longer than the cap, even for one endless sentence", () => {
     const out = segmentTranscript(`${"word ".repeat(700)}end`);
     expect(out.length).toBeGreaterThan(2);
@@ -126,6 +133,9 @@ describe("segmentTranscript", () => {
     expect(out[0]!.text).toBe("see https://example.com/notes for the 12:30 meeting");
     const prose = segmentTranscript("12:30 meeting moved to Friday.\n\n12:45 room booked.");
     expect(prose.map((p) => p.timestamp)).toEqual([null, null]);
+    const urls = segmentTranscript("https://example.com/a\nhttps://example.com/b\nMarcus: ok\nPriya: fine");
+    expect(urls.map((p) => p.speaker)).toEqual([null, "Marcus", "Priya"]);
+    expect(urls[0]!.text).toBe("https://example.com/a\nhttps://example.com/b");
   });
 });
 

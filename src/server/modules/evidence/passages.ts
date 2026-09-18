@@ -15,7 +15,7 @@ export interface Passage {
 
 const TIME = String.raw`\[?(\d{1,2}:\d{2}(?::\d{2})?)\]?`;
 /** `[00:01:10] Priya: text`, `00:05 - Marcus: text`, `Priya: text`; the name is a short run of letters in any script. */
-const LABEL = new RegExp(String.raw`^(?:${TIME}\s*[-–]?\s*)?(\p{L}[\p{L}\p{N} .'-]{0,40}?)\s*:\s*(.*)$`, "u");
+const LABEL = new RegExp(String.raw`^(?:${TIME}\s*[-–]?\s*)?(\p{L}[\p{L}\p{N} .'-]{0,40}?)\s*:(?!//)\s*(.*)$`, "u");
 /** A line that is only a timestamp: the next lines are the turn. */
 const TIME_ONLY = new RegExp(String.raw`^${TIME}\s*$`);
 /** `[00:00:01] text` or `00:00:01 - text` with no speaker; a bare `12:30 meeting moved` is prose. */
@@ -71,7 +71,8 @@ function splitLong(text: string): string[] {
   for (const sentence of text.split(/(?<=[.!?])\s+/)) {
     if (sentence.length > PASSAGE_MAX_CHARS) {
       flush();
-      const words = sentence.match(new RegExp(String.raw`\S{1,${PASSAGE_MAX_CHARS}}(?:\s+|$)`, "g")) ?? [];
+      // Word chunks, then a hard cut for a token with no whitespace at all (a pasted blob or URL).
+      const words = sentence.match(new RegExp(String.raw`\S{1,${PASSAGE_MAX_CHARS}}(?:\s+|$|(?=\S))`, "g")) ?? [];
       for (const w of words) {
         if (buf.length + w.length > PASSAGE_MAX_CHARS) flush();
         buf += w;
