@@ -66,8 +66,12 @@ The list of all Risks in a Project.
 ### Evidence
 
 **Evidence**:
-A source artifact attached to a Project (plan, minutes, status update, export) from which project facts may be derived.
+A source artifact attached to a Project (plan, minutes, transcript, status update, export) from which project facts may be derived. A transcript is stored as ordered Passages as well as its full text.
 _Avoid_: Document, file, attachment, upload
+
+**Passage**:
+One ordered segment of a transcript: its text, plus the speaker and timestamp when the transcript has them. A Source may cite a Passage instead of the whole Evidence; when the Passage is gone, the Source degrades to the whole Evidence.
+_Avoid_: Chunk, snippet, segment (as a noun), quote
 
 ### Decision Memory
 

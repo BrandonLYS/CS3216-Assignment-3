@@ -75,7 +75,15 @@ export type DependencyItemType = (typeof DEPENDENCY_ITEM_TYPES)[number];
 export const DEPENDENCY_TYPES = ["finish_to_start"] as const;
 export type DependencyType = (typeof DEPENDENCY_TYPES)[number];
 
-export const EVIDENCE_KINDS = ["plan", "minutes", "status_update", "task_export", "risk_register", "other"] as const;
+export const EVIDENCE_KINDS = [
+  "plan",
+  "minutes",
+  "transcript",
+  "status_update",
+  "task_export",
+  "risk_register",
+  "other",
+] as const;
 export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
 
 /** Entity types that appear in Activity Events and Dependencies. */

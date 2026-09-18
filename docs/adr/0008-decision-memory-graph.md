@@ -46,6 +46,7 @@ A Source is:
 - `passageId` is valid only when `kind` is `evidence`.
   It references the Evidence passage row that transcript ingestion introduces, nullable with `ON DELETE SET NULL`, so a re-extracted or deleted passage degrades to the whole Evidence item instead of erroring.
   Settling this now means the source shape never has to be reshaped when passage-level citation arrives.
+  Since #42 it is a real foreign key to `evidence_passages` with `ON DELETE SET NULL`; passages are rewritten whole when a transcript's text changes, so the degrade happens in the database.
 - `excerpt` and `label` are snapshots taken at cite time and are the durable display (the ADR 0006 pattern); the live item is linked while it exists.
 
 Sources live in one `decision_sources` table with a nullable `decisionId` and a nullable `edgeId`, a `CHECK (num_nonnulls(decision_id, edge_id) = 1)` constraint and an index on each, so Decisions and edges share the same rule and the same renderer.

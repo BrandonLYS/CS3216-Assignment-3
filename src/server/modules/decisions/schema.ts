@@ -11,6 +11,7 @@ import {
   entityTypeEnum,
   sourceKindEnum,
 } from "@/server/db/enums";
+import { evidencePassages } from "@/server/modules/evidence/schema";
 import { people } from "@/server/modules/people/schema";
 import { projects } from "@/server/modules/projects/schema";
 
@@ -122,7 +123,7 @@ export const decisionSources = pgTable(
     edgeId: text("edge_id").references(() => decisionEdges.id, { onDelete: "cascade" }),
     kind: sourceKindEnum("kind").notNull(),
     entityId: text("entity_id").notNull(),
-    passageId: text("passage_id"),
+    passageId: text("passage_id").references(() => evidencePassages.id, { onDelete: "set null" }),
     excerpt: text("excerpt").notNull(),
     label: text("label").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
