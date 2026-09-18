@@ -86,6 +86,36 @@ describe("segmentTranscript", () => {
     expect(segmentTranscript("Priya:\nMarcus: hi\nPriya: yo").map(brief)).toEqual(["0|Marcus|-|hi", "1|Priya|-|yo"]);
   });
 
+  it("accepts speaker names in any script and case, and keeps a numeric turn that is not SRT sequencing", () => {
+    const out = segmentTranscript(
+      ["Élodie: bonjour", "李雷: 你好", "marcus: fine", "Élodie: 42", "李雷: ok"].join("\n"),
+    );
+    expect(out.map((p) => `${p.speaker}|${p.text}`)).toEqual([
+      "Élodie|bonjour",
+      "李雷|你好",
+      "marcus|fine",
+      "Élodie|42",
+      "李雷|ok",
+    ]);
+    expect(segmentTranscript("Priya: the answer is\n42\nMarcus: right\nPriya: yes").map((p) => p.text)).toEqual([
+      "the answer is\n42",
+      "right",
+      "yes",
+    ]);
+  });
+
+  it("never emits a passage longer than the cap, even for one endless sentence", () => {
+    const out = segmentTranscript(`${"word ".repeat(700)}end`);
+    expect(out.length).toBeGreaterThan(2);
+    expect(out.every((p) => p.text.length <= 1200)).toBe(true);
+    expect(
+      out
+        .map((p) => p.text)
+        .join(" ")
+        .replace(/\s+/g, " "),
+    ).toBe(`${"word ".repeat(700)}end`);
+  });
+
   it("does not mistake URLs or times in prose for labels", () => {
     const out = segmentTranscript(
       ["Priya: see https://example.com/notes for the 12:30 meeting", "Marcus: ok", "Priya: the ratio was 3:1"].join(

@@ -12,7 +12,8 @@ const HIGHLIGHT = ["ring-1", "ring-primary/40", "rounded-sm"];
  */
 export function ScrollToHash({ prefix }: { prefix: string }) {
   const pathname = usePathname();
-  const params = useSearchParams();
+  // Stringified: the params object has a new identity every render and would re-scroll on each one.
+  const search = useSearchParams().toString();
   React.useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const run = () => {
@@ -31,6 +32,6 @@ export function ScrollToHash({ prefix }: { prefix: string }) {
       window.removeEventListener("hashchange", run);
       if (timer) clearTimeout(timer);
     };
-  }, [prefix, pathname, params]);
+  }, [prefix, pathname, search]);
   return null;
 }

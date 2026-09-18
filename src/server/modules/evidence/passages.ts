@@ -14,14 +14,15 @@ export interface Passage {
 }
 
 const TIME = String.raw`\[?(\d{1,2}:\d{2}(?::\d{2})?)\]?`;
-/** `[00:01:10] Priya: text`, `00:05 - Marcus: text`, `Priya: text`; the name is a short capitalised run. */
-const LABEL = new RegExp(String.raw`^(?:${TIME}\s*[-–]?\s*)?([A-Z][\w .'-]{0,40}?)\s*:\s*(.*)$`);
+/** `[00:01:10] Priya: text`, `00:05 - Marcus: text`, `Priya: text`; the name is a short run of letters in any script. */
+const LABEL = new RegExp(String.raw`^(?:${TIME}\s*[-–]?\s*)?(\p{L}[\p{L}\p{N} .'-]{0,40}?)\s*:\s*(.*)$`, "u");
 /** A line that is only a timestamp: the next lines are the turn. */
 const TIME_ONLY = new RegExp(String.raw`^${TIME}\s*$`);
 /** `[00:00:01] text` or `00:00:01 - text` with no speaker; a bare `12:30 meeting moved` is prose. */
 const TIME_LEAD = new RegExp(String.raw`^(?:\[(\d{1,2}:\d{2}(?::\d{2})?)\]|(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–])\s*(.*)$`);
-/** SRT sequence numbers and SRT/WebVTT cue timing lines carry no text. */
-const SRT_NOISE = /^(\d+|\d{1,2}:\d{2}(?::\d{2})?[.,]\d{1,3}\s*-->.*|WEBVTT.*)$/;
+/** SRT/WebVTT cue timing lines carry no text; a pure number is SRT sequencing only when a cue line follows. */
+const CUE = /^(\d{1,2}:\d{2}(?::\d{2})?[.,]\d{1,3}\s*-->.*|WEBVTT.*)$/;
+const SEQUENCE = /^\d+$/;
 
 export const PASSAGE_MAX_CHARS = 1200;
 export const PASSAGE_MAX_COUNT = 5000;
@@ -32,9 +33,10 @@ function labelled(lines: string[]): Draft[] {
   const out: Draft[] = [];
   const start = (d: Draft) => out.push(d);
   const cur = () => out[out.length - 1];
-  for (const raw of lines) {
+  for (const [i, raw] of lines.entries()) {
     const line = raw.trim();
-    if (!line || SRT_NOISE.test(line)) continue;
+    if (!line || CUE.test(line)) continue;
+    if (SEQUENCE.test(line) && CUE.test(lines[i + 1]?.trim() ?? "")) continue;
     const timeOnly = TIME_ONLY.exec(line);
     if (timeOnly) {
       start({ speaker: null, timestamp: timeOnly[1]!, text: "" });
@@ -57,17 +59,31 @@ function labelled(lines: string[]): Draft[] {
   return out;
 }
 
+/** Sentences first; a single sentence longer than the cap is cut at word boundaries, then hard. */
 function splitLong(text: string): string[] {
   if (text.length <= PASSAGE_MAX_CHARS) return [text];
   const pieces: string[] = [];
   let buf = "";
+  const flush = () => {
+    if (buf) pieces.push(buf);
+    buf = "";
+  };
   for (const sentence of text.split(/(?<=[.!?])\s+/)) {
-    if (buf && buf.length + sentence.length + 1 > PASSAGE_MAX_CHARS) {
-      pieces.push(buf);
-      buf = sentence;
-    } else buf = buf ? `${buf} ${sentence}` : sentence;
+    if (sentence.length > PASSAGE_MAX_CHARS) {
+      flush();
+      const words = sentence.match(new RegExp(String.raw`\S{1,${PASSAGE_MAX_CHARS}}(?:\s+|$)`, "g")) ?? [];
+      for (const w of words) {
+        if (buf.length + w.length > PASSAGE_MAX_CHARS) flush();
+        buf += w;
+      }
+      buf = buf.trimEnd();
+      flush();
+      continue;
+    }
+    if (buf && buf.length + sentence.length + 1 > PASSAGE_MAX_CHARS) flush();
+    buf = buf ? `${buf} ${sentence}` : sentence;
   }
-  if (buf) pieces.push(buf);
+  flush();
   return pieces;
 }
 

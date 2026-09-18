@@ -74,7 +74,8 @@ async function resolveSources(
     const key = `${s.kind}:${s.entityId}:${s.passageId ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const base = { projectId, kind: s.kind, entityId: s.entityId, passageId: s.passageId ?? null };
+    // `passageId` is valid only for Evidence (ADR 0008); other kinds never store one.
+    const base = { projectId, kind: s.kind, entityId: s.entityId, passageId: null };
     // A caller-supplied excerpt is kept only when it really occurs in the Source text.
     const quoted = (text: string) => {
       const q = s.excerpt?.replace(/\s+/g, " ").trim();
