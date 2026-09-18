@@ -136,17 +136,24 @@ describe("neighbourhood", () => {
   });
 
   it("follows a broken path longer than maxDepth through sideways edges between cause nodes", () => {
-    // a1 -> d1 -> t0 puts every node within the bound, but the break also reaches t0 along the
-    // six-edge chain a1 -> d1 -> t1 -> t2 -> t3 -> t4 -> t0. Edges are declared against path order, so
-    // a bounded number of passes advances one hop per pass and would leave t4 unmarked.
+    // Shortcuts (d1 -> t0, d2 -> t0) keep every node within the bound, but the break also reaches t0
+    // along the six-edge chain a1 -> d1 -> d2 -> d3 -> t1 -> t2 -> t0. Edges are declared against
+    // path order, so a bounded number of passes advances one hop per pass and would leave t1, t2 unmarked.
     const r = neighbourhood({
       centre: { type: "task", id: "t0" },
-      edges: [leadsTo("d1", "task", "t1"), leadsTo("d1", "task", "t0"), supports("a1", "d1")],
+      edges: [
+        leadsTo("d3", "task", "t1"),
+        superseded("d2", "d3"),
+        superseded("d1", "d2"),
+        leadsTo("d2", "task", "t0"),
+        leadsTo("d1", "task", "t0"),
+        supports("a1", "d1"),
+      ],
       assumptions: [assumption("a1", { state: "broken", subtype: "external_rule" })],
-      dependencies: [dep("t4", "t0"), dep("t3", "t4"), dep("t2", "t3"), dep("t1", "t2")],
-      known: known("assumption:a1", "decision:d1", "task:t0", "task:t1", "task:t2", "task:t3", "task:t4"),
+      dependencies: [dep("t2", "t0"), dep("t1", "t2")],
+      known: known("assumption:a1", "decision:d1", "decision:d2", "decision:d3", "task:t0", "task:t1", "task:t2"),
     });
-    expect(ids(r.causes)).toEqual(["d1@1", "t4@1", "a1@2", "t3@2", "t2@3", "t1@3"]);
+    expect(ids(r.causes)).toEqual(["d2@1", "d1@1", "t2@1", "a1@2", "t1@2", "d3@3"]);
     expect(r.causes.every((n) => n.onBrokenPath)).toBe(true);
     expect(r.causeEdges.every((e) => e.highlighted)).toBe(true);
     expect(r.brokenReachesCentre).toBe(true);
