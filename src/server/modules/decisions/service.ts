@@ -10,7 +10,7 @@ import { risksRepo } from "@/server/modules/risks/repository";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { wouldCreateCycle } from "@/server/modules/dependencies/graph";
 import { dependenciesRepo } from "@/server/modules/dependencies/repository";
-import { evidenceRepo } from "@/server/modules/evidence/repository";
+import { evidenceRepo, passagesRepo } from "@/server/modules/evidence/repository";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
@@ -56,6 +56,9 @@ async function getOwnedAssumption(db: DbOrTx, userId: string, id: string): Promi
   return a;
 }
 
+/** How a cited Passage is named after its Evidence title: the speaker, else its position. */
+export const passageWhere = (p: { speaker: string | null; ordinal: number }) => p.speaker ?? `passage ${p.ordinal + 1}`;
+
 /**
  * Turn Source inputs into rows: each must live in this Project, and `label` / `excerpt` are
  * snapshots computed here, never trusted from the caller (ADR 0008).
@@ -85,8 +88,23 @@ async function resolveSources(
     if (s.kind === "evidence") {
       const e = await evidenceRepo.findById(tx, s.entityId);
       if (!e || e.projectId !== projectId) throw bad();
-      const text = e.body ?? e.extractedText ?? e.notes ?? "";
-      out.push({ ...base, label: e.title, excerpt: quoted(text) });
+      // A Passage of another Evidence is a bad request; one that no longer exists (re-segmented since the
+      // caller saw it) degrades to the whole Evidence, so a Proposal accept never fails on it (issue #42).
+      const passage = s.passageId ? await passagesRepo.findById(tx, s.passageId) : undefined;
+      if (passage && passage.evidenceId !== e.id) {
+        throw new ValidationError("Passage is not in this source", { sources: ["Passage is not in this source"] });
+      }
+      if (passage) {
+        out.push({
+          ...base,
+          passageId: passage.id,
+          label: `${e.title} · ${passageWhere(passage)}`,
+          excerpt: quoted(passage.text),
+        });
+      } else {
+        const text = e.body ?? e.extractedText ?? e.notes ?? "";
+        out.push({ ...base, passageId: null, label: e.title, excerpt: quoted(text) });
+      }
     } else if (s.kind === "comment") {
       const c = await commentsRepo.findById(tx, s.entityId);
       if (!c || c.projectId !== projectId) throw bad();
@@ -403,12 +421,15 @@ export const decisionsService = {
     return assumptionsRepo.listByProject(ctx.db, projectId);
   },
 
-  /** `kind:entityId` to display label for every citable Source in the Project. */
+  /** `kind:entityId` (and `evidence:id:passageId` for a cited Passage) to display label for every citable Source. */
   sourceLabels: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const c = await decisionsService.sourceCandidates(ctx, projectId);
     const out = new Map<string, string>();
-    for (const e of c.evidence) out.set(`evidence:${e.id}`, e.title);
+    for (const e of c.evidence) {
+      out.set(`evidence:${e.id}`, e.title);
+      for (const p of e.passages) out.set(`evidence:${e.id}:${p.id}`, `${e.title} · ${passageWhere(p)}`);
+    }
     for (const m of c.comments)
       out.set(`comment:${m.id}`, firstLine(`${m.saidByName ? `${m.saidByName}: ` : ""}${m.body}`, LABEL_MAX));
     return out;

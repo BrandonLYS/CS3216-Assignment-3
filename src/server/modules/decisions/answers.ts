@@ -1,6 +1,6 @@
 import type { ActivityEventRow } from "@/server/modules/activity/schema";
 import type { CommentRow } from "@/server/modules/comments/schema";
-import { decisionHref, evidenceHref } from "@/shared/lib/hrefs";
+import { decisionHref, evidenceHref, passageHref } from "@/shared/lib/hrefs";
 import type { DecisionSourceRow } from "./schema";
 
 /**
@@ -103,17 +103,22 @@ const ITEM_PATH: Record<string, (p: string, id: string) => string> = {
 };
 
 /**
- * Where a cited Source opens: the Evidence item, the parent item of a Comment (History tab), or
+ * Where a cited Source opens: the Evidence item (or its cited Passage), the parent item of a Comment (History tab), or
  * the changed entity of an Activity Event. Falls back to the citing Decision (Comment gone) or
  * the Project Overview feed (entity without a dialog).
  */
 export function sourceHref(
   projectId: string,
   decisionId: string,
-  source: Pick<DecisionSourceRow, "kind" | "entityId">,
+  source: Pick<DecisionSourceRow, "kind" | "entityId"> & Partial<Pick<DecisionSourceRow, "passageId">>,
   lookups: HrefLookups,
 ): string {
-  if (source.kind === "evidence") return evidenceHref(projectId, source.entityId);
+  if (source.kind === "evidence") {
+    // A cited Passage lands on itself; a Passage that is gone (`passageId` nulled) degrades to the item.
+    return source.passageId
+      ? passageHref(projectId, source.entityId, source.passageId)
+      : evidenceHref(projectId, source.entityId);
+  }
   if (source.kind === "comment") {
     const c = lookups.comments.get(source.entityId);
     const path = c && ITEM_PATH[c.entityType];

@@ -8,6 +8,10 @@ export const decisionHref = (projectId: string, decisionId: string) =>
 export const evidenceHref = (projectId: string, evidenceId: string) =>
   `/projects/${projectId}/evidence?item=${evidenceId}#evidence-${evidenceId}`;
 
+/** One Passage of a transcript: the Evidence page with the item selected, anchored on the Passage (issue #42). */
+export const passageHref = (projectId: string, evidenceId: string, passageId: string) =>
+  `/projects/${projectId}/evidence?item=${evidenceId}#passage-${passageId}`;
+
 export const taskHref = (projectId: string, taskId: string) => `/projects/${projectId}/tasks?task=${taskId}`;
 
 export const milestoneHref = (projectId: string, milestoneId: string) =>

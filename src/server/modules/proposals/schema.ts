@@ -9,6 +9,8 @@ import type { AssumptionSubtype, AssumptionTargetType, DateTargetField, SourceKi
 export interface ProposedSource {
   kind: SourceKind;
   entityId: string;
+  /** The transcript Passage the excerpt sits in, when the Evidence has Passages (issue #42). Not FK-protected. */
+  passageId?: string | null;
   excerpt: string;
 }
 

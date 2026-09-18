@@ -89,6 +89,12 @@ describe("sourceHref", () => {
     expect(sourceHref("p", "d", { kind: "evidence", entityId: "ev1" }, lookups)).toBe(
       "/projects/p/evidence?item=ev1#evidence-ev1",
     );
+    expect(sourceHref("p", "d", { kind: "evidence", entityId: "ev1", passageId: "pa1" }, lookups)).toBe(
+      "/projects/p/evidence?item=ev1#passage-pa1",
+    );
+    expect(sourceHref("p", "d", { kind: "evidence", entityId: "ev1", passageId: null }, lookups)).toBe(
+      "/projects/p/evidence?item=ev1#evidence-ev1",
+    );
     expect(sourceHref("p", "d", { kind: "comment", entityId: "c1" }, lookups)).toBe(
       "/projects/p/tasks?task=t1&tab=history",
     );
