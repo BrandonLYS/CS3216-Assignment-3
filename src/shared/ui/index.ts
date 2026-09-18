@@ -8,3 +8,4 @@ export * from "./form-fields";
 export * from "./logo";
 export * from "./tabs";
 export * from "./command-picker";
+export * from "./scroll-to-hash";
