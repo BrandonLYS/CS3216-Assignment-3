@@ -52,7 +52,9 @@ export function ProposalCards({
                       <span className="flex items-center gap-1.5 text-ink">
                         <Icon className="size-3.5 shrink-0 text-ink-tertiary" />
                         <span className="truncate">
-                          {sourceLabels.get(`${s.kind}:${s.entityId}`) ?? labelFor(s.kind)}
+                          {(s.passageId ? sourceLabels.get(`${s.kind}:${s.entityId}:${s.passageId}`) : undefined) ??
+                            sourceLabels.get(`${s.kind}:${s.entityId}`) ??
+                            labelFor(s.kind)}
                         </span>
                       </span>
                       <blockquote className="border-l-2 border-hairline pl-2 text-caption text-ink-subtle italic">

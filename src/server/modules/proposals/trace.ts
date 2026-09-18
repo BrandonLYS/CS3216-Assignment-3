@@ -88,6 +88,26 @@ export function traceAssumption(raw: RawAssumption, refs: TraceRefs): ProposedAs
   return Object.keys(errors).length ? null : candidate;
 }
 
+/**
+ * Point each Evidence Source at the transcript Passage its excerpt sits in (issue #42): the first
+ * Passage whose normalised text contains the normalised excerpt; none when the excerpt spans
+ * Passages or the Evidence has no Passages. Pure.
+ */
+export function attachPassages<T extends { sources: ProposedSource[] }>(
+  proposals: T[],
+  passagesByEvidence: Map<string, Array<{ id: string; text: string }>>,
+): T[] {
+  return proposals.map((p) => ({
+    ...p,
+    sources: p.sources.map((s) => {
+      const passages = s.kind === "evidence" ? passagesByEvidence.get(s.entityId) : undefined;
+      if (!passages?.length) return s;
+      const q = norm(s.excerpt);
+      return { ...s, passageId: passages.find((x) => norm(x.text).includes(q))?.id ?? null };
+    }),
+  }));
+}
+
 export interface TracedProposal extends Omit<NewProposalRow, "projectId" | "extractor" | "assumptions"> {
   fingerprint: string;
   sources: ProposedSource[];

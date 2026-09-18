@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RawProposal } from "./extract";
-import { fingerprintOf, traceAssumption, traceProposals } from "./trace";
+import { attachPassages, fingerprintOf, traceAssumption, traceProposals } from "./trace";
 
 const sources = [
   { kind: "evidence" as const, entityId: "e1", title: "Notes", text: "We   decided to\nswitch to interviews. Done." },
@@ -82,5 +82,35 @@ describe("traceProposals", () => {
     };
     expect(traceAssumption({ statement: "j", subtype: "person", targetName: "John" }, two)).toBeNull();
     expect(traceAssumption({ statement: "j", subtype: "person", targetName: "Doe" }, two)?.targetId).toBe("p2");
+  });
+});
+
+describe("attachPassages", () => {
+  const passages = new Map([
+    [
+      "e1",
+      [
+        { id: "p1", text: "The merchant dataset slipped again." },
+        { id: "p2", text: "We decided to freeze scope\nafter the pilot instead of adding the export." },
+      ],
+    ],
+  ]);
+  const proposal = (excerpt: string, entityId = "e1", kind: "evidence" | "comment" = "evidence") => ({
+    sources: [{ kind, entityId, excerpt }],
+  });
+
+  it("points an excerpt at the Passage that contains it, whitespace and case tolerant", () => {
+    const [out] = attachPassages([proposal("we DECIDED to freeze scope after the pilot")], passages);
+    expect(out!.sources[0]).toMatchObject({ passageId: "p2" });
+  });
+
+  it("gives null when the excerpt spans two Passages and leaves Sources without Passages untouched", () => {
+    const [spanning, comment, other] = attachPassages(
+      [proposal("slipped again. We decided"), proposal("anything", "c1", "comment"), proposal("anything", "e9")],
+      passages,
+    );
+    expect(spanning!.sources[0]).toMatchObject({ passageId: null });
+    expect(comment!.sources[0]).not.toHaveProperty("passageId");
+    expect(other!.sources[0]).not.toHaveProperty("passageId");
   });
 });

@@ -6,7 +6,8 @@ import { conversationsRepo, messagesRepo } from "@/server/modules/assistant/repo
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { decisionsService } from "@/server/modules/decisions/service";
 import type { CreateDecisionInput } from "@/server/modules/decisions/validation";
-import { evidenceRepo } from "@/server/modules/evidence/repository";
+import { transcriptText } from "@/server/modules/evidence/passages";
+import { evidenceRepo, passagesRepo } from "@/server/modules/evidence/repository";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
@@ -15,7 +16,7 @@ import type { ProposalExtractor } from "@/shared/domain";
 import { pickExtractor, type Extract, type ExtractSource } from "./extract";
 import { passSourcesRepo, proposalsRepo } from "./repository";
 import type { ProposalRow } from "./schema";
-import { traceProposals, type TraceRefs } from "./trace";
+import { attachPassages, traceProposals, type TraceRefs } from "./trace";
 
 export type PassOutcome =
   | { skipped: "not_configured" | "nothing_new" | "failed" }
@@ -56,19 +57,29 @@ export const proposalsService = {
     const extractorName: ProposalExtractor = opts.extract ? "heuristic" : (picked?.name ?? "heuristic");
     if (!extract) return { skipped: "not_configured" };
 
-    const [evidence, comments, passed] = await Promise.all([
+    const [evidence, comments, passed, passages] = await Promise.all([
       evidenceRepo.listByProject(ctx.db, projectId),
       commentsRepo.listByProject(ctx.db, projectId),
       passSourcesRepo.listForProject(ctx.db, projectId),
+      passagesRepo.listForProject(ctx.db, projectId),
     ]);
+    const passagesByEvidence = new Map<string, typeof passages>();
+    for (const p of passages)
+      passagesByEvidence.set(p.evidenceId, [...(passagesByEvidence.get(p.evidenceId) ?? []), p]);
     const seen = new Map(passed.map((p) => [`${p.kind}:${p.entityId}`, p.textHash]));
     const candidates: Array<ExtractSource & { textHash: string }> = [];
-    for (const e of evidence) {
-      const text = evidenceText(e).trim();
-      if (!text) continue;
-      const textHash = hashOf(text);
+    // Transcripts first: they carry the stated reasoning (issue #42). The hash stays on the raw text so
+    // "already read" is independent of segmentation; the extractor reads label-free Passage text so its
+    // excerpts sit inside one Passage.
+    const ordered = [...evidence].sort((a, b) => Number(b.kind === "transcript") - Number(a.kind === "transcript"));
+    for (const e of ordered) {
+      const raw = evidenceText(e).trim();
+      if (!raw) continue;
+      const textHash = hashOf(raw);
       if (seen.get(`evidence:${e.id}`) === textHash) continue;
-      candidates.push({ kind: "evidence", entityId: e.id, title: e.title, text, textHash });
+      const own = passagesByEvidence.get(e.id);
+      const text = own?.length ? transcriptText(own) : raw;
+      candidates.push({ kind: "evidence", entityId: e.id, title: e.title, evidenceKind: e.kind, text, textHash });
     }
     for (const c of comments) {
       const text = c.body.trim();
@@ -101,7 +112,13 @@ export const proposalsService = {
     let raw: Awaited<ReturnType<Extract>>;
     try {
       raw = await extract({
-        sources: candidates.map(({ kind, entityId, title, text }) => ({ kind, entityId, title, text })),
+        sources: candidates.map(({ kind, entityId, title, evidenceKind, text }) => ({
+          kind,
+          entityId,
+          title,
+          evidenceKind,
+          text,
+        })),
         context: {
           people: refs.people.map((p) => p.name),
           milestones: refs.milestones.map((m) => m.name),
@@ -113,7 +130,9 @@ export const proposalsService = {
       console.error("Proposal pass failed", e);
       return { skipped: "failed" };
     }
-    const { kept, discarded } = traceProposals(raw.proposals, candidates, refs);
+    const traced = traceProposals(raw.proposals, candidates, refs);
+    const kept = attachPassages(traced.kept, passagesByEvidence);
+    const { discarded } = traced;
 
     // Pass bookkeeping and the new Proposals land together, after the extractor returned. Two
     // passes racing on one Project (two quick saves) are safe: the unique keys absorb the loser.

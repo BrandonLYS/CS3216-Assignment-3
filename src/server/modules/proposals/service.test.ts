@@ -318,3 +318,71 @@ describe("races and tampering", () => {
     expect(await proposalsService.listPending(ctx, p.id)).toHaveLength(1);
   });
 });
+
+describe("transcripts (#42)", () => {
+  const TRANSCRIPT = [
+    "[00:01:10] Priya: The merchant dataset slipped again.",
+    "[00:03:45] Marcus: We decided to freeze scope after the pilot instead of adding the export.",
+    "Priya: Agreed.",
+  ].join("\n");
+
+  it("lists transcripts first, hands the extractor label-free text and cites the Passage", async () => {
+    const pid = (await makeProject(ctx, "TRP")).id;
+    await evidenceService.create(ctx, {
+      projectId: pid,
+      title: "Plan",
+      kind: "plan",
+      body: "We agreed to ship in Q4.",
+    });
+    const transcript = await evidenceService.create(ctx, {
+      projectId: pid,
+      title: "Steering call",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    const [, marcus] = await evidenceService.passages(ctx, transcript.id);
+    let seen: Parameters<Extract>[0] | null = null;
+    const spy: Extract = async (input) => {
+      seen = input;
+      return heuristicExtract(input);
+    };
+    const out = await proposalsService.runPass(ctx, pid, { extract: spy });
+    expect(out).toMatchObject({ proposed: 2 });
+    expect(seen!.sources.map((s) => [s.title, s.evidenceKind])).toEqual([
+      ["Steering call", "transcript"],
+      ["Plan", "plan"],
+    ]);
+    expect(seen!.sources[0]!.text).toBe(
+      "The merchant dataset slipped again.\n\nWe decided to freeze scope after the pilot instead of adding the export.\n\nAgreed.",
+    );
+    const pending = await proposalsService.listPending(ctx, pid);
+    const fromTranscript = pending.find((p) => p.sources[0]!.entityId === transcript.id)!;
+    expect(fromTranscript.sources[0]).toMatchObject({
+      passageId: marcus!.id,
+      excerpt: "We decided to freeze scope after the pilot instead of adding the export.",
+    });
+    expect(pending.find((p) => p.sources[0]!.entityId !== transcript.id)!.sources[0]).not.toHaveProperty("passageId");
+
+    // Accept carries the Passage into the Decision Source.
+    const d = await proposalsService.accept(ctx, { id: fromTranscript.id });
+    const [source] = await sourcesRepo.listForDecisions(ctx.db, [d.id]);
+    expect(source).toMatchObject({ passageId: marcus!.id, label: "Steering call · Marcus" });
+  });
+
+  it("accepting after the transcript was re-segmented still creates the Decision, citing the whole item", async () => {
+    const pid = (await makeProject(ctx, "TRQ")).id;
+    const transcript = await evidenceService.create(ctx, {
+      projectId: pid,
+      title: "Late call",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    await proposalsService.runPass(ctx, pid, { extract: heuristicExtract });
+    const [proposal] = await proposalsService.listPending(ctx, pid);
+    expect(proposal!.sources[0]!.passageId).toBeTruthy();
+    await evidenceService.update(ctx, { id: transcript.id, body: `${TRANSCRIPT}\nMarcus: One more thing.` });
+    const d = await proposalsService.accept(ctx, { id: proposal!.id });
+    const [source] = await sourcesRepo.listForDecisions(ctx.db, [d.id]);
+    expect(source).toMatchObject({ passageId: null, label: "Late call", entityId: transcript.id });
+  });
+});
