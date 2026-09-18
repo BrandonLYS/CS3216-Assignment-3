@@ -221,3 +221,101 @@ describe("evidenceService text extraction", () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe("transcript passages (#42)", () => {
+  const TRANSCRIPT = [
+    "[00:01:10] Priya: The merchant dataset slipped again.",
+    "[00:03:45] Marcus: We decided to freeze scope after the pilot instead of adding the export.",
+    "Priya: Agreed.",
+  ].join("\n");
+
+  it("segments a pasted transcript into Passages with speakers and timestamps", async () => {
+    const ev = await evidenceService.create(ctx, {
+      projectId,
+      title: "Steering call",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    const passages = await evidenceService.passages(ctx, ev.id);
+    expect(passages.map((p) => [p.ordinal, p.speaker, p.timestamp, p.text])).toEqual([
+      [0, "Priya", "00:01:10", "The merchant dataset slipped again."],
+      [1, "Marcus", "00:03:45", "We decided to freeze scope after the pilot instead of adding the export."],
+      [2, "Priya", null, "Agreed."],
+    ]);
+  });
+
+  it("segments an uploaded text transcript from its extracted text", async () => {
+    const ev = await evidenceService.create(
+      ctx,
+      { projectId, title: "Uploaded call", kind: "transcript" },
+      { name: "call.txt", type: "text/plain", size: TRANSCRIPT.length, bytes: Buffer.from(TRANSCRIPT) },
+    );
+    expect(ev.extractedText).toBe(TRANSCRIPT);
+    expect((await evidenceService.passages(ctx, ev.id)).map((p) => p.speaker)).toEqual(["Priya", "Marcus", "Priya"]);
+  });
+
+  it("segments an unlabelled transcript into paragraphs and gives other kinds no Passages", async () => {
+    const plain = await evidenceService.create(ctx, {
+      projectId,
+      title: "Plain call",
+      kind: "transcript",
+      body: "First thing said.\n\nSecond thing said.",
+    });
+    expect((await evidenceService.passages(ctx, plain.id)).map((p) => [p.speaker, p.text])).toEqual([
+      [null, "First thing said."],
+      [null, "Second thing said."],
+    ]);
+    const minutes = await mkEvidence("Minutes, not a transcript");
+    expect(await evidenceService.passages(ctx, minutes.id)).toEqual([]);
+  });
+
+  it("keeps Passages on a title edit, rewrites them on a body edit and drops them on a kind change", async () => {
+    const ev = await evidenceService.create(ctx, {
+      projectId,
+      title: "Edited call",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    const before = await evidenceService.passages(ctx, ev.id);
+    await evidenceService.update(ctx, { id: ev.id, title: "Edited call (renamed)" });
+    expect((await evidenceService.passages(ctx, ev.id)).map((p) => p.id)).toEqual(before.map((p) => p.id));
+    await evidenceService.update(ctx, { id: ev.id, body: `${TRANSCRIPT}\nMarcus: One more.` });
+    const after = await evidenceService.passages(ctx, ev.id);
+    expect(after).toHaveLength(4);
+    expect(after.some((p) => before.some((b) => b.id === p.id))).toBe(false);
+    await evidenceService.update(ctx, { id: ev.id, kind: "plan" });
+    expect(await evidenceService.passages(ctx, ev.id)).toEqual([]);
+  });
+
+  it("still creates the Evidence with its text when segmentation throws", async () => {
+    const passagesModule = await import("./passages");
+    const boom = vi.spyOn(passagesModule, "segmentTranscript").mockImplementation(() => {
+      throw new Error("segmenter bug");
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const ev = await evidenceService.create(ctx, {
+        projectId,
+        title: "Broken segmenter",
+        kind: "transcript",
+        body: TRANSCRIPT,
+      });
+      expect(ev.body).toBe(TRANSCRIPT);
+      expect(await evidenceService.passages(ctx, ev.id)).toEqual([]);
+      expect(error).toHaveBeenCalled();
+    } finally {
+      boom.mockRestore();
+      error.mockRestore();
+    }
+  });
+
+  it("refuses Passages of Evidence the caller does not own", async () => {
+    const ev = await evidenceService.create(ctx, {
+      projectId,
+      title: "Private call",
+      kind: "transcript",
+      body: TRANSCRIPT,
+    });
+    await expect(evidenceService.passages(await makeCtx(), ev.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});

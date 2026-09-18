@@ -12,7 +12,9 @@ import { tasksRepo } from "@/server/modules/tasks/repository";
 import { getStorage } from "@/server/storage";
 import { labelFor, type LinkableEntityType } from "@/shared/domain";
 import { extractText } from "./extract";
-import { evidenceLinksRepo, evidenceRepo } from "./repository";
+import { segmentTranscript } from "./passages";
+import { evidenceLinksRepo, evidenceRepo, passagesRepo } from "./repository";
+import type { EvidenceRow } from "./schema";
 import type { CreateEvidenceInput, EvidenceLinkInput, UpdateEvidenceInput } from "./validation";
 
 export const MAX_EVIDENCE_BYTES = 15 * 1024 * 1024;
@@ -70,6 +72,26 @@ async function ownedEvidenceInProject(db: DbOrTx, projectId: string, evidenceId:
   return e;
 }
 
+/** The text a transcript is segmented from: the paste, else the file's extracted text. */
+export const evidenceText = (e: Pick<EvidenceRow, "body" | "extractedText">) => e.body ?? e.extractedText ?? "";
+
+/**
+ * Rewrite a transcript's Passages from its current text; anything else has none. Segmentation is
+ * pure and guarded: a segmenter failure logs and leaves the Evidence with its text and no Passages,
+ * so ingest never fails because of it (issue #42).
+ */
+async function syncPassages(tx: DbOrTx, row: EvidenceRow) {
+  let passages: ReturnType<typeof segmentTranscript> = [];
+  if (row.kind === "transcript") {
+    try {
+      passages = segmentTranscript(evidenceText(row));
+    } catch (e) {
+      console.error(`Transcript segmentation failed for evidence ${row.id}`, e);
+    }
+  }
+  await passagesRepo.replaceForEvidence(tx, row.id, passages);
+}
+
 export const evidenceService = {
   list: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
@@ -77,6 +99,12 @@ export const evidenceService = {
   },
 
   get: (ctx: Ctx, id: string) => getOwned(ctx.db, ctx.userId, id),
+
+  /** Ordered Passages of one Evidence item (empty unless it is a transcript). */
+  passages: async (ctx: Ctx, id: string) => {
+    await getOwned(ctx.db, ctx.userId, id);
+    return passagesRepo.listForEvidence(ctx.db, id);
+  },
 
   /**
    * Either `file` or `input.body` must be present. Bytes are written to storage before the
@@ -106,6 +134,7 @@ export const evidenceService = {
           sizeBytes: file?.size,
           extractedText,
         });
+        await syncPassages(tx, row);
         rec.created("evidence", input.projectId, row.id, row.title);
         return row;
       });
@@ -125,6 +154,7 @@ export const evidenceService = {
       const changes = diffFields(before, clean);
       if (!changes.length) return before;
       const after = await evidenceRepo.update(tx, id, clean);
+      if (changes.some((c) => c.field === "kind" || c.field === "body")) await syncPassages(tx, after);
       rec.updated("evidence", before.projectId, id, after.title, changes);
       return after;
     }),
