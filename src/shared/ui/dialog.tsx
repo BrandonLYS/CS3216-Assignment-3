@@ -28,40 +28,44 @@ export function Dialog({
     () => false,
   );
 
-  const panel = React.useRef<HTMLDivElement>(null);
+  const modal = React.useRef<HTMLDialogElement>(null);
 
-  React.useEffect(() => {
-    if (!open) return;
-    // Only the topmost open dialog answers Escape, so a nested dialog does not close its parent.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const all = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
-      if (all[all.length - 1] === panel.current) onClose();
-    };
-    document.addEventListener("keydown", onKey);
+  React.useLayoutEffect(() => {
+    if (!open || !mounted) return;
+    const dialog = modal.current;
+    if (!dialog) return;
+    const trigger = document.activeElement;
+    // Native modality contains focus and makes the background inert.
+    dialog.showModal();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKey);
+      dialog.close();
       document.body.style.overflow = prev;
+      // React may already have removed the portal, so native focus restoration cannot run.
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open, mounted]);
 
   if (!mounted || !open) return null;
 
   // Portals still bubble React events through the component tree, so a form inside a nested
   // Dialog would submit the ActionForm that rendered it; stop submit at the overlay.
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-overlay/70 p-4 pt-[8vh] duration-150 animate-in fade-in-0"
+    <dialog
+      ref={modal}
+      aria-label={title}
+      aria-modal="true"
+      className="fixed inset-0 z-50 m-0 hidden h-dvh max-h-none w-screen max-w-none items-start justify-center border-0 bg-overlay/70 p-4 pt-[8vh] text-ink duration-150 animate-in fade-in-0 backdrop:bg-transparent open:flex"
+      onCancel={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       onSubmit={(e) => e.stopPropagation()}
     >
       <div
-        ref={panel}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
         className={cn(
           "flex max-h-[84vh] w-full max-w-lg flex-col panel border-hairline-strong bg-surface-2 shadow-2xl duration-150 animate-in fade-in-0 zoom-in-95",
           className,
@@ -78,7 +82,7 @@ export function Dialog({
         </div>
         <div className="min-h-0 overflow-y-auto px-5 pb-5">{children}</div>
       </div>
-    </div>,
+    </dialog>,
     document.body,
   );
 }

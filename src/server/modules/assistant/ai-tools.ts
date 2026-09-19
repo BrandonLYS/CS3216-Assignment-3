@@ -18,6 +18,8 @@ export function toAiTools(ctx: Ctx, defs: ToolDef[], scope?: { projectId: string
         tool({
           description: def.description,
           inputSchema,
+          // Database rows contain Dates; model tool results must contain only JSON values.
+          toModelOutput: ({ output }) => ({ type: "json", value: JSON.parse(JSON.stringify(output ?? null)) }),
           execute: async (input: Record<string, unknown>) => {
             try {
               return await def.handler(ctx, scoped ? { ...input, projectId: scope.projectId } : input);

@@ -75,7 +75,8 @@ test("custom statuses must keep a category and cannot be deleted while in use", 
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("link", { name: "E2E Project" }).first().click();
-  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+  await page.getByRole("main").getByRole("link", { name: "Settings", exact: true }).click();
 
   await page.getByRole("button", { name: "Add", exact: true }).first().click();
   const dialog = page.getByRole("dialog");
