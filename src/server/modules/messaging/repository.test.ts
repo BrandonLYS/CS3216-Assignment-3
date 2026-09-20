@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import type { PersonRow } from "@/server/modules/people/schema";
+import { peopleRepo } from "@/server/modules/people/repository";
 import { people } from "@/server/modules/people/schema";
 import { peopleService } from "@/server/modules/people/service";
 import { projects, type ProjectRow } from "@/server/modules/projects/schema";
@@ -157,6 +158,55 @@ describe("history", () => {
       limit: 2,
     });
     expect(second.map((m) => m.text)).toEqual(["m3", "m2"]);
+  });
+});
+
+describe("messaging credentials stay on the server", () => {
+  it("never returns a password hash from a public Person read", async () => {
+    await ctx.db
+      .update(people)
+      .set({ passwordHash: "hashed-secret", inviteTokenHash: "hashed-token" })
+      .where(eq(people.id, priya.id));
+
+    // These are the reads that reach the browser through loadProjectRefs and the Assistant
+    // prompt through get_project_summary, so a credential column must not appear in them.
+    const listed = await peopleRepo.listByProject(ctx.db, project.id);
+    const found = await peopleRepo.findById(ctx.db, priya.id);
+    const updated = await peopleRepo.update(ctx.db, priya.id, { role: "Designer" });
+
+    for (const row of [...listed, found, updated]) {
+      expect(row).toBeDefined();
+      expect(Object.keys(row!)).not.toContain("passwordHash");
+      expect(Object.keys(row!)).not.toContain("inviteTokenHash");
+    }
+  });
+
+  it("reads credentials only through the login lookup, case-insensitively", async () => {
+    await ctx.db
+      .update(people)
+      .set({ email: "Jason.Tan@Example.com", passwordHash: "hashed-secret" })
+      .where(eq(people.id, jason.id));
+
+    const found = await peopleRepo.findCredentialsByEmail(ctx.db, project.id, "jason.tan@example.com");
+    expect(found?.passwordHash).toBe("hashed-secret");
+    expect(await peopleRepo.findCredentialsByEmail(ctx.db, project.id, "nobody@example.com")).toBeUndefined();
+  });
+
+  it("allows two uninvited People to share an email but not two invited ones", async () => {
+    const a = await peopleService.createPerson(ctx, { projectId: project.id, name: "Ann Koh" });
+    const b = await peopleService.createPerson(ctx, { projectId: project.id, name: "Ben Koh" });
+    const shared = "shared@example.com";
+
+    // Always allowed: the roster is a directory, so existing data is never invalidated.
+    await ctx.db.update(people).set({ email: shared }).where(eq(people.id, a.id));
+    await ctx.db.update(people).set({ email: shared }).where(eq(people.id, b.id));
+
+    // The clash surfaces only when the second of them is invited.
+    await ctx.db.update(people).set({ inviteTokenHash: "token-a" }).where(eq(people.id, a.id));
+    await expectRejectedBy(
+      ctx.db.update(people).set({ inviteTokenHash: "token-b" }).where(eq(people.id, b.id)),
+      "people_project_email_uq",
+    );
   });
 });
 

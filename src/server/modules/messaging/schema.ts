@@ -70,7 +70,13 @@ export const roomMessages = pgTable(
     authorUserId: text("author_user_id").references(() => user.id, { onDelete: "set null" }),
     /** Snapshot of the author's name at write time; survives the Person or User being deleted. */
     authorName: text("author_name").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Millisecond precision on purpose. Postgres stores a timestamp to the microsecond but
+     * drizzle hands it back as a JavaScript `Date`, which truncates to milliseconds, so a
+     * keyset cursor built from one would compare `.123000` against a stored `.123456` and skip
+     * every Chat Message in between. Storing what the cursor can represent removes the gap.
+     */
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
   (t) => [
     // The only reference to the Room, so there is one cascade path and not two. Without the
