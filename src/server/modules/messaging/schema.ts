@@ -86,7 +86,11 @@ export const roomMessages = pgTable(
       columns: [t.roomId, t.projectId],
       foreignColumns: [rooms.id, rooms.projectId],
     }).onDelete("cascade"),
-    index("room_messages_room_time_idx").on(t.roomId, t.createdAt.desc(), t.id.desc()),
+    // `nullsFirst` is not about nulls: both columns are NOT NULL. It is what Postgres uses by
+    // default for DESC, and so what `desc()` in `listMessages` asks for. Drizzle would
+    // otherwise emit DESC NULLS LAST, which Postgres treats as a different ordering, and the
+    // planner would sort a Room's whole history before applying the page limit.
+    index("room_messages_room_time_idx").on(t.roomId, t.createdAt.desc().nullsFirst(), t.id.desc().nullsFirst()),
     check("room_messages_content_ck", sql`num_nonnulls(${t.text}, ${t.attachmentUrl}) >= 1`),
     // At most one, never exactly one: `on delete set null` must be able to leave both null.
     check("room_messages_author_ck", sql`num_nonnulls(${t.authorPersonId}, ${t.authorUserId}) <= 1`),
