@@ -3,6 +3,12 @@ import type { Ctx } from "@/server/core/context";
 import { DomainError } from "@/server/core/errors";
 import type { ToolDef } from "./tools";
 
+/** Convert service results to plain JSON so the AI SDK's ModelMessage schema accepts them. */
+function toJSON(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value));
+}
+
 /**
  * Adapt registry entries to AI SDK tools for one chat turn. When a scope is given, `projectId`
  * is bound server-side and removed from the model-facing schema, so the model cannot point a
@@ -20,9 +26,10 @@ export function toAiTools(ctx: Ctx, defs: ToolDef[], scope?: { projectId: string
           inputSchema,
           execute: async (input: Record<string, unknown>) => {
             try {
-              return await def.handler(ctx, scoped ? { ...input, projectId: scope.projectId } : input);
+              const result = await def.handler(ctx, scoped ? { ...input, projectId: scope.projectId } : input);
+              return toJSON(result);
             } catch (e) {
-              if (e instanceof DomainError) return { error: e.message };
+              if (e instanceof DomainError) return toJSON({ error: e.message });
               throw e;
             }
           },

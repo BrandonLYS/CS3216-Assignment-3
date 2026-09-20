@@ -31,7 +31,7 @@ export function CreateProjectDialog({ open, onClose }: { open: boolean; onClose:
             required
             placeholder="PAY"
             maxLength={6}
-            hint="Prefix for task IDs, e.g. PAY-12"
+            hint="Prefix for task IDs, e.g. PAY"
             inputClassName="uppercase"
           />
         </FormRow>

@@ -47,3 +47,7 @@ next-env.d.ts
 /.test-storage
 /test-results
 /playwright-report
+
+# course materials (not source)
+/*.pdf
+/*.docx

@@ -1,0 +1,60 @@
+[
+  {
+    "name": "Triage drilldown and comment",
+    "result": {
+      "afterClose": "http://localhost:3000/projects/f731f229-5813-4c4e-a8fb-8af9e87430c3/tasks?task=bf091a0c-03b5-4606-a9fe-28926e8d0669",
+      "commentPosted": true,
+      "triageOwnersVisible": "Overdue\nPAY\nPAY-1\nVendor sandbox credentials\nBlocked\nDue 17 Sep, 2 days ago"
+    }
+  },
+  {
+    "name": "Filter and view persistence",
+    "result": {
+      "filterAfterReturn": "runbook",
+      "showDoneAfterReturn": false,
+      "visibleDone": false
+    }
+  },
+  {
+    "name": "Global task search",
+    "result": {
+      "title": "Review migration checklist",
+      "url": "http://localhost:3000/projects/9fd1bf3e-2b03-4e56-bed5-a6a7faf3db56/tasks?task=6d2f6303-f41c-4cf8-ab0b-62e92ee0aac8"
+    }
+  },
+  {
+    "name": "Quick capture from command palette",
+    "result": "Command palette\nTASKS\nNo tasks match"
+  },
+  {
+    "name": "Timeline with due-only tasks",
+    "result": "Payments cutover\nPAY\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings"
+  },
+  {
+    "name": "Dependency and milestone",
+    "result": {
+      "added": true
+    }
+  },
+  {
+    "name": "Cross-project calendar",
+    "result": "Calendar\n\nDue dates and milestones across all projects\n\nToday\nSeptember 2026\nMonth\nWeek\nMon\nTue\nWed\nThu\nFri\nSat\nSun\n31\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\nArchive legacy reports\nPAY-5\n17\nVendor sandbox credentials\nPAY-1\n18\nApprove onboarding copy\nONB-1\nComplete restore rehearsal\nDATA-1\n19\n20\nApprove rollback runbook\nPAY-3\nCapture legal sign-off\nONB-4\n21\nAgree support coverage\nDATA-3\nLoad-test payment gateway\nPAY-2\n22\nValidate signup analytics\nONB-2\nInvestigate backup latency\nDATA-4\n23\nRun onboarding pilot\nONB-3\n24\nPayments go-live\nPAY\nReview migration checklist\nDATA-2\n25\nUpdate support FAQ\nPAY-4\n26\n27\n28\n29\n30\n1\n2\n3\n4"
+  },
+  {
+    "name": "Duplicate People across projects",
+    "result": [
+      {
+        "project": "Payments cutover",
+        "text": "Payments cutover\nPAY\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\nPEOPLE\nAdd person\nAM\n\nAlex Morgan\n\nTechnical lead\n\n4 open\nTEAMS\nAdd team\n\nNo teams yet."
+      },
+      {
+        "project": "Customer onboarding",
+        "text": "Customer onboarding\nONB\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\nPEOPLE\nAdd person\nAM\n\nAlex Morgan\n\nTechnical lead\n\n3 open\nTEAMS\nAdd team\n\nNo teams yet."
+      },
+      {
+        "project": "Data platform upgrade",
+        "text": "Data platform upgrade\nDATA\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\nPEOPLE\nAdd person\nAM\n\nAlex Morgan\n\nTechnical lead\n\n4 open\nTEAMS\nAdd team\n\nNo teams yet."
+      }
+    ]
+  }
+]

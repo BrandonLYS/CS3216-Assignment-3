@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Reload filters",
+    "result": {
+      "filter": "",
+      "showDone": true,
+      "boardCards": 0
+    }
+  },
+  {
+    "name": "Board status move",
+    "result": {
+      "status": "In Progress"
+    }
+  },
+  {
+    "name": "Timeline actual view",
+    "result": "Payments cutover\nPAY\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\nNew milestone\n\n6 scheduled · 1 dependencies\n\nItem\nPayments go-live\nLoad-test payment gateway\nPAY-2\nArchive legacy reports\nPAY-5\nVendor sandbox credentials\nPAY-1\nApprove rollback runbook\nPAY-3\nUpdate support FAQ\nPAY-4\nSep 2026\nOct 2026\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16"
+  },
+  {
+    "name": "Risk response planning",
+    "result": "Payments cutover\nPAY\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\n\n1 risk · sorted by severity\n\nShow closed\nNew risk\nID\tRisk\tProbability\tImpact\tStatus\tOwner\tReview\nR-1\t\nVendor outage during cutover\n\nMitigation: Obtain vendor freeze confirmation and rehearse rollback\n\n\t\nHigh\n\t\nHigh\n\t\nOpen\n\t\nAM\nAlex\n\t1d left"
+  },
+  {
+    "name": "Meeting Evidence capture",
+    "result": "Payments cutover\nPAY\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\n\n1 item\n\nAdd\nCutover decision meeting\nMinutes\n·\n19 Sep 2026\nMinutes\nSource date 19 Sep 2026\nCutover decision meeting\nEdit\nLinked to\nLink item\n\nNot linked to any item\n\nWe decided to keep a reversible cutover on 24 September. Alex owns the rollback rehearsal. We rejected a big-bang cutover because the vendor sandbox is still unreliable. Revisit the date if sandbox access is not ready by 21 September.\n\nAdded 0 seconds ago"
+  },
+  {
+    "name": "Decision capture source requirement",
+    "result": "Payments cutover\nPAY\nActive\nAssistant\nOverview\nTasks\nTimeline\nCalendar\nRisks\nDecisions\nEvidence\nPeople\nSettings\n\n1 decision · newest first\n\nShow superseded\nAssistant acceptance: 0 of 1\nPropose from evidence\nNew decision\nID\tDecision\tDate\tOwner\tStatus\tAssumptions\n\nD-1\n\t\n\nUse a reversible cutover\n\nKeep a rollback path through launch\n\n\t19 Sep 2026\t\nAM\nAlex\n\t\nActive\t-"
+  },
+  {
+    "name": "Workspace preferences",
+    "result": "Settings\nASSISTANT\nProfile\n\nHow you work: tone, cadence, defaults. The Assistant reads this on every turn, in every Project. Reflection revises it after your conversations; every version is kept below.\n\nMarkdown\nMarkdown. Roughly 2,000 tokens at most.\nSave\nAPI TOKENS\n\nLet an MCP client such as Claude Desktop or Cursor drive your Projects. Each token acts as you; changes show in History via Assistant. Destructive tools are not offered over MCP.\n\nLabel\nGenerate token"
+  },
+  {
+    "name": "Portfolio final view",
+    "result": {
+      "cards": 10,
+      "links": [
+        "OverduePAYPAY-1Vendor sandbox credentialsBlockedDue 17 Sep, 2 days ago",
+        "OverdueDATADATA-1Complete restore rehearsalDue 18 Sep, 1 day ago",
+        "OverdueONBONB-1Approve onboarding copyBlockedDue 18 Sep, 1 day ago",
+        "BlockedDATADATA-4Investigate backup latencyDue soonBlocked (Blocked)",
+        "Top riskPAYR-1Vendor outage during cutoverSeverity 9 (High / High)",
+        "Due soonONBONB-4Capture legal sign-offDue 20 Sep, in 1 day",
+        "Due soonPAYPAY-3Approve rollback runbookDue 20 Sep, in 1 day",
+        "Due soonDATADATA-3Agree support coverageDue 21 Sep, in 2 days",
+        "Due soonPAYPAY-2Load-test payment gatewayDue 21 Sep, in 2 days",
+        "Due soonONBONB-2Validate signup analyticsDue 22 Sep, in 3 days",
+        "Payments go-livePayments cutoverPlanned24 Sep",
+        "Data platform upgrade1 overdue1 blocked2 due soon",
+        "Customer onboarding1 overdue3 due soon",
+        "Payments cutover1 overdue1 top risk3 due soon"
+      ]
+    }
+  }
+]

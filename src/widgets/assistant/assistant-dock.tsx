@@ -14,7 +14,7 @@ import * as React from "react";
 import { useShell } from "@/shared/lib/shell-context";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 import { cn } from "@/shared/lib/cn";
-import { Button, Textarea } from "@/shared/ui";
+import { Button, Panel, SectionTitle, Textarea } from "@/shared/ui";
 import { LinkedText } from "./linked-text";
 
 const FRIENDLY: Record<string, string> = {
@@ -53,6 +53,85 @@ const TOOL_LABEL: Record<string, string> = {
 };
 
 const isPendingCard = (part: UIMessage["parts"][number]) => isToolUIPart(part) && part.state === "approval-requested";
+
+type ProjectSummary = {
+  project?: { name?: string; key?: string } | null;
+  milestones?: { name?: string; targetDate?: string }[];
+  tasks?: { number?: number; title?: string; status?: string }[];
+  risks?: { name?: string }[];
+};
+
+function latestSummary(messages: UIMessage[]): ProjectSummary | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    for (let j = m.parts.length - 1; j >= 0; j--) {
+      const part = m.parts[j];
+      if (!isToolUIPart(part) || part.state !== "output-available") continue;
+      const name = getToolName(part);
+      if (name === "get_project_summary" && part.output && typeof part.output === "object") {
+        return part.output as ProjectSummary;
+      }
+      if (name === "list_projects" && Array.isArray(part.output)) {
+        return {
+          project: null,
+          milestones: [],
+          tasks: part.output as unknown as { number: number; title: string; status: string }[],
+          risks: [],
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function CurrentState({ messages }: { messages: UIMessage[] }) {
+  const summary = latestSummary(messages);
+  if (!summary) return null;
+  const milestones = summary.milestones ?? [];
+  const tasks = summary.tasks ?? [];
+  const risks = summary.risks ?? [];
+  return (
+    <Panel className="mb-3 p-3">
+      <SectionTitle className="mb-2">Current state</SectionTitle>
+      {summary.project && summary.project.name && (
+        <p className="mb-2 truncate text-body-sm font-medium text-ink">
+          {summary.project.key ? `${summary.project.key} · ` : ""}
+          {summary.project.name}
+        </p>
+      )}
+      {milestones.length > 0 && (
+        <div className="mb-2">
+          <p className="text-caption text-ink-subtle">Milestones</p>
+          <ul className="mt-1 space-y-0.5">
+            {milestones.map((m, i) => (
+              <li key={i} className="truncate text-caption text-ink-subtle">
+                {m.targetDate ? `${m.targetDate} · ` : ""}
+                {m.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {tasks.length > 0 && (
+        <div className="mb-2">
+          <p className="text-caption text-ink-subtle">Tasks</p>
+          <ul className="mt-1 space-y-0.5">
+            {tasks.slice(0, 8).map((t, i) => (
+              <li key={i} className="truncate text-caption text-ink-subtle">
+                {t.number ? `#${t.number} ` : ""}
+                {t.title}
+                {t.status ? <span className="text-ink-faint"> · {t.status}</span> : null}
+              </li>
+            ))}
+            {tasks.length > 8 && <li className="text-ink-faint text-caption">+{tasks.length - 8} more</li>}
+          </ul>
+        </div>
+      )}
+      {risks.length > 0 && <p className="text-caption text-ink-subtle">Risks: {risks.length}</p>}
+    </Panel>
+  );
+}
 
 /**
  * Right-side Assistant panel for one Project, or for the dashboard when `projectId` is null
@@ -122,6 +201,7 @@ export function AssistantDock({
               : "Start from nothing. Try “create a project called Website Relaunch, key WEB”."}
           </p>
         )}
+        <CurrentState messages={messages} />
         <ol className="flex flex-col gap-3">
           {messages.map((m) => (
             <li key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
