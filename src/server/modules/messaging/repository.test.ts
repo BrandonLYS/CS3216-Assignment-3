@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
@@ -133,11 +134,16 @@ describe("history", () => {
       name: "Paging",
       createdBy: ctx.userId,
     });
+    // Explicit, increasing timestamps. Left to `defaultNow()` these inserts can land in the
+    // same millisecond, and the query would then fall back to ordering by their random UUIDs,
+    // failing the assertions below for a reason that has nothing to do with paging.
+    const at = (i: number) => new Date(Date.UTC(2026, 0, 1, 12, 0, i));
     for (let i = 1; i <= 5; i++) {
       await messagingRepo.insertMessage(ctx.db, paged.id, {
         text: `m${i}`,
         authorPersonId: jason.id,
         authorName: jason.name,
+        createdAt: at(i),
       });
     }
 
@@ -150,6 +156,7 @@ describe("history", () => {
       text: "m6",
       authorPersonId: jason.id,
       authorName: jason.name,
+      createdAt: at(6),
     });
 
     const last = first.at(-1)!;
@@ -158,6 +165,41 @@ describe("history", () => {
       limit: 2,
     });
     expect(second.map((m) => m.text)).toEqual(["m3", "m2"]);
+  });
+
+  it("breaks a timestamp tie on id, so a shared instant never repeats or skips a row", async () => {
+    const tied = await messagingRepo.insertRoom(ctx.db, {
+      projectId: project.id,
+      type: "group",
+      name: "Tied",
+      createdBy: ctx.userId,
+    });
+    // Three Chat Messages written in the same instant, with ids chosen so their descending
+    // order is known: c, b, a. This is the case defaultNow() produces under a burst. The
+    // prefix is per-run because `id` is a primary key across every Room, not just this one.
+    const sameInstant = new Date(Date.UTC(2026, 0, 2, 9, 0, 0));
+    const prefix = randomUUID();
+    const ids = ["a", "b", "c"].map((suffix) => `${prefix}-${suffix}`);
+    for (const id of ids) {
+      await messagingRepo.insertMessage(ctx.db, tied.id, {
+        id,
+        text: id,
+        authorPersonId: jason.id,
+        authorName: jason.name,
+        createdAt: sameInstant,
+      });
+    }
+    const [a, b, c] = ids;
+
+    const page1 = await messagingRepo.listMessages(ctx.db, tied.id, { limit: 2 });
+    expect(page1.map((m) => m.id)).toEqual([c, b]);
+
+    const cursor = page1.at(-1)!;
+    const page2 = await messagingRepo.listMessages(ctx.db, tied.id, {
+      before: { createdAt: cursor.createdAt, id: cursor.id },
+      limit: 2,
+    });
+    expect(page2.map((m) => m.id)).toEqual([a]);
   });
 });
 
