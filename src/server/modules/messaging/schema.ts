@@ -43,10 +43,7 @@ export const roomParticipants = pgTable(
       .references(() => people.id, { onDelete: "cascade" }),
     addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    primaryKey({ columns: [t.roomId, t.personId] }),
-    index("room_participants_person_idx").on(t.personId),
-  ],
+  (t) => [primaryKey({ columns: [t.roomId, t.personId] }), index("room_participants_person_idx").on(t.personId)],
 );
 
 /**
