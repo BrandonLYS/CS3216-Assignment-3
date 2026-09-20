@@ -101,6 +101,9 @@ export const ENTITY_TYPES = [
   "comment",
   "decision",
   "assumption",
+  "room",
+  "participant",
+  "chat_message",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -166,6 +169,14 @@ export const PROPOSAL_STATUSES = ["pending", "accepted", "rejected"] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 export const PROPOSAL_EXTRACTORS = ["model", "heuristic"] as const;
 export type ProposalExtractor = (typeof PROPOSAL_EXTRACTORS)[number];
+
+// ---------------------------------------------------------------------------
+// Messaging (issue #61, ADR 0009). A Room holds Chat Messages between the PM
+// and the People they admit. "Message" is reserved for an Assistant turn.
+// ---------------------------------------------------------------------------
+/** A group Room has a name and many Participants; a one_to_one Room is the PM and exactly one Person. */
+export const ROOM_TYPES = ["group", "one_to_one"] as const;
+export type RoomType = (typeof ROOM_TYPES)[number];
 
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 

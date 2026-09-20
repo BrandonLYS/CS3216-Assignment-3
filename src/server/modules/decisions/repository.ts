@@ -3,7 +3,7 @@ import type { DbOrTx } from "@/server/db/client";
 import { activityEvents } from "@/server/modules/activity/schema";
 import { comments } from "@/server/modules/comments/schema";
 import { evidence } from "@/server/modules/evidence/schema";
-import { people } from "@/server/modules/people/schema";
+import { people, personPublicColumns } from "@/server/modules/people/schema";
 import type { AssumptionTargetType, DecisionEdgeKind } from "@/shared/domain";
 import {
   assumptions,
@@ -20,7 +20,10 @@ import {
 } from "./schema";
 
 const withOwner = (db: DbOrTx) =>
-  db.select({ decision: decisions, owner: people }).from(decisions).leftJoin(people, eq(people.id, decisions.ownerId));
+  db
+    .select({ decision: decisions, owner: personPublicColumns })
+    .from(decisions)
+    .leftJoin(people, eq(people.id, decisions.ownerId));
 
 export const decisionsRepo = {
   listByProject: (db: DbOrTx, projectId: string) =>

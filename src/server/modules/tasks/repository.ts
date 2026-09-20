@@ -5,7 +5,7 @@ import { comments } from "@/server/modules/comments/schema";
 import { evidenceLinks } from "@/server/modules/evidence/schema";
 import { labels } from "@/server/modules/labels/schema";
 import { milestones } from "@/server/modules/milestones/schema";
-import { people, teams } from "@/server/modules/people/schema";
+import { people, personPublicColumns, teams } from "@/server/modules/people/schema";
 import { statuses } from "@/server/modules/statuses/schema";
 import { taskLabels, tasks, type NewTaskRow, type TaskRow } from "./schema";
 
@@ -34,7 +34,7 @@ const withJoins = (db: DbOrTx, commentScope: SQL) => {
     .select({
       task: tasks,
       status: statuses,
-      assignee: people,
+      assignee: personPublicColumns,
       team: teams,
       milestone: { id: milestones.id, name: milestones.name, dueDate: milestones.dueDate },
       commentCount: sql<number>`coalesce(${commentCounts.n}, 0)`.mapWith(Number),

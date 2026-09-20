@@ -1,12 +1,12 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
-import { people } from "@/server/modules/people/schema";
+import { people, personPublicColumns } from "@/server/modules/people/schema";
 import { statuses } from "@/server/modules/statuses/schema";
 import { risks, type NewRiskRow, type RiskRow } from "./schema";
 
 const withJoins = (db: DbOrTx) =>
   db
-    .select({ risk: risks, status: statuses, owner: people })
+    .select({ risk: risks, status: statuses, owner: personPublicColumns })
     .from(risks)
     .innerJoin(statuses, eq(statuses.id, risks.statusId))
     .leftJoin(people, eq(people.id, risks.ownerId));
