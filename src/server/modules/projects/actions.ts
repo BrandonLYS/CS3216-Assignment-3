@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
+import { captureCurrent } from "@/shared/analytics/server";
 import { projectsService } from "./service";
 import { createProjectSchema, updateProjectSchema } from "./validation";
 
@@ -12,7 +13,10 @@ import { createProjectSchema, updateProjectSchema } from "./validation";
 
 export async function createProjectAction(fd: FormData) {
   const res = await runAction(createProjectSchema, fd, (ctx, input) => projectsService.create(ctx, input));
-  if (res.ok) revalidatePath("/", "layout");
+  if (res.ok) {
+    revalidatePath("/", "layout");
+    await captureCurrent("project_created", { project_id: res.data.id });
+  }
   return res;
 }
 

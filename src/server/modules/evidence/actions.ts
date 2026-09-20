@@ -4,6 +4,7 @@ import { z } from "zod";
 import { runAction } from "@/server/core/action";
 import { scheduleProposalPass } from "@/server/modules/proposals/schedule";
 import { revalidateProject } from "@/server/core/revalidate";
+import { captureCurrent } from "@/shared/analytics/server";
 import { evidenceService, type UploadedFile } from "./service";
 import { createEvidenceSchema, evidenceLinkSchema, updateEvidenceSchema } from "./validation";
 
@@ -24,7 +25,13 @@ export async function createEvidenceAction(fd: FormData) {
     scheduleProposalPass(ctx, row.projectId);
     return row;
   });
-  if (res.ok) revalidateProject(res.data.projectId);
+  if (res.ok) {
+    revalidateProject(res.data.projectId);
+    await captureCurrent("evidence_created", { evidence_id: res.data.id, evidence_kind: res.data.kind });
+    if (res.data.kind === "transcript") {
+      await captureCurrent("transcript_created", { evidence_id: res.data.id });
+    }
+  }
   return res;
 }
 

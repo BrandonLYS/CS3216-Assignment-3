@@ -18,6 +18,7 @@ import { assistantService } from "@/server/modules/assistant/service";
 import { PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "@/server/modules/assistant/tools";
 import { memoryService } from "@/server/modules/memory/service";
 import { reflect } from "@/server/modules/reflection/service";
+import { capture } from "@/shared/analytics/server";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 
 export const maxDuration = 60;
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
     const { conversation } = await assistantService.conversation(ctx, projectId);
+    capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
     const [profile, workingMemory] = await Promise.all([
       memoryService.current(ctx, null),
       scope ? memoryService.current(ctx, projectId) : null,

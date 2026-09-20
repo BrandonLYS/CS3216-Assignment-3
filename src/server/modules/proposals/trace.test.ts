@@ -13,7 +13,11 @@ const refs = {
 };
 const raw = (over: Partial<RawProposal> = {}): RawProposal => ({
   title: "Switch to interviews",
+  decidedOn: null,
+  context: null,
   chosen: "Interviews",
+  alternatives: null,
+  revisitWhen: null,
   sources: [{ kind: "evidence", entityId: "e1", excerpt: "decided to switch to interviews" }],
   assumptions: [],
   ...over,
@@ -50,11 +54,29 @@ describe("traceProposals", () => {
   it("drops an Assumption that does not resolve but keeps the Proposal; fingerprints are stable and dedupe", () => {
     const p = raw({
       assumptions: [
-        { statement: "Priya stays", subtype: "person", targetName: "priya nair" },
-        { statement: "Ghost", subtype: "person", targetName: "Nobody" },
-        { statement: "Data before UAT", subtype: "date", targetName: "UAT begins", assumedUntil: "2026-10-01" },
-        { statement: "No date", subtype: "date", targetName: "UAT begins" },
-        { statement: "Rule", subtype: "external_rule" },
+        {
+          statement: "Priya stays",
+          subtype: "person",
+          targetName: "priya nair",
+          targetField: null,
+          assumedUntil: null,
+        },
+        { statement: "Ghost", subtype: "person", targetName: "Nobody", targetField: null, assumedUntil: null },
+        {
+          statement: "Data before UAT",
+          subtype: "date",
+          targetName: "UAT begins",
+          targetField: null,
+          assumedUntil: "2026-10-01",
+        },
+        { statement: "No date", subtype: "date", targetName: "UAT begins", targetField: null, assumedUntil: null },
+        {
+          statement: "Rule",
+          subtype: "external_rule",
+          targetName: null,
+          targetField: null,
+          assumedUntil: null,
+        },
       ],
     });
     const { kept } = traceProposals([p, p], sources, refs);
@@ -71,8 +93,18 @@ describe("traceProposals", () => {
     const { kept } = traceProposals([raw({ title: "x".repeat(300), decidedOn: "yesterday" })], sources, refs);
     expect(kept[0]?.title).toHaveLength(200);
     expect(kept[0]?.decidedOn).toBeNull();
-    expect(traceAssumption({ statement: "", subtype: "external_rule" }, refs)).toBeNull();
-    expect(traceAssumption({ statement: "dep", subtype: "dependency" }, refs)).toBeNull();
+    expect(
+      traceAssumption(
+        { statement: "", subtype: "external_rule", targetName: null, targetField: null, assumedUntil: null },
+        refs,
+      ),
+    ).toBeNull();
+    expect(
+      traceAssumption(
+        { statement: "dep", subtype: "dependency", targetName: null, targetField: null, assumedUntil: null },
+        refs,
+      ),
+    ).toBeNull();
     const two = {
       ...refs,
       people: [
@@ -80,8 +112,18 @@ describe("traceProposals", () => {
         { id: "p2", name: "John Doe" },
       ],
     };
-    expect(traceAssumption({ statement: "j", subtype: "person", targetName: "John" }, two)).toBeNull();
-    expect(traceAssumption({ statement: "j", subtype: "person", targetName: "Doe" }, two)?.targetId).toBe("p2");
+    expect(
+      traceAssumption(
+        { statement: "j", subtype: "person", targetName: "John", targetField: null, assumedUntil: null },
+        two,
+      ),
+    ).toBeNull();
+    expect(
+      traceAssumption(
+        { statement: "j", subtype: "person", targetName: "Doe", targetField: null, assumedUntil: null },
+        two,
+      )?.targetId,
+    ).toBe("p2");
   });
 });
 

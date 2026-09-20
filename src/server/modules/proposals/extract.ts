@@ -32,20 +32,20 @@ export const rawAssumptionSchema = z.object({
   statement: z.string(),
   subtype: z.enum(ASSUMPTION_SUBTYPES),
   /** Name of the Person / Milestone / Task the Assumption watches; resolved by the pass. */
-  targetName: z.string().nullable().optional(),
-  targetField: z.enum(DATE_TARGET_FIELDS).nullable().optional(),
-  assumedUntil: z.string().nullable().optional(),
+  targetName: z.string().nullable(),
+  targetField: z.enum(DATE_TARGET_FIELDS).nullable(),
+  assumedUntil: z.string().nullable(),
 });
 
 export const rawProposalSchema = z.object({
   title: z.string(),
-  decidedOn: z.string().nullable().optional(),
-  context: z.string().nullable().optional(),
+  decidedOn: z.string().nullable(),
+  context: z.string().nullable(),
   chosen: z.string(),
-  alternatives: z.string().nullable().optional(),
-  revisitWhen: z.string().nullable().optional(),
+  alternatives: z.string().nullable(),
+  revisitWhen: z.string().nullable(),
   sources: z.array(z.object({ kind: z.enum(["evidence", "comment"]), entityId: z.string(), excerpt: z.string() })),
-  assumptions: z.array(rawAssumptionSchema).default([]),
+  assumptions: z.array(rawAssumptionSchema),
 });
 export type RawProposal = z.infer<typeof rawProposalSchema>;
 export type RawAssumption = z.infer<typeof rawAssumptionSchema>;
@@ -84,14 +84,16 @@ export const heuristicExtract: Extract = async ({ sources }) => ({
       .filter((sentence) => DECISION_VERB.test(sentence))
       .map((sentence) => ({
         title: titleOf(sentence),
-        chosen: sentence,
+        decidedOn: null,
         context: null,
+        chosen: sentence,
         alternatives: /\b(instead of|rather than|over)\b/i.test(sentence)
           ? (sentence
               .split(/\b(?:instead of|rather than)\b/i)[1]
               ?.trim()
               .replace(/[.!?]$/, "") ?? null)
           : null,
+        revisitWhen: null,
         sources: [{ kind: s.kind, entityId: s.entityId, excerpt: sentence }],
         assumptions: [],
       })),
