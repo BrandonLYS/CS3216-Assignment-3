@@ -101,6 +101,18 @@ _Avoid_: Reason, effect, outcome, impact node
 A short, plain-text, dated statement attached to one Task, Risk or Milestone, optionally attributed to the Person who said it ("said by") and dated to when it was said ("said on"). Immutable once posted; may be deleted, in which case the item's history keeps the body.
 _Avoid_: Message, note, remark, update
 
+**Room**:
+A place inside one Project where the PM and the People they admit exchange Chat Messages. Either a group Room, which has a name and many Participants, or a one-to-one Room between the PM and a single Person. Always scoped to one Project.
+_Avoid_: Channel, chat, thread, conversation
+
+**Participant**:
+A Person admitted to a Room by the PM. Admission is the only way into a Room; a Person cannot join one themselves.
+_Avoid_: Member, user, recipient, attendee
+
+**Chat Message**:
+One plain-text entry in a Room, optionally carrying a single media attachment. Attributed to the PM or to the Participant who wrote it, by a name captured at the time of writing. Never edited and never deleted.
+_Avoid_: Message (that is an Assistant turn), post, chat, DM
+
 ### Assistant
 
 **Assistant**:
@@ -113,6 +125,7 @@ _Avoid_: Chat, thread, session
 
 **Message**:
 One turn in a Conversation: from the User, or from the Assistant (text plus any tool calls it made).
+A Message is always an Assistant turn; what People send each other in a Room is a **Chat Message**, a separate concept under Discussion.
 _Avoid_: Prompt, reply, chat message
 
 **Profile**:

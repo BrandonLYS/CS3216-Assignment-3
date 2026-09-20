@@ -18,6 +18,7 @@ import {
   PROJECT_STATUSES,
   PROPOSAL_EXTRACTORS,
   PROPOSAL_STATUSES,
+  ROOM_TYPES,
   SCALE_LEVELS,
   SOURCE_KINDS,
   STATUS_CATEGORIES,
@@ -48,3 +49,4 @@ export const decisionEdgeKindEnum = pgEnum("decision_edge_kind", DECISION_EDGE_K
 export const sourceKindEnum = pgEnum("source_kind", SOURCE_KINDS);
 export const proposalStatusEnum = pgEnum("proposal_status", PROPOSAL_STATUSES);
 export const proposalExtractorEnum = pgEnum("proposal_extractor", PROPOSAL_EXTRACTORS);
+export const roomTypeEnum = pgEnum("room_type", ROOM_TYPES);
