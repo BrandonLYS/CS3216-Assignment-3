@@ -8,6 +8,8 @@ import { people } from "@/server/modules/people/schema";
 import { peopleService } from "@/server/modules/people/service";
 import { projects, type ProjectRow } from "@/server/modules/projects/schema";
 import { projectsService } from "@/server/modules/projects/service";
+import { risksService } from "@/server/modules/risks/service";
+import { tasksService } from "@/server/modules/tasks/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { messagingRepo } from "./repository";
 import { roomMessages, roomParticipants, rooms, type RoomRow } from "./schema";
@@ -221,6 +223,33 @@ describe("messaging credentials stay on the server", () => {
       expect(Object.keys(row!)).not.toContain("passwordHash");
       expect(Object.keys(row!)).not.toContain("inviteTokenHash");
     }
+  });
+
+  it("never returns a password hash from a Person joined onto another item", async () => {
+    await ctx.db.update(people).set({ passwordHash: "hashed-secret" }).where(eq(people.id, jason.id));
+    const task = await tasksService.create(ctx, {
+      projectId: project.id,
+      title: "Ship the gateway",
+      priority: "none",
+      assigneeId: jason.id,
+    });
+    const risk = await risksService.create(ctx, {
+      projectId: project.id,
+      title: "Vendor slips",
+      probability: "medium",
+      impact: "medium",
+      ownerId: jason.id,
+    });
+
+    // Task and Risk rows travel to client components and into the Assistant's list_tasks and
+    // get_task tools, so their joined Person must be the public projection too.
+    const [listedTask] = (await tasksService.list(ctx, project.id)).filter((t) => t.task.id === task.id);
+    const [listedRisk] = (await risksService.list(ctx, project.id)).filter((r) => r.risk.id === risk.id);
+
+    expect(listedTask!.assignee).toBeTruthy();
+    expect(Object.keys(listedTask!.assignee!)).not.toContain("passwordHash");
+    expect(listedRisk!.owner).toBeTruthy();
+    expect(Object.keys(listedRisk!.owner!)).not.toContain("passwordHash");
   });
 
   it("reads credentials only through the login lookup, case-insensitively", async () => {

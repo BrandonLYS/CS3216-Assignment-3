@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { people } from "@/server/modules/people/schema";
 import {
@@ -92,11 +92,12 @@ export const messagingRepo = {
       .where(
         and(
           eq(roomMessages.roomId, roomId),
+          // A row comparison, not the equivalent OR of two predicates. Postgres can use a
+          // composite index as a range bound for `(a, b) < (x, y)` and seek straight to the
+          // cursor; given the disjunction it starts at the newest row and filters forward, so
+          // deep pages get steadily more expensive.
           before
-            ? or(
-                lt(roomMessages.createdAt, before.createdAt),
-                and(eq(roomMessages.createdAt, before.createdAt), lt(roomMessages.id, before.id)),
-              )
+            ? sql`(${roomMessages.createdAt}, ${roomMessages.id}) < (${before.createdAt.toISOString()}::timestamptz, ${before.id})`
             : undefined,
         ),
       )
