@@ -1,5 +1,5 @@
 {
-  "id": "9d55a94d-434a-4468-9218-2993063849a6",
+  "id": "889085a2-942d-4589-ace1-4e819f7e6c5f",
   "prevId": "c57dfe72-5ff5-4f93-8ee6-f9debb47174e",
   "version": "7",
   "dialect": "postgresql",
@@ -716,7 +716,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"people\".\"email\" is not null",
+          "where": "\"people\".\"email\" is not null and (\"people\".\"password_hash\" is not null or \"people\".\"invite_token_hash\" is not null)",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3705,7 +3705,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

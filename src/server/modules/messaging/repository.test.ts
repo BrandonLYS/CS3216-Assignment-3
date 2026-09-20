@@ -192,6 +192,17 @@ describe("messaging credentials stay on the server", () => {
     expect(await peopleRepo.findCredentialsByEmail(ctx.db, project.id, "nobody@example.com")).toBeUndefined();
   });
 
+  it("finds the real account when an uninvited Person shares the address", async () => {
+    const namesake = await peopleService.createPerson(ctx, { projectId: project.id, name: "Other Jason" });
+    // Allowed: neither the index nor the app stops two roster entries sharing an address while
+    // only one of them can log in. The lookup must not return this one.
+    await ctx.db.update(people).set({ email: "Jason.Tan@Example.com" }).where(eq(people.id, namesake.id));
+
+    const found = await peopleRepo.findCredentialsByEmail(ctx.db, project.id, "jason.tan@example.com");
+    expect(found?.id).toBe(jason.id);
+    expect(found?.passwordHash).toBe("hashed-secret");
+  });
+
   it("allows two uninvited People to share an email but not two invited ones", async () => {
     const a = await peopleService.createPerson(ctx, { projectId: project.id, name: "Ann Koh" });
     const b = await peopleService.createPerson(ctx, { projectId: project.id, name: "Ben Koh" });

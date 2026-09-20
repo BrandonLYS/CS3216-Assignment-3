@@ -25,8 +25,13 @@ export const peopleRepo = {
   delete: (db: DbOrTx, id: string) => db.delete(people).where(eq(people.id, id)),
 
   /**
-   * The one read that returns credentials, for the messaging login only (ADR 0009). Matched
-   * case-insensitively on the same expression as the `people_project_email_uq` index.
+   * The one read that returns credentials, for the messaging login only (ADR 0009).
+   *
+   * Matched on exactly the same expression *and predicate* as `people_project_email_uq`:
+   * case-insensitive, and restricted to People who hold an invite or a password. Two People in
+   * one Project may legitimately share an address while neither is invited, so without the
+   * predicate this could match an uninvited namesake and return null credentials in place of
+   * the real account. With it, the index guarantees at most one row.
    */
   findCredentialsByEmail: async (
     db: DbOrTx,
@@ -45,7 +50,12 @@ export const peopleRepo = {
       })
       .from(people)
       .where(
-        and(eq(people.projectId, projectId), isNotNull(people.email), sql`lower(${people.email}) = lower(${email})`),
+        and(
+          eq(people.projectId, projectId),
+          isNotNull(people.email),
+          sql`lower(${people.email}) = lower(${email})`,
+          sql`(${people.passwordHash} is not null or ${people.inviteTokenHash} is not null)`,
+        ),
       );
     return row;
   },

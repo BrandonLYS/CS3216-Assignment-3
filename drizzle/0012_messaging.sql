@@ -12,7 +12,7 @@ CREATE TABLE "room_messages" (
 	"author_person_id" text,
 	"author_user_id" text,
 	"author_name" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "room_messages_content_ck" CHECK (num_nonnulls("room_messages"."text", "room_messages"."attachment_url") >= 1),
 	CONSTRAINT "room_messages_author_ck" CHECK (num_nonnulls("room_messages"."author_person_id", "room_messages"."author_user_id") <= 1),
 	CONSTRAINT "room_messages_attachment_ck" CHECK (num_nonnulls("room_messages"."attachment_url", "room_messages"."mime_type") <> 1)
@@ -48,4 +48,4 @@ ALTER TABLE "rooms" ADD CONSTRAINT "rooms_created_by_user_id_fk" FOREIGN KEY ("c
 CREATE INDEX "room_messages_room_time_idx" ON "room_messages" USING btree ("room_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "room_participants_person_idx" ON "room_participants" USING btree ("person_id");--> statement-breakpoint
 CREATE INDEX "rooms_project_idx" ON "rooms" USING btree ("project_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "people_project_email_uq" ON "people" USING btree ("project_id",lower("email")) WHERE "people"."email" is not null;
+CREATE UNIQUE INDEX "people_project_email_uq" ON "people" USING btree ("project_id",lower("email")) WHERE "people"."email" is not null and ("people"."password_hash" is not null or "people"."invite_token_hash" is not null);
