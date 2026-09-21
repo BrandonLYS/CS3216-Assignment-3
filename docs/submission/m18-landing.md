@@ -1,7 +1,7 @@
 # M18 - Landing Page
 
 The public landing page is implemented at `/`, with the authenticated workspace at `/dashboard`.
-The current implementation builds on PR #78's five-chapter scroll film and retains the Vantage brand from that branch.
+The current implementation builds on PR #78's five-chapter scroll film, rebased onto main with PrismPM branding and the shared prism logo.
 
 ## Implemented
 
@@ -16,8 +16,8 @@ The current implementation builds on PR #78's five-chapter scroll film and retai
 ## Verification and evidence
 
 The [verification report](../artifacts/72-landing/README.md) records the tested code SHA, commands, results and limitations.
-Twelve landing browser tests passed against the optimized local production build.
-Local Lighthouse reports score 89 performance on mobile and 100 on desktop, with 100 accessibility, best practices and SEO on both.
+All 43 browser tests, including 12 landing checks, passed against the optimized local production build.
+Local Lighthouse reports score 88 performance on mobile and 100 on desktop, with 100 accessibility, best practices and SEO on both.
 
 - [Desktop before](../artifacts/72-landing/screenshots/before-desktop.png) and [after](../artifacts/72-landing/screenshots/after-desktop.png).
 - [Phone before](../artifacts/72-landing/screenshots/before-mobile.png) and [after](../artifacts/72-landing/screenshots/after-mobile.png).
@@ -28,6 +28,6 @@ Local Lighthouse reports score 89 performance on mobile and 100 on desktop, with
 ## Production acceptance remains pending
 
 No canonical live URL or accessible deployment was available during this work.
-The local test fixture `https://vantage.example` is not a deployed product URL.
+The local test fixture `https://prismpm.example` is not a deployed product URL.
 Production builds require `SITE_URL` to name the real public HTTPS origin; configure it before deploying and use that same canonical origin on previews.
 See the verification report's remaining-production-acceptance checklist for the live URL, screenshots, metadata/OG checks, Lighthouse report and release identity still required by issue #72.

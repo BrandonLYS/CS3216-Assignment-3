@@ -1,10 +1,10 @@
 {
-  "checkedAt": "2026-09-21T22:08:12.306Z",
+  "checkedAt": "2026-09-21T22:26:37.502Z",
   "scope": "Local optimized production build, not a deployed release",
-  "codeCommit": "ca07cfbb5d03cce17f046928e56155e44e95287f",
-  "baseCommit": "de7eb55fe9ada235e2a57c1594a0296b7cc1f932",
+  "codeCommit": "82f9417395eff940353d5290b60f195d6af6ffd3",
+  "baseCommit": "a0cb75506c74d807e28e09d42759855056c28f01",
   "url": "http://localhost:3000/",
-  "canonicalFixture": "https://vantage.example/",
+  "canonicalFixture": "https://prismpm.example/",
   "viewports": [
     {
       "name": "desktop",
@@ -23,7 +23,7 @@
       "errors": []
     }
   ],
-  "title": "Vantage - project management with a memory",
+  "title": "PrismPM - project management with a memory",
   "metadata": [
     {
       "name": "description",
@@ -35,11 +35,11 @@
     },
     {
       "rel": "canonical",
-      "href": "https://vantage.example"
+      "href": "https://prismpm.example"
     },
     {
       "property": "og:title",
-      "content": "Vantage - project management with a memory"
+      "content": "PrismPM - project management with a memory"
     },
     {
       "property": "og:description",
@@ -47,11 +47,11 @@
     },
     {
       "property": "og:url",
-      "content": "https://vantage.example"
+      "content": "https://prismpm.example"
     },
     {
       "property": "og:site_name",
-      "content": "Vantage"
+      "content": "PrismPM"
     },
     {
       "property": "og:locale",
@@ -59,7 +59,7 @@
     },
     {
       "property": "og:image",
-      "content": "https://vantage.example/opengraph-image"
+      "content": "https://prismpm.example/opengraph-image"
     },
     {
       "property": "og:image:width",
@@ -71,7 +71,7 @@
     },
     {
       "property": "og:image:alt",
-      "content": "Vantage. Stand above the whole project. Project management with a memory."
+      "content": "PrismPM. Stand above the whole project. Project management with a memory."
     },
     {
       "property": "og:type",
@@ -83,7 +83,7 @@
     },
     {
       "name": "twitter:title",
-      "content": "Vantage - project management with a memory"
+      "content": "PrismPM - project management with a memory"
     },
     {
       "name": "twitter:description",
@@ -91,11 +91,11 @@
     },
     {
       "name": "twitter:image",
-      "content": "https://vantage.example/opengraph-image"
+      "content": "https://prismpm.example/opengraph-image"
     },
     {
       "name": "twitter:image:alt",
-      "content": "Vantage. Stand above the whole project. Project management with a memory."
+      "content": "PrismPM. Stand above the whole project. Project management with a memory."
     },
     {
       "name": "twitter:image:width",
@@ -109,12 +109,12 @@
   "/robots.txt": {
     "status": 200,
     "contentType": "text/plain",
-    "body": "User-Agent: *\nAllow: /\nDisallow: /dashboard\nDisallow: /projects\nDisallow: /calendar\nDisallow: /settings\nDisallow: /login\nDisallow: /signup\nDisallow: /invite/\nDisallow: /m/\nDisallow: /api/\n\nSitemap: https://vantage.example/sitemap.xml\n"
+    "body": "User-Agent: *\nAllow: /\nDisallow: /dashboard\nDisallow: /projects\nDisallow: /calendar\nDisallow: /settings\nDisallow: /login\nDisallow: /signup\nDisallow: /invite/\nDisallow: /m/\nDisallow: /api/\n\nSitemap: https://prismpm.example/sitemap.xml\n"
   },
   "/sitemap.xml": {
     "status": 200,
     "contentType": "application/xml",
-    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url>\n<loc>https://vantage.example/</loc>\n</url>\n</urlset>\n"
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url>\n<loc>https://prismpm.example/</loc>\n</url>\n</urlset>\n"
   },
   "/opengraph-image": {
     "status": 200,
