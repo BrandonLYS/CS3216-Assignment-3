@@ -226,6 +226,12 @@ function Room({
     // reader gets there. The button above stays for the keyboard, and for retrying a page
     // that failed - which is also when it is on screen long enough to be read.
     const onScroll = () => {
+      // A page already asked for arrives whenever the network says so, and the reader may
+      // have moved on by then. Keep the anchor on where they are now, and stop treating a
+      // request they started at the top as one to scroll back to it.
+      if (anchor.current) {
+        anchor.current = { ...anchor.current, distanceFromBottom: el.scrollHeight - el.scrollTop, keepInView: false };
+      }
       if (el.scrollTop <= 200) void loadOlder();
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -361,11 +367,23 @@ function useRoomHistory({
   // before touching the DOM, so the merged history is what paints, with no second pass.
   if (page !== seenPage) {
     setSeenPage(page);
-    setMessages((current) => merge(current, page));
-    // The prop may narrow this and never widen it: it describes the newest page, so it is
-    // `true` again after every post, while a reader who has reached the first Chat Message of
-    // the Room has nothing left to load.
-    setHasMore((current) => current && hasMoreOnServer);
+    // A refreshed page that no longer reaches back to what the reader already has means more
+    // than a page arrived while they were idle. Merging the two would leave a stretch of the
+    // Room between them that no cursor can ever ask for, because paging continues from the
+    // oldest row on screen. Start again from the newest page instead: a visible jump, rather
+    // than a hole that looks like history.
+    const contiguous = !messages.length || !page.length || page.some((m) => m.id === messages[0]!.id);
+    if (contiguous) {
+      setMessages((current) => merge(current, page));
+      // The prop may narrow this and never widen it: it describes the newest page, so it is
+      // `true` again after every post, while a reader who has reached the first Chat Message
+      // of the Room has nothing left to load.
+      setHasMore((current) => current && hasMoreOnServer);
+    } else {
+      setMessages(page);
+      setHasMore(hasMoreOnServer);
+      setLoadedOlder(false);
+    }
   }
   // One request at a time: the button and the observer call the same function, and the
   // observer keeps firing while the sentinel is on screen.
