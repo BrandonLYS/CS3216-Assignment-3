@@ -10,7 +10,7 @@ async function signUp(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/dashboard");
 }
 
 test.describe.configure({ mode: "serial" });

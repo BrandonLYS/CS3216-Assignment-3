@@ -86,7 +86,8 @@ npm run db:studio
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign in with the demo credentials from `.env`.
+Open [http://localhost:3000](http://localhost:3000) for the landing page, then sign in at `/login` with the demo credentials from `.env`.
+The workspace itself lives at `/dashboard`.
 
 For a production-mode check:
 

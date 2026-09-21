@@ -20,13 +20,14 @@ const destination = (path: string, cookies?: Record<string, string>) => {
 describe("the optimistic redirect", () => {
   it("sends an anonymous visitor to the sign-in form, remembering where they were going", () => {
     expect(destination("/projects/p1/messages")).toBe("http://localhost:3000/login?next=%2Fprojects%2Fp1%2Fmessages");
-    expect(destination("/")).toBe("http://localhost:3000/login");
+    // The landing page renders for everyone.
+    expect(destination("/")).toBeNull();
   });
 
   it("lets a signed-in User through and keeps them off the sign-in form", () => {
     const signedIn = { [USER_COOKIE]: "token" };
     expect(destination("/projects/p1/messages", signedIn)).toBeNull();
-    expect(destination("/login", signedIn)).toBe("http://localhost:3000/");
+    expect(destination("/login", signedIn)).toBe("http://localhost:3000/dashboard");
   });
 
   it("lets a Participant reach the messages route", () => {
@@ -34,8 +35,8 @@ describe("the optimistic redirect", () => {
   });
 
   it("leaves the sign-in form alone for a Participant, so the two cannot bounce off each other", () => {
-    // `/login` redirecting a Participant to `/`, which redirects them back to `/login`, is an
-    // infinite loop. The PM's form simply renders.
+    // `/login` redirecting a Participant to `/dashboard`, which redirects them back to
+    // `/login`, is an infinite loop. The PM's form simply renders.
     expect(destination("/login", { [PARTICIPANT_COOKIE]: "signed.value" })).toBeNull();
   });
 
