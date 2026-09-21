@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { MessagesSquare, Plus, Send, Users } from "lucide-react";
 import * as React from "react";
-import { postMessageAction } from "@/server/modules/messaging/actions";
+import { participantPostMessageAction, postMessageAction } from "@/server/modules/messaging/actions";
+import type { ActionResult } from "@/server/core/action";
 import type { RoomMessageRow, RoomRow } from "@/server/modules/messaging/schema";
 import { fmtDateTime, relative } from "@/shared/lib/dates";
 import { cn } from "@/shared/lib/cn";
@@ -20,29 +21,36 @@ export type RoomPerson = { personId: string; name: string };
 export type RoomListItem = { room: RoomRow; participants: RoomPerson[] };
 
 /**
- * Who is looking (ADR 0009). The PM creates Rooms and admits People; a Participant reads the
- * Rooms they are in and, until issue #55, cannot write.
+ * Who is looking (ADR 0009). The PM creates Rooms and admits People; a Participant reads and
+ * writes in the Rooms they were admitted to, and does nothing else.
  */
 export type MessagesViewer =
   { kind: "pm"; userId: string; roster: RosterPerson[] } | { kind: "participant"; personId: string };
 
+/** Whoever the reader is, they are never their own company; the PM is not a Person at all. */
+const others = (participants: RoomPerson[], viewer: MessagesViewer) =>
+  viewer.kind === "pm" ? participants : participants.filter((p) => p.personId !== viewer.personId);
+
 /**
  * A one-to-one Room carries no name and is known by the Person in it; the PM is never a
- * Participant, so the sole Participant is the other side. Deliberately not the service's
- * `roomLabel`: that one names an Activity Event and knows nothing about Participants, and
- * importing it here would pull the whole server module into the browser bundle.
+ * Participant, so the sole Participant is the other side. The Participant on the other side
+ * of that Room sees "Direct message", because the only Person in it is themselves and the PM
+ * has no Person row to be named by. Deliberately not the service's `roomLabel`: that one
+ * names an Activity Event and knows nothing about Participants, and importing it here would
+ * pull the whole server module into the browser bundle.
  */
-function labelOf({ room, participants }: RoomListItem) {
-  return room.name ?? participants[0]?.name ?? "Direct message";
+function labelOf({ room, participants }: RoomListItem, viewer: MessagesViewer) {
+  return room.name ?? others(participants, viewer)[0]?.name ?? "Direct message";
 }
 
 /**
  * The line under a Room's name. A one-to-one Room is already named after its Person, so
  * repeating that name would say the same thing twice.
  */
-function subtitleOf({ room, participants }: RoomListItem) {
+function subtitleOf({ room, participants }: RoomListItem, viewer: MessagesViewer) {
   if (!room.name) return "Direct message";
-  return participants.length ? participants.map((p) => p.name).join(", ") : "No participants yet";
+  const rest = others(participants, viewer);
+  return rest.length ? rest.map((p) => p.name).join(", ") : "No participants yet";
 }
 
 export function MessagesView({
@@ -87,8 +95,8 @@ export function MessagesView({
                     active && "bg-surface-2",
                   )}
                 >
-                  <span className="truncate text-body-sm text-ink">{labelOf(item)}</span>
-                  <span className="truncate text-caption text-ink-tertiary">{subtitleOf(item)}</span>
+                  <span className="truncate text-body-sm text-ink">{labelOf(item, viewer)}</span>
+                  <span className="truncate text-caption text-ink-tertiary">{subtitleOf(item, viewer)}</span>
                 </Link>
               </li>
             );
@@ -149,8 +157,8 @@ function Room({
   return (
     <>
       <div className="flex shrink-0 items-baseline gap-2 border-b border-hairline px-5 py-3">
-        <h2 className="text-body font-medium text-ink">{labelOf(item)}</h2>
-        <p className="truncate text-caption text-ink-tertiary">{subtitleOf(item)}</p>
+        <h2 className="text-body font-medium text-ink">{labelOf(item, viewer)}</h2>
+        <p className="truncate text-caption text-ink-tertiary">{subtitleOf(item, viewer)}</p>
         {viewer.kind === "pm" && (
           <Button size="sm" className="ml-auto shrink-0" onClick={() => setPeople(true)}>
             <Users className="size-3.5" /> People
@@ -160,13 +168,7 @@ function Room({
 
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {ordered.length === 0 ? (
-          <EmptyState
-            icon={<MessagesSquare />}
-            title="No messages yet"
-            description={
-              viewer.kind === "pm" ? "Say something to start." : "The project manager has not posted here yet."
-            }
-          />
+          <EmptyState icon={<MessagesSquare />} title="No messages yet" description="Say something to start." />
         ) : (
           // `justify-end` on a full-height column keeps a short history sitting on the
           // composer instead of floating at the top of an empty pane.
@@ -190,13 +192,14 @@ function Room({
         )}
       </div>
 
-      {viewer.kind === "pm" ? (
-        <Composer projectId={projectId} roomId={item.room.id} />
-      ) : (
-        <p className="shrink-0 border-t border-hairline px-5 py-3 text-caption text-ink-subtle">
-          Only the project manager can post for now.
-        </p>
-      )}
+      {/* Both audiences write the same Chat Message; only the action behind it differs (#55). */}
+      <Composer
+        send={(text) =>
+          viewer.kind === "pm"
+            ? postMessageAction({ projectId, roomId: item.room.id, text })
+            : participantPostMessageAction({ projectId, roomId: item.room.id, text })
+        }
+      />
 
       {viewer.kind === "pm" && (
         <RoomPeopleDialog
@@ -211,7 +214,11 @@ function Room({
   );
 }
 
-function Composer({ projectId, roomId }: { projectId: string; roomId: string }) {
+/**
+ * `send` rather than the action itself: the PM and a Participant post the same Chat Message
+ * through two actions behind two different seams, and the composer is indifferent to which.
+ */
+function Composer({ send: post }: { send: (text: string) => Promise<ActionResult<RoomMessageRow>> }) {
   const [text, setText] = React.useState("");
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -233,10 +240,10 @@ function Composer({ projectId, roomId }: { projectId: string; roomId: string }) 
     setFieldErrors({});
     const sent = text;
     try {
-      const res = await postMessageAction({ projectId, roomId, text: sent });
+      const res = await post(sent);
       if (!mounted.current) return;
       if (!res.ok) {
-        // Keep the draft: the PM should be able to fix and retry, not retype.
+        // Keep the draft: the writer should be able to fix and retry, not retype.
         setError(res.error);
         setFieldErrors(res.fieldErrors ?? {});
         return;
