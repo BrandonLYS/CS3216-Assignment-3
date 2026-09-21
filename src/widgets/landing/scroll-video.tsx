@@ -241,7 +241,7 @@ export function ScrollVideo() {
               ))}
             </ol>
 
-            <div className="mx-auto w-full max-w-[1280px] px-6 pb-20 sm:pb-24">
+            <div className="mx-auto w-full max-w-[1280px] px-6 pb-10">
               <div className="grid max-w-2xl">
                 {chapters.map((chapter, i) => (
                   <div
@@ -264,12 +264,14 @@ export function ScrollVideo() {
               </div>
             </div>
 
-            <div className="relative h-px w-full bg-hairline">
-              <span
-                ref={railRef}
-                className="absolute inset-0 origin-left bg-primary"
-                style={{ transform: "scaleX(0.004)" }}
-              />
+            <div className="mx-auto w-full max-w-[1280px] px-6 pb-10">
+              <div className="relative h-px w-full bg-hairline-tertiary">
+                <span
+                  ref={railRef}
+                  className="absolute inset-0 origin-left bg-primary"
+                  style={{ transform: "scaleX(0.004)" }}
+                />
+              </div>
             </div>
           </div>
         </div>
