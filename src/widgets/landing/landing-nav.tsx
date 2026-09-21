@@ -10,6 +10,7 @@ const links = [
   { href: "#how", label: "How it works" },
   { href: "#memory", label: "Memory" },
   { href: "#capabilities", label: "Capabilities" },
+  { href: "#pricing", label: "Pricing" },
 ];
 
 export function LandingNav({ signedIn }: { signedIn: boolean }) {
@@ -30,13 +31,19 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
         lifted ? "border-b border-hairline bg-canvas/85 backdrop-blur-md" : "border-b border-transparent bg-canvas",
       )}
     >
+      <a
+        href="#main-content"
+        className="sr-only rounded-md bg-surface-1 p-3 text-ink focus:not-sr-only focus:absolute focus:top-2 focus:left-6 focus:z-50"
+      >
+        Skip to content
+      </a>
       <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-6 px-6">
         <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           <Logo className="size-5" />
           <span className="text-body-sm font-medium tracking-[-0.2px] text-ink">PrismPM</span>
         </Link>
 
-        <nav className="hidden flex-1 items-center gap-6 md:flex">
+        <nav aria-label="Main navigation" className="hidden flex-1 items-center gap-6 md:flex">
           {links.map((link) => (
             <a
               key={link.href}
@@ -76,6 +83,7 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
           <button
             type="button"
             aria-expanded={open}
+            aria-controls="mobile-navigation"
             aria-label={open ? "Close menu" : "Open menu"}
             onClick={() => setOpen((value) => !value)}
             className="inline-flex size-8 items-center justify-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink md:hidden"
@@ -86,7 +94,11 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
       </div>
 
       {open && (
-        <nav className="border-t border-hairline bg-canvas px-6 py-2 md:hidden">
+        <nav
+          id="mobile-navigation"
+          aria-label="Mobile navigation"
+          className="border-t border-hairline bg-canvas px-6 py-2 md:hidden"
+        >
           {links.map((link) => (
             <a
               key={link.href}
