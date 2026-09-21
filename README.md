@@ -12,7 +12,7 @@ npm install
 npm run db:up                 # Postgres (dev on :5433, test on :5434) via Docker
 npm run db:migrate
 npm run db:seed               # demo@example.com / demo-password-123 with the PDF scenario
-npm run dev                   # http://localhost:3000
+npm run dev                   # landing page on http://localhost:3000, workspace on /dashboard
 ```
 
 ## Verify
