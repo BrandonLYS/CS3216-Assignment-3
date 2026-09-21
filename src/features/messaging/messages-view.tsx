@@ -362,6 +362,8 @@ function useRoomHistory({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [seenPage, setSeenPage] = React.useState(page);
+  /** Bumped whenever the loaded history is discarded, so a late page cannot rejoin it. */
+  const [generation, setGeneration] = React.useState(0);
 
   // Adjusting state while rendering, rather than in an effect: React re-runs this component
   // before touching the DOM, so the merged history is what paints, with no second pass.
@@ -372,17 +374,22 @@ function useRoomHistory({
     // Room between them that no cursor can ever ask for, because paging continues from the
     // oldest row on screen. Start again from the newest page instead: a visible jump, rather
     // than a hole that looks like history.
-    const contiguous = !messages.length || !page.length || page.some((m) => m.id === messages[0]!.id);
+    const fresh = !messages.length;
+    const contiguous = fresh || !page.length || page.some((m) => m.id === messages[0]!.id);
     if (contiguous) {
       setMessages((current) => merge(current, page));
       // The prop may narrow this and never widen it: it describes the newest page, so it is
       // `true` again after every post, while a reader who has reached the first Chat Message
-      // of the Room has nothing left to load.
-      setHasMore((current) => current && hasMoreOnServer);
+      // of the Room has nothing left to load. A Room that was empty is the exception - there
+      // was no history to have reached the beginning of, so the server's answer is the truth.
+      setHasMore((current) => (fresh ? hasMoreOnServer : current && hasMoreOnServer));
     } else {
       setMessages(page);
       setHasMore(hasMoreOnServer);
       setLoadedOlder(false);
+      // Anything already in flight belongs to the history that was just thrown away, and
+      // merging it back would reinstate the hole this branch exists to avoid.
+      setGeneration((n) => n + 1);
     }
   }
   // One request at a time: the button and the observer call the same function, and the
@@ -390,6 +397,7 @@ function useRoomHistory({
   const inFlight = React.useRef(false);
   // A Room switch unmounts this; never set state on the way out.
   const mounted = React.useRef(true);
+  const current = React.useRef(generation);
 
   React.useEffect(() => {
     mounted.current = true;
@@ -397,6 +405,10 @@ function useRoomHistory({
       mounted.current = false;
     };
   }, []);
+
+  React.useEffect(() => {
+    current.current = generation;
+  }, [generation]);
 
   /**
    * Fetch the page before the oldest Chat Message on screen. Scrolling is the caller's: it
@@ -408,16 +420,20 @@ function useRoomHistory({
     inFlight.current = true;
     setLoading(true);
     setError(null);
+    const asked = generation;
     const ask = viewer.kind === "pm" ? olderMessagesAction : participantOlderMessagesAction;
     try {
       const res = await ask({ projectId, roomId, before: { createdAt: oldest.createdAt, id: oldest.id } });
       if (!mounted.current) return;
+      // The history this page belongs to was discarded while it was in flight. Merging it now
+      // would file it under a newer, disjoint page and put back the hole that reset avoided.
+      if (current.current !== asked) return;
       if (!res.ok) {
         // The button stays, and so does `hasMore`: a failed page must be retryable.
         setError(res.error);
         return;
       }
-      setMessages((current) => merge(current, res.data.items));
+      setMessages((loaded) => merge(loaded, res.data.items));
       setHasMore(res.data.hasMore);
       setLoadedOlder(true);
     } catch {
@@ -427,7 +443,7 @@ function useRoomHistory({
       inFlight.current = false;
       if (mounted.current) setLoading(false);
     }
-  }, [hasMore, messages, projectId, roomId, viewer.kind]);
+  }, [generation, hasMore, messages, projectId, roomId, viewer.kind]);
 
   return { messages, hasMore, loadedOlder, loading, error, loadOlder };
 }
