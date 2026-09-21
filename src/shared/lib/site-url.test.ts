@@ -6,9 +6,9 @@ afterEach(() => vi.unstubAllEnvs());
 describe("canonical site origin", () => {
   it("never derives a canonical from a preview hostname", () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("SITE_URL", "https://vantage.example");
+    vi.stubEnv("SITE_URL", "https://prismpm.example");
     vi.stubEnv("VERCEL_URL", "preview-123.vercel.app");
-    expect(siteUrl().href).toBe("https://vantage.example/");
+    expect(siteUrl().href).toBe("https://prismpm.example/");
   });
 
   it("requires an explicit origin for production builds", () => {
@@ -18,14 +18,14 @@ describe("canonical site origin", () => {
   });
 
   it.each([
-    "http://vantage.example",
+    "http://prismpm.example",
     "https://localhost",
     "https://127.0.0.1",
     "https://[::1]",
-    "https://vantage.example/landing",
-    "https://vantage.example/?secret=value",
-    "https://user:password@vantage.example",
-    "https://vantage.example/#section",
+    "https://prismpm.example/landing",
+    "https://prismpm.example/?secret=value",
+    "https://user:password@prismpm.example",
+    "https://prismpm.example/#section",
     "file:///tmp/site",
   ])("rejects unsafe or noncanonical production origin %s", (value) => {
     vi.stubEnv("NODE_ENV", "production");
@@ -42,7 +42,7 @@ describe("canonical site origin", () => {
   it("does not advertise preview deployments to crawlers", async () => {
     vi.resetModules();
     vi.stubEnv("VERCEL_ENV", "preview");
-    vi.stubEnv("SITE_URL", "https://vantage.example");
+    vi.stubEnv("SITE_URL", "https://prismpm.example");
     const { default: robots } = await import("@/app/robots");
     const { default: sitemap } = await import("@/app/sitemap");
     expect(robots()).toEqual({ rules: { userAgent: "*", disallow: "/" } });

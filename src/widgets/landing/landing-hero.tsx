@@ -66,7 +66,7 @@ export function LandingHero({ signedIn }: { signedIn: boolean }) {
         aria-hidden
         className="absolute inset-x-0 top-0 -z-10 h-[120%] bg-cover bg-center opacity-[0.28]"
         style={{
-          backgroundImage: "url('/landing/vantage-scroll-poster.jpg')",
+          backgroundImage: "url('/landing/prismpm-scroll-poster.jpg')",
           maskImage: "linear-gradient(to bottom, transparent, black 18%, black 42%, transparent 82%)",
           WebkitMaskImage: "linear-gradient(to bottom, transparent, black 18%, black 42%, transparent 82%)",
         }}
@@ -76,8 +76,7 @@ export function LandingHero({ signedIn }: { signedIn: boolean }) {
           data-hero-fade
           className="inline-flex items-center gap-2 rounded-full border border-hairline bg-surface-1 px-3 py-1 text-caption text-ink-muted"
         >
-          <span className="size-1.5 rounded-full bg-primary" />
-          The project manager&apos;s vantage point
+          <span className="size-1.5 rounded-full bg-primary" />A clearer view of every project
         </span>
 
         <h1
@@ -88,8 +87,8 @@ export function LandingHero({ signedIn }: { signedIn: boolean }) {
         </h1>
 
         <p data-hero-fade className="mx-auto mt-6 max-w-xl text-body-lg text-ink-subtle">
-          PrismPM holds the plan view and the single changed field in one system. Every Task, every Decision, every assumption it
-          rests on, and every change anyone made to any of it.
+          PrismPM holds the plan view and the single changed field in one system. Every Task, every Decision, every
+          assumption it rests on, and every change anyone made to any of it.
         </p>
 
         <div data-hero-fade className="mt-9 flex flex-wrap items-center justify-center gap-3">

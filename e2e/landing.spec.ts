@@ -66,7 +66,7 @@ test("desktop scrubbing survives compact and reduced-motion viewports", async ({
 });
 
 test("missing video leaves all chapters readable", async ({ page }) => {
-  await page.route("**/landing/vantage-scroll.mp4", (route) => route.abort());
+  await page.route("**/landing/prismpm-scroll.mp4", (route) => route.abort());
   await page.goto("/");
   await page.locator("#how").scrollIntoViewIfNeeded();
   await expect(page.locator("#how").getByRole("heading", { level: 3 })).toHaveCount(5);
@@ -77,7 +77,7 @@ test("the phone hero does not download the film until it enters view", async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   const downloads: string[] = [];
   page.on("request", (request) => {
-    if (request.url().endsWith("/landing/vantage-scroll.mp4")) downloads.push(request.url());
+    if (request.url().endsWith("/landing/prismpm-scroll.mp4")) downloads.push(request.url());
   });
   await page.goto("/");
   await expect(page.locator("#how .sticky")).toBeVisible();
@@ -148,7 +148,7 @@ test("anonymous dashboard access redirects to sign-in", async ({ page }) => {
 test("metadata, social image and crawl routes share the canonical origin", async ({ page, request }) => {
   const origin = new URL(process.env.SITE_URL || "http://localhost:3000").origin;
   await page.goto("/");
-  await expect(page).toHaveTitle("Vantage - project management with a memory");
+  await expect(page).toHaveTitle("PrismPM - project management with a memory");
   expect(new URL((await page.locator('link[rel="canonical"]').getAttribute("href"))!).href).toBe(origin + "/");
   expect(new URL((await page.locator('meta[property="og:url"]').getAttribute("content"))!).href).toBe(origin + "/");
   await expect(page.locator('meta[property="og:type"]')).toHaveAttribute("content", "website");
@@ -167,7 +167,7 @@ test("metadata, social image and crawl routes share the canonical origin", async
     expect(bytes.readUInt32BE(16)).toBe(1200);
     expect(bytes.readUInt32BE(20)).toBe(630);
   }
-  await expect(page.locator('meta[property="og:image:alt"]')).toHaveAttribute("content", /Vantage/);
+  await expect(page.locator('meta[property="og:image:alt"]')).toHaveAttribute("content", /PrismPM/);
   const robots = await request.get("/robots.txt");
   expect(robots.status()).toBe(200);
   expect(await robots.text()).toContain(`Sitemap: ${origin}/sitemap.xml`);

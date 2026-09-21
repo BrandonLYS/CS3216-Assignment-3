@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { addDays, format } from "date-fns";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,6 +15,7 @@ const key = `F${stamp}`;
 const email = `flows-${run}@test.local`;
 const password = "flows-password-123";
 const projectName = "Payments Migration";
+let sessionCookies: Awaited<ReturnType<BrowserContext["cookies"]>> | undefined;
 
 const shots = (flow: string) => {
   const dir = path.join("docs", flow, "screenshots");
@@ -30,11 +31,20 @@ const shots = (flow: string) => {
 };
 
 async function login(page: Page) {
+  // The auth flow exercises sign-in once; subsequent flows reuse its session.
+  // Repeated sign-ins from the same browser-test host hit production rate limits.
+  if (sessionCookies) {
+    await page.context().addCookies(sessionCookies);
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL("/dashboard");
+    return;
+  }
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL("/dashboard");
+  sessionCookies = await page.context().cookies();
 }
 
 async function openProject(page: Page, section?: string) {

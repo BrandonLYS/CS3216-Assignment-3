@@ -14,7 +14,7 @@ const SCRUB_FACTOR = 0.14;
 
 /**
  * One beat of the descent, from the plan view above the tower down into a single room.
- * Each pairs the shot it sits over with the part of Vantage that shot stands for.
+ * Each pairs the shot it sits over with the part of PrismPM that shot stands for.
  */
 const chapters = [
   {

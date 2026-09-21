@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
+import { Logo } from "@/shared/ui/logo";
 
-export const alt = "Vantage. Stand above the whole project. Project management with a memory.";
+export const alt = "PrismPM. Stand above the whole project. Project management with a memory.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const dynamic = "force-static";
@@ -30,17 +31,8 @@ export default async function Image() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", fontSize: 32, gap: 16 }}>
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-          <rect x="2" y="2" width="20" height="20" rx="6" fill={color("primary")} />
-          <path
-            d="M7 8l5 9 5-9"
-            stroke={color("on-primary")}
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Vantage
+        <Logo size={44} color={color} />
+        PrismPM
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         <div style={{ fontSize: 88, lineHeight: 1.05, letterSpacing: -3, maxWidth: 960 }}>
