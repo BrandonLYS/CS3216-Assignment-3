@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { Tx } from "@/server/db/client";
+import type { Db, Tx } from "@/server/db/client";
 import { activityEvents, type NewActivityEventRow } from "@/server/modules/activity/schema";
 import { eventBus, type DomainEvent, type DomainEventName } from "@/server/events/bus";
 import { ensureSubscribers } from "@/server/events/subscribers";
 import type { EntityType, Via } from "@/shared/domain";
-import type { Ctx } from "./context";
+import type { Ctx, ParticipantCtx } from "./context";
 import type { FieldChange } from "./diff";
 
 /**
@@ -15,8 +15,13 @@ export class Recorder {
   private pending: DomainEvent[] = [];
   private signals: DomainEvent[] = [];
 
+  /**
+   * `actorId` is null when the mutation is a Participant's (ADR 0009): a Person has no `user`
+   * row, and `activity_events.actor_id` is a foreign key to one. Such a mutation may signal
+   * and may not record; `push` refuses the rest.
+   */
   constructor(
-    private readonly actorId: string,
+    private readonly actorId: string | null,
     private readonly via: Via | null = null,
   ) {}
 
@@ -59,6 +64,12 @@ export class Recorder {
     changes: FieldChange[],
     snapshot?: unknown,
   ) {
+    // A programmer error, not a domain one: the caller chose an actor-less mutation and then
+    // asked it to write history nobody can be named in. Thrown here, inside the transaction
+    // and before `flush`, so whatever the service already inserted rolls back with it.
+    if (this.actorId === null) {
+      throw new Error(`An actor-less mutation cannot record ${entityType}.${action}; use rec.signal`);
+    }
     this.pending.push({
       name: `${entityType}.${action}`,
       projectId,
@@ -112,9 +123,33 @@ export class Recorder {
 }
 
 /** Run `fn` in a transaction; activity is persisted with it and events published on commit. */
-export async function mutate<T>(ctx: Ctx, fn: (tx: Tx, rec: Recorder) => Promise<T>): Promise<T> {
-  const rec = new Recorder(ctx.userId, ctx.via ?? null);
-  const result = await ctx.db.transaction(async (tx) => {
+export function mutate<T>(ctx: Ctx, fn: (tx: Tx, rec: Recorder) => Promise<T>): Promise<T> {
+  return run(ctx.db, ctx.userId, ctx.via ?? null, fn);
+}
+
+/**
+ * The same, for the one audience that is not a User (ADR 0009). A Participant's mutation can
+ * only `rec.signal`, which is all a Chat Message needs (ADR 0010); `Recorder` refuses the rest.
+ *
+ * A separate function rather than a `Ctx | ParticipantCtx` parameter on `mutate`: the two
+ * context types are deliberately distinct so a Person id cannot reach a service that expects
+ * a `user.id`, and a union here would hand every existing `mutate` caller that possibility.
+ *
+ * `via` is null because a Participant acts for nobody: `Via` names the Assistant, Reflection
+ * and the system acting for the User.
+ */
+export function mutateAsParticipant<T>(pctx: ParticipantCtx, fn: (tx: Tx, rec: Recorder) => Promise<T>): Promise<T> {
+  return run(pctx.db, null, null, fn);
+}
+
+async function run<T>(
+  db: Db,
+  actorId: string | null,
+  via: Via | null,
+  fn: (tx: Tx, rec: Recorder) => Promise<T>,
+): Promise<T> {
+  const rec = new Recorder(actorId, via);
+  const result = await db.transaction(async (tx) => {
     const r = await fn(tx, rec);
     await rec.flush(tx);
     return r;
