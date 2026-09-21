@@ -1,18 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { MessagesSquare, Send } from "lucide-react";
+import { MessagesSquare, Plus, Send, Users } from "lucide-react";
 import * as React from "react";
 import { postMessageAction } from "@/server/modules/messaging/actions";
-import type { RoomParticipantItem } from "@/server/modules/messaging/repository";
 import type { RoomMessageRow, RoomRow } from "@/server/modules/messaging/schema";
 import { fmtDateTime, relative } from "@/shared/lib/dates";
 import { cn } from "@/shared/lib/cn";
 import { Button, Field, Textarea } from "@/shared/ui";
 import { EmptyState } from "@/shared/ui/page-header";
 import { Avatar } from "@/entities/person/avatar";
+import { NewRoomDialog, RoomPeopleDialog, type RosterPerson } from "./room-dialogs";
 
-export type RoomListItem = { room: RoomRow; participants: RoomParticipantItem[] };
+/**
+ * Only what the pane renders. Narrower than `RoomParticipantItem` on purpose: a Participant is
+ * served the same component and must not be handed anyone's login email.
+ */
+export type RoomPerson = { personId: string; name: string };
+export type RoomListItem = { room: RoomRow; participants: RoomPerson[] };
+
+/**
+ * Who is looking (ADR 0009). The PM creates Rooms and admits People; a Participant reads the
+ * Rooms they are in and, until issue #55, cannot write.
+ */
+export type MessagesViewer =
+  { kind: "pm"; userId: string; roster: RosterPerson[] } | { kind: "participant"; personId: string };
 
 /**
  * A one-to-one Room carries no name and is known by the Person in it; the PM is never a
@@ -38,22 +50,30 @@ export function MessagesView({
   rooms,
   selected,
   messages,
-  currentUserId,
+  viewer,
 }: {
   projectId: string;
   rooms: RoomListItem[];
   selected: RoomListItem | null;
   /** Newest first, as the keyset page returns them. */
   messages: RoomMessageRow[];
-  currentUserId: string;
+  viewer: MessagesViewer;
 }) {
+  const [newRoom, setNewRoom] = React.useState(false);
   const base = `/projects/${projectId}/messages`;
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-72 shrink-0 flex-col border-r border-hairline">
-        <p className="px-4 py-2 text-caption text-ink-subtle">
-          {rooms.length} room{rooms.length === 1 ? "" : "s"}
-        </p>
+        <div className="flex items-center justify-between gap-2 px-4 py-2">
+          <p className="text-caption text-ink-subtle">
+            {rooms.length} room{rooms.length === 1 ? "" : "s"}
+          </p>
+          {viewer.kind === "pm" && (
+            <Button size="sm" variant="primary" onClick={() => setNewRoom(true)}>
+              <Plus className="size-3.5" /> New room
+            </Button>
+          )}
+        </div>
         <ul className="flex-1 overflow-y-auto border-t border-hairline">
           {rooms.map((item) => {
             const active = item.room.id === selected?.room.id;
@@ -81,12 +101,20 @@ export function MessagesView({
           <EmptyState
             icon={<MessagesSquare />}
             title="No rooms yet"
-            description="Rooms are created by you and hold the People you admit to them."
+            description={
+              viewer.kind === "pm"
+                ? "Create a room and choose the People in it."
+                : "You have not been added to a room yet."
+            }
           />
         ) : (
-          <Room key={selected.room.id} projectId={projectId} item={selected} messages={messages} me={currentUserId} />
+          <Room key={selected.room.id} projectId={projectId} item={selected} messages={messages} viewer={viewer} />
         )}
       </div>
+
+      {viewer.kind === "pm" && (
+        <NewRoomDialog open={newRoom} onClose={() => setNewRoom(false)} projectId={projectId} roster={viewer.roster} />
+      )}
     </div>
   );
 }
@@ -95,14 +123,15 @@ function Room({
   projectId,
   item,
   messages,
-  me,
+  viewer,
 }: {
   projectId: string;
   item: RoomListItem;
   messages: RoomMessageRow[];
-  me: string;
+  viewer: MessagesViewer;
 }) {
   const scroller = React.useRef<HTMLDivElement>(null);
+  const [people, setPeople] = React.useState(false);
   // Newest last is the reading order of a chat; the copy keeps the prop array untouched.
   const ordered = React.useMemo(() => [...messages].reverse(), [messages]);
 
@@ -114,11 +143,19 @@ function Room({
     if (el) el.scrollTop = el.scrollHeight;
   }, [item.room.id, newestId]);
 
+  const mine = (m: RoomMessageRow) =>
+    viewer.kind === "pm" ? m.authorUserId === viewer.userId : m.authorPersonId === viewer.personId;
+
   return (
     <>
       <div className="flex shrink-0 items-baseline gap-2 border-b border-hairline px-5 py-3">
         <h2 className="text-body font-medium text-ink">{labelOf(item)}</h2>
         <p className="truncate text-caption text-ink-tertiary">{subtitleOf(item)}</p>
+        {viewer.kind === "pm" && (
+          <Button size="sm" className="ml-auto shrink-0" onClick={() => setPeople(true)}>
+            <Users className="size-3.5" /> People
+          </Button>
+        )}
       </div>
 
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -134,7 +171,7 @@ function Room({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-caption font-medium text-ink">{m.authorName}</span>
-                    {m.authorUserId === me && <span className="text-caption text-ink-tertiary">You</span>}
+                    {mine(m) && <span className="text-caption text-ink-tertiary">You</span>}
                     <span className="text-caption text-ink-tertiary" title={fmtDateTime(m.createdAt)}>
                       {relative(m.createdAt)}
                     </span>
@@ -147,7 +184,23 @@ function Room({
         )}
       </div>
 
-      <Composer projectId={projectId} roomId={item.room.id} />
+      {viewer.kind === "pm" ? (
+        <Composer projectId={projectId} roomId={item.room.id} />
+      ) : (
+        <p className="shrink-0 border-t border-hairline px-5 py-3 text-caption text-ink-subtle">
+          Only the project manager can post for now.
+        </p>
+      )}
+
+      {viewer.kind === "pm" && (
+        <RoomPeopleDialog
+          open={people}
+          onClose={() => setPeople(false)}
+          projectId={projectId}
+          item={item}
+          roster={viewer.roster}
+        />
+      )}
     </>
   );
 }

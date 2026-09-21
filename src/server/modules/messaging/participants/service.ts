@@ -76,7 +76,7 @@ export const participantsService = {
       rec.updated("person", projectId, personId, person.name, [
         { field: "messaging_invite", oldValue: null, newValue: "sent" },
       ]);
-      return { token, expiresAt };
+      return { token, expiresAt, projectId, personId };
     }),
 
   /** Sets the Person's own password and burns the token. Returns the session to sign them in with. */
