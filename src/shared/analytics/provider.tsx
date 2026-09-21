@@ -3,15 +3,15 @@
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
-import { carriesSecret, redactUrl } from "./redact";
+import { Suspense, useEffect, useRef } from "react";
+import { carriesSecret, isCredentialPath, redactUrl } from "./redact";
 
 function PostHogPageView() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (!pathname) return;
+    if (!pathname || isCredentialPath(pathname)) return;
     const redacted = redactUrl(pathname);
     // The query string goes with it: a redacted path next to the real one would be pointless.
     const query = redacted === pathname ? searchParams?.toString() : undefined;
@@ -23,10 +23,21 @@ function PostHogPageView() {
 }
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const started = useRef(false);
+
   useEffect(() => {
+    if (started.current) return;
+    // Analytics never starts on a page whose URL is itself a credential (ADR 0009). Session
+    // recording is the reason this is a hard stop rather than more redaction: `$snapshot`
+    // events do not pass through `sanitize_properties`, and a replay would hold the address
+    // bar verbatim. Once the invite is accepted the browser is on the messages route, and
+    // analytics starts there with no token anywhere in the session.
+    if (pathname && isCredentialPath(pathname)) return;
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
     if (!key) return;
+    started.current = true;
     posthog.init(key, {
       api_host: host || "https://us.i.posthog.com",
       capture_pageview: false,
@@ -42,7 +53,10 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         return properties;
       },
     });
-  }, []);
+    // Re-run on navigation, because a session that started on the invite page initialises
+    // nothing and must still start analytics once the browser has left it. `started` keeps
+    // that to exactly one `init`.
+  }, [pathname]);
 
   return (
     <PHProvider client={posthog}>

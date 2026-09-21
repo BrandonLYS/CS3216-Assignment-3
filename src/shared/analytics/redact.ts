@@ -9,3 +9,10 @@ export const redactUrl = (value: string) => value.replaceAll(/\/invite\/[^/?#\s]
 /** True when a captured property could carry an invite token, and so needs `redactUrl`. */
 export const carriesSecret = (value: unknown): value is string =>
   typeof value === "string" && value.includes("/invite/");
+
+/**
+ * A page whose own address is a credential. Analytics does not start on one at all: session
+ * recording sends `$snapshot` events that never pass through `sanitize_properties`, so a
+ * replay would keep the address bar exactly as it was, token included.
+ */
+export const isCredentialPath = (pathname: string) => pathname.startsWith("/invite/");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carriesSecret, redactUrl } from "./redact";
+import { carriesSecret, isCredentialPath, redactUrl } from "./redact";
 
 const TOKEN = "dhc5Xc8WDAtmBrkJbkXO8FYxRwAJecRG";
 
@@ -18,6 +18,14 @@ describe("keeping an invite token out of analytics", () => {
       expect(redactUrl(url)).toBe(url);
       expect(carriesSecret(url)).toBe(false);
     }
+  });
+
+  it("names the invite page as the one analytics must not start on", () => {
+    // Session recording sends `$snapshot` events that skip `sanitize_properties` entirely, so
+    // the only safe answer on this page is to capture nothing at all.
+    expect(isCredentialPath(`/invite/${TOKEN}`)).toBe(true);
+    expect(isCredentialPath("/projects/p1/messages")).toBe(false);
+    expect(isCredentialPath("/m/p1/login")).toBe(false);
   });
 
   it("flags any property that could carry one, whatever the SDK named it", () => {
