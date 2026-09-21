@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/shared/lib/cn";
 import { ProductFrame } from "./product-frame";
 
-const VIDEO_SRC = "/landing/vantage-scroll.mp4";
-const POSTER_SRC = "/landing/vantage-scroll-poster.jpg";
+const VIDEO_SRC = "/landing/prismpm-scroll.mp4";
+const POSTER_SRC = "/landing/prismpm-scroll-poster.jpg";
 
 /** How hard the playhead chases the scroll position, in anime.js `damp` terms: 1 snaps, 0 never moves. */
 const SCRUB_FACTOR = 0.14;

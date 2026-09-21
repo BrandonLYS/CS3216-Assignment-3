@@ -1,10 +1,11 @@
 {
-  "name": "cs3216-a3",
+  "name": "prismpm",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "brand:icons": "tsx scripts/generate-favicon.ts",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
