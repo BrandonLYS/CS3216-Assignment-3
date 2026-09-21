@@ -14,6 +14,16 @@ export const projectsRepo = {
     return row;
   },
 
+  /**
+   * A Project's name without proving ownership. The only caller is the Participant surface,
+   * which has no User to own anything and has already proved the Person belongs to this Project
+   * (ADR 0009). Deliberately narrow: a Participant must never receive a whole Project row.
+   */
+  findName: async (db: DbOrTx, id: string): Promise<Pick<ProjectRow, "id" | "name"> | undefined> => {
+    const [row] = await db.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.id, id));
+    return row;
+  },
+
   insert: async (db: DbOrTx, values: NewProjectRow) => {
     const [row] = await db.insert(projects).values(values).returning();
     return row!;
