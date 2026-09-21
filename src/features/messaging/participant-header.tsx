@@ -10,7 +10,15 @@ import { Logo } from "@/shared/ui/logo";
  * The Participant surface has no Vantage shell (ADR 0009), so the one thing that would
  * otherwise live there - which Project this is, who you are, and how to leave - lives here.
  */
-export function ParticipantHeader({ projectName, personName }: { projectName: string; personName: string }) {
+export function ParticipantHeader({
+  projectId,
+  projectName,
+  personName,
+}: {
+  projectId: string;
+  projectName: string;
+  personName: string;
+}) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
 
@@ -27,8 +35,9 @@ export function ParticipantHeader({ projectName, personName }: { projectName: st
         onClick={async () => {
           setPending(true);
           await participantSignOutAction();
-          // The action clears the cookie; this page is behind it, so leave for the login form.
-          router.replace("/login");
+          // Back to the messaging login of this Project, not `/login`: that form authenticates
+          // a User against better-auth, and a Person's credentials would simply fail there.
+          router.replace(`/m/${projectId}/login`);
         }}
       >
         Sign out

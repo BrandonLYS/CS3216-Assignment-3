@@ -222,10 +222,18 @@ function InviteButton({
         onClick={async () => {
           setPending(true);
           setError(null);
-          const res = await createInviteAction({ projectId, personId: person.id });
-          setPending(false);
-          if (res.ok) onLink(res.data.url);
-          else setError(res.error);
+          try {
+            const res = await createInviteAction({ projectId, personId: person.id });
+            if (res.ok) onLink(res.data.url);
+            else setError(res.error);
+          } catch {
+            // A rejected action (network loss, an unexpected server error) must not leave the
+            // button spinning with nothing said; the dialog's parent stays mounted, so the
+            // state would survive closing and reopening it.
+            setError("Could not create a link. Try again.");
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <Link2 className="size-3" /> {label}

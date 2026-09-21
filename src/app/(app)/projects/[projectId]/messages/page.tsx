@@ -76,8 +76,10 @@ async function participantView(
     ? await participantMessagingService.listMessages(pctx, { projectId, roomId: selected.room.id }, { limit: PAGE })
     : [];
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <ParticipantHeader projectName={project.name} personName={person.name} />
+    // `h-screen overflow-hidden` is what `AppShell` gives the PM and what the pane's internal
+    // scrolling needs; without it a long history grows the page instead of scrolling itself.
+    <div className="flex h-screen flex-col overflow-hidden">
+      <ParticipantHeader projectId={projectId} projectName={project.name} personName={person.name} />
       <MessagesView
         projectId={projectId}
         rooms={rooms}
