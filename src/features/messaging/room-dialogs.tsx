@@ -121,77 +121,94 @@ export function RoomPeopleDialog({
   item: RoomListItem;
   roster: RosterPerson[];
 }) {
+  return (
+    <Dialog open={open} onClose={onClose} title="People in this room">
+      {/* `Dialog` renders nothing while closed, unmounting this along with it; that is what
+          keeps a Person's one-time link from reappearing as though freshly generated the next
+          time the dialog opens for this room, without RoomPeopleDialog itself having to track it. */}
+      <RoomPeopleDialogBody projectId={projectId} item={item} roster={roster} />
+    </Dialog>
+  );
+}
+
+function RoomPeopleDialogBody({
+  projectId,
+  item,
+  roster,
+}: {
+  projectId: string;
+  item: RoomListItem;
+  roster: RosterPerson[];
+}) {
   const [fresh, setFresh] = React.useState<{ personId: string; url: string } | null>(null);
   const inRoom = new Set(item.participants.map((p) => p.personId));
   const outside = roster.filter((p) => !inRoom.has(p.id));
   const full = item.room.type === "one_to_one";
 
   return (
-    <Dialog open={open} onClose={onClose} title="People in this room">
-      <div className="flex flex-col gap-4">
-        <ul className="flex flex-col gap-1">
-          {item.participants.map((p) => {
-            const person = roster.find((r) => r.id === p.personId);
-            return (
-              <li key={p.personId} className="flex items-center gap-2 rounded-md px-1 py-1.5">
-                <span className="truncate text-body-sm text-ink">{p.name}</span>
-                {person && (
-                  <Badge className={person.state === "active" ? "text-tag-green" : undefined}>
-                    {STATE_LABEL[person.state]}
-                  </Badge>
-                )}
-                {person?.state === "invited" && person.inviteExpiresAt && (
-                  <span className="text-caption text-ink-tertiary">expires {fmtDateTime(person.inviteExpiresAt)}</span>
-                )}
-                <InviteButton
-                  projectId={projectId}
-                  person={person}
-                  onLink={(url) => setFresh({ personId: p.personId, url })}
-                />
-              </li>
-            );
-          })}
-        </ul>
+    <div className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-1">
+        {item.participants.map((p) => {
+          const person = roster.find((r) => r.id === p.personId);
+          return (
+            <li key={p.personId} className="flex items-center gap-2 rounded-md px-1 py-1.5">
+              <span className="truncate text-body-sm text-ink">{p.name}</span>
+              {person && (
+                <Badge className={person.state === "active" ? "text-tag-green" : undefined}>
+                  {STATE_LABEL[person.state]}
+                </Badge>
+              )}
+              {person?.state === "invited" && person.inviteExpiresAt && (
+                <span className="text-caption text-ink-tertiary">expires {fmtDateTime(person.inviteExpiresAt)}</span>
+              )}
+              <InviteButton
+                projectId={projectId}
+                person={person}
+                onLink={(url) => setFresh({ personId: p.personId, url })}
+              />
+            </li>
+          );
+        })}
+      </ul>
 
-        {fresh && (
-          <div role="status" className="rounded-md border border-hairline-strong bg-surface-2 p-3">
-            <p className="text-caption text-ink-subtle">
-              Send this link to {roster.find((r) => r.id === fresh.personId)?.name}. It is shown once and can be used
-              once.
-            </p>
-            {/* `ph-no-capture` keeps the link out of a PostHog session replay: a `$snapshot`
-                records the DOM verbatim and never passes through the analytics sanitizer, so
-                a live credential rendered here would otherwise leave the browser. */}
-            <div className="ph-no-capture mt-2 flex items-center gap-2">
-              <code className="flex-1 truncate font-mono text-mono text-ink">{fresh.url}</code>
-              <Button size="sm" onClick={() => void navigator.clipboard.writeText(fresh.url)}>
-                <Copy className="size-3" /> Copy
-              </Button>
-            </div>
+      {fresh && (
+        <div role="status" className="rounded-md border border-hairline-strong bg-surface-2 p-3">
+          <p className="text-caption text-ink-subtle">
+            Send this link to {roster.find((r) => r.id === fresh.personId)?.name}. It is shown once and can be used
+            once.
+          </p>
+          {/* `ph-no-capture` keeps the link out of a PostHog session replay: a `$snapshot`
+              records the DOM verbatim and never passes through the analytics sanitizer, so
+              a live credential rendered here would otherwise leave the browser. */}
+          <div className="ph-no-capture mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate font-mono text-mono text-ink">{fresh.url}</code>
+            <Button size="sm" onClick={() => void navigator.clipboard.writeText(fresh.url)}>
+              <Copy className="size-3" /> Copy
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {full ? (
-          <p className="text-caption text-ink-subtle">A direct message holds one Person and cannot take another.</p>
-        ) : outside.length === 0 ? (
-          <p className="text-caption text-ink-subtle">Everyone in this project is already here.</p>
-        ) : (
-          <ActionForm
-            action={addParticipantAction}
-            hidden={{ projectId, roomId: item.room.id }}
-            submitLabel="Add to room"
-          >
-            <SelectField
-              name="personId"
-              label="Add someone"
-              required
-              placeholder="Choose a person"
-              options={outside.map((p) => ({ value: p.id, label: p.name }))}
-            />
-          </ActionForm>
-        )}
-      </div>
-    </Dialog>
+      {full ? (
+        <p className="text-caption text-ink-subtle">A direct message holds one Person and cannot take another.</p>
+      ) : outside.length === 0 ? (
+        <p className="text-caption text-ink-subtle">Everyone in this project is already here.</p>
+      ) : (
+        <ActionForm
+          action={addParticipantAction}
+          hidden={{ projectId, roomId: item.room.id }}
+          submitLabel="Add to room"
+        >
+          <SelectField
+            name="personId"
+            label="Add someone"
+            required
+            placeholder="Choose a person"
+            options={outside.map((p) => ({ value: p.id, label: p.name }))}
+          />
+        </ActionForm>
+      )}
+    </div>
   );
 }
 

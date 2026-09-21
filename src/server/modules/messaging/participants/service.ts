@@ -1,18 +1,15 @@
-import { createHash, randomBytes } from "node:crypto";
 import { hashPassword, verifyPassword } from "better-auth/crypto";
 import type { ParticipantSession } from "@/server/auth/participant-session";
 import type { Ctx } from "@/server/core/context";
 import { ValidationError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
+import { hashToken, randomToken } from "@/server/core/token";
 import { db } from "@/server/db/client";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { projectsRepo } from "@/server/modules/projects/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import type { AcceptInviteInput, CreateInviteInput, ParticipantLoginInput } from "./validation";
-
-/** Same scheme as a personal access token: random bytes handed out once, only the hash stored. */
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const INVITE_TTL_DAYS = 7;
 
@@ -58,7 +55,7 @@ export const participantsService = {
           personId: ["Email already in use"],
         });
       }
-      const token = randomBytes(24).toString("base64url");
+      const token = randomToken();
       const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
       try {
         await peopleRepo.setInvite(tx, personId, hashToken(token), expiresAt);
