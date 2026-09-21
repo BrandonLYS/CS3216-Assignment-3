@@ -36,7 +36,7 @@ export const PROJECT_SECTIONS = [
 ] as const;
 
 const GO_TO = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/settings", label: "Settings", icon: Settings },

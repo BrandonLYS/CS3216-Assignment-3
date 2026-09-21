@@ -10,7 +10,7 @@ import { Logo } from "@/shared/ui";
 import { HealthDot } from "@/entities/project/health";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -50,8 +50,7 @@ export function Sidebar({
 
       <nav className="flex flex-col gap-0.5 px-3">
         {nav.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/" ? pathname === "/" : pathname.startsWith(href) && !pathname.startsWith("/projects/");
+          const active = pathname.startsWith(href) && !pathname.startsWith("/projects/");
           return (
             <Link
               key={href}

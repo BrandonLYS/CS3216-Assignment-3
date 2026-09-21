@@ -34,7 +34,7 @@ async function login(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/dashboard");
 }
 
 async function openProject(page: Page, section?: string) {
@@ -64,7 +64,7 @@ test.describe("auth", () => {
     await page.getByLabel("Password").fill(password);
     await shot(page, "signup-filled");
     await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     await expect(page.getByText("No projects yet", { exact: true })).toBeVisible();
     await shot(page, "empty-workspace");
 
@@ -444,7 +444,7 @@ test.describe("overview", () => {
     await shot(page, "project-overview");
 
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     await expect(page.getByRole("link", { name: projectName }).first()).toBeVisible();
     await shot(page, "workspace-dashboard");
   });
@@ -680,7 +680,7 @@ test.describe("attention", () => {
     await shot(page, "overview-collapsed");
 
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     const row = page.getByRole("link", { name: projectName }).filter({ hasText: /overdue/ });
     await expect(row.getByText(/\d+ overdue/)).toBeVisible();
     await expect(row.getByText(/\d+ blocked/)).toBeVisible();
@@ -776,7 +776,7 @@ test.describe("task-search", () => {
 
     // Key search from the Dashboard → result shows project name → Enter opens the dialog.
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     await page.keyboard.press("Meta+k");
     const input = page.getByPlaceholder("Type a command or search…");
     await input.fill(`${key}-1`);

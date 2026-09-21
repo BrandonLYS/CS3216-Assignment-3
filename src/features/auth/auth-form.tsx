@@ -9,7 +9,7 @@ import { Button, Field, Input } from "@/shared/ui";
 
 /** Only same-origin absolute paths; rejects `//host`, `javascript:` and anything else attacker-controlled. */
 function safeReturnPath(next: string | null) {
-  return next && /^\/(?!\/)/.test(next) ? next : "/";
+  return next && /^\/(?!\/)/.test(next) ? next : "/dashboard";
 }
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
