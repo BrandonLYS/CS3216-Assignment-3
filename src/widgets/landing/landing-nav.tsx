@@ -52,7 +52,7 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
           {signedIn ? (
             <Link
               href="/dashboard"
-              className="inline-flex h-8 items-center rounded-md bg-primary px-3.5 text-body-sm font-medium text-on-primary transition-colors hover:bg-primary-hover active:bg-primary-focus"
+              className="inline-flex h-10 items-center rounded-md bg-primary px-3.5 text-body-sm font-medium text-on-primary transition-colors hover:bg-primary-hover active:bg-primary-focus"
             >
               Open workspace
             </Link>
@@ -60,13 +60,13 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
             <>
               <Link
                 href="/login"
-                className="inline-flex h-8 items-center rounded-md px-3 text-body-sm text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                className="inline-flex h-10 items-center rounded-md px-3 text-body-sm text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 Sign in
               </Link>
               <Link
                 href="/signup"
-                className="inline-flex h-8 items-center rounded-md bg-primary px-3.5 text-body-sm font-medium text-on-primary transition-colors hover:bg-primary-hover active:bg-primary-focus"
+                className="inline-flex h-10 items-center rounded-md bg-primary px-3.5 text-body-sm font-medium text-on-primary transition-colors hover:bg-primary-hover active:bg-primary-focus"
               >
                 Get started
               </Link>

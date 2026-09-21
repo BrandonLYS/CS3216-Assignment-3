@@ -47,7 +47,7 @@ export function ScrollVideo() {
   const progress = useRef(0);
   const [active, setActive] = useState(0);
   const [video, setVideo] = useState<"pending" | "ready" | "missing">("pending");
-  const [reduced, setReduced] = useState(false);
+  const [stacked, setStacked] = useState(false);
 
   const markReady = useCallback((el: HTMLVideoElement) => {
     setVideo("ready");
@@ -68,8 +68,10 @@ export function ScrollVideo() {
   }, [markReady]);
 
   useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduced(query.matches);
+    // The pinned text/video composition needs desktop width and enough height to
+    // fit below the navigation. Smaller viewports keep every chapter in normal flow.
+    const query = window.matchMedia("(prefers-reduced-motion: reduce), (width < 64rem), (height < 40rem)");
+    const sync = () => setStacked(query.matches);
     sync();
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
@@ -77,7 +79,7 @@ export function ScrollVideo() {
 
   useEffect(() => {
     const section = sectionRef.current;
-    if (reduced || !section) return;
+    if (stacked || !section) return;
     let shown = -1;
     return scroll(
       (p: number) => {
@@ -92,12 +94,12 @@ export function ScrollVideo() {
       },
       { target: section, offset: ["start start", "end end"] },
     );
-  }, [reduced]);
+  }, [stacked]);
 
   useEffect(() => {
     const section = sectionRef.current;
     const el = videoRef.current;
-    if (reduced || video !== "ready" || !section || !el) return;
+    if (stacked || video !== "ready" || !section || !el) return;
 
     let frame = 0;
     let last = 0;
@@ -129,7 +131,7 @@ export function ScrollVideo() {
       unwatch();
       stop();
     };
-  }, [reduced, video]);
+  }, [stacked, video]);
 
   const stage = (
     <div className="relative overflow-hidden rounded-xl border border-hairline bg-surface-1">
@@ -155,7 +157,7 @@ export function ScrollVideo() {
     </div>
   );
 
-  if (reduced) {
+  if (stacked) {
     return (
       <section id="how" className="mx-auto max-w-[1280px] px-6 py-24">
         <Heading />
@@ -163,7 +165,7 @@ export function ScrollVideo() {
         <ol className="mt-10 grid gap-6 sm:grid-cols-2">
           {chapters.map((chapter) => (
             <li key={chapter.id} className="rounded-lg border border-hairline bg-surface-1 p-6">
-              <span className="font-mono text-mono text-ink-tertiary">{chapter.index}</span>
+              <span className="text-eyebrow font-medium text-ink-tertiary">{chapter.index}</span>
               <h3 className="mt-2 text-card-title text-ink">{chapter.title}</h3>
               <p className="mt-2 text-body-sm text-ink-subtle">{chapter.body}</p>
             </li>
@@ -205,7 +207,7 @@ export function ScrollVideo() {
                         i === active ? "opacity-100" : "pointer-events-none opacity-0",
                       )}
                     >
-                      <span className="font-mono text-mono text-primary">{chapter.index}</span>
+                      <span className="text-eyebrow font-medium text-primary">{chapter.index}</span>
                       <h3 className="mt-2 text-headline text-ink">{chapter.title}</h3>
                       <p className="mt-3 max-w-md text-body text-ink-subtle">{chapter.body}</p>
                     </div>
