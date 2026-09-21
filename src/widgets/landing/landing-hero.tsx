@@ -60,26 +60,36 @@ export function LandingHero({ signedIn }: { signedIn: boolean }) {
   }, []);
 
   return (
-    <div ref={rootRef} className="mx-auto max-w-[1280px] px-6 pt-24 pb-16 sm:pt-32">
+    <div ref={rootRef} className="relative isolate px-6 pt-24 pb-16 sm:pt-32">
+      {/* The film's first frame, held far back, so the page opens in the world the descent continues into. */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 -z-10 h-[120%] bg-cover bg-center opacity-[0.28]"
+        style={{
+          backgroundImage: "url('/landing/vantage-scroll-poster.jpg')",
+          maskImage: "linear-gradient(to bottom, transparent, black 18%, black 42%, transparent 82%)",
+          WebkitMaskImage: "linear-gradient(to bottom, transparent, black 18%, black 42%, transparent 82%)",
+        }}
+      />
       <div className="mx-auto max-w-4xl text-center">
         <span
           data-hero-fade
           className="inline-flex items-center gap-2 rounded-full border border-hairline bg-surface-1 px-3 py-1 text-caption text-ink-muted"
         >
           <span className="size-1.5 rounded-full bg-primary" />
-          Decision memory for project managers
+          The project manager&apos;s vantage point
         </span>
 
         <h1
           ref={headingRef}
-          className="mt-7 text-[40px] leading-[1.08] font-semibold tracking-[-1.4px] text-ink sm:text-display-lg lg:text-display-xl"
+          className="mt-7 text-[40px] leading-[1.08] font-semibold tracking-[-1.4px] text-balance text-ink sm:text-display-lg lg:text-display-xl"
         >
-          Every project forgets why. Yours will not.
+          Stand above the whole project.
         </h1>
 
         <p data-hero-fade className="mx-auto mt-6 max-w-xl text-body-lg text-ink-subtle">
-          PrismPM holds the tasks, milestones and risks you would expect - and underneath them the decisions, the
-          assumptions they rest on, and the evidence they came from.
+          PrismPM holds the plan view and the single changed field in one system. Every Task, every Decision, every assumption it
+          rests on, and every change anyone made to any of it.
         </p>
 
         <div data-hero-fade className="mt-9 flex flex-wrap items-center justify-center gap-3">
