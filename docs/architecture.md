@@ -81,8 +81,9 @@ flowchart TB
 ```
 
 The auth-to-database arrow represents the Better Auth Drizzle adapter and the separate Participant/API-token modules.
+Session persistence, API-token management, and Participant self-service credential changes do not use Project mutation recording.
+PM-issued invitations are an exception: issuing or reissuing one records a Person Activity Event through `mutate`.
 The AI box combines the shared registry with the in-app loop for readability; MCP calls the registry only and never invokes that loop.
-They do not use Project mutation recording for session or credential persistence.
 The Evidence download handler also calls the Evidence service and storage adapter after authenticating the User.
 The diagram groups these internal helpers to keep the main boundaries visible.
 
@@ -501,7 +502,8 @@ The recording exceptions are intentional:
 - `project.deleted` is a publish-only signal because the deleted Project's Activity rows cascade away.
 - `chat_message.created` is publish-only because `room_messages` already stores the immutable content; Room creation and Participant admission do create Activity.
 - Evidence link/unlink signals accompany the linked item's recorded change rather than replacing it.
-- Conversations, Messages, memory versions, API tokens, pending Proposals, and Participant credential writes are not ordinary Project mutations and do not create Project Activity rows.
+- Conversations, Messages, memory versions, API tokens, pending Proposals, and Participant self-service credential changes do not create Project Activity rows.
+  PM invitation issuance and reissuance use `mutate` and record a Person Activity Event without exposing the token hash.
 - Better Auth owns its account/session persistence through its adapter.
 
 Proposal passes and Reflection use Next.js `after()` instead of the event bus.
