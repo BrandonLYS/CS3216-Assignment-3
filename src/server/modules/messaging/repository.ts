@@ -20,8 +20,15 @@ export const messagingRepo = {
     return row!;
   },
 
-  findRoomById: async (db: DbOrTx, id: string): Promise<RoomRow | undefined> => {
-    const [row] = await db.select().from(rooms).where(eq(rooms.id, id));
+  /**
+   * The only way to read one Room, and it takes the Project it is expected to be in, so
+   * a caller cannot reach across Projects by knowing an id (issue #53).
+   */
+  findRoom: async (db: DbOrTx, projectId: string, id: string): Promise<RoomRow | undefined> => {
+    const [row] = await db
+      .select()
+      .from(rooms)
+      .where(and(eq(rooms.id, id), eq(rooms.projectId, projectId)));
     return row;
   },
 
@@ -42,6 +49,10 @@ export const messagingRepo = {
   addParticipant: (db: DbOrTx, roomId: string, personId: string) =>
     db.insert(roomParticipants).values({ roomId, personId }).onConflictDoNothing(),
 
+  /**
+   * Takes no `projectId`: `room_participants` has no such column to filter on. The Room is
+   * resolved against its Project by `messagingService` before this is reached.
+   */
   listParticipants: (db: DbOrTx, roomId: string) =>
     db
       .select({ personId: people.id, name: people.name, email: people.email, addedAt: roomParticipants.addedAt })
@@ -50,6 +61,7 @@ export const messagingRepo = {
       .where(eq(roomParticipants.roomId, roomId))
       .orderBy(asc(people.name)),
 
+  /** Project-scoped for the same reason as `listParticipants`: through the Room, not a column. */
   isParticipant: (db: DbOrTx, roomId: string, personId: string): Promise<boolean> =>
     db
       .select({ one: sql<number>`1` })
@@ -59,19 +71,19 @@ export const messagingRepo = {
       .then((xs) => xs.length > 0),
 
   /**
-   * `projectId` is taken from the Room, never from the caller, so the denormalised column
-   * cannot disagree with it. Throws if the Room is gone.
+   * Takes the Room row, not its id: `projectId` is then copied from the Room and never
+   * supplied by the caller, and the Room has already been resolved inside its Project by
+   * `findRoom`. A fabricated pair is still refused by `room_messages_room_fk`, which is
+   * also what rejects a Room deleted between the read and this insert.
    */
   insertMessage: async (
     db: DbOrTx,
-    roomId: string,
+    room: Pick<RoomRow, "id" | "projectId">,
     values: Omit<NewRoomMessageRow, "roomId" | "projectId">,
   ): Promise<RoomMessageRow> => {
-    const room = await messagingRepo.findRoomById(db, roomId);
-    if (!room) throw new Error(`Room ${roomId} not found`);
     const [row] = await db
       .insert(roomMessages)
-      .values({ ...values, roomId, projectId: room.projectId })
+      .values({ ...values, roomId: room.id, projectId: room.projectId })
       .returning();
     return row!;
   },
@@ -83,6 +95,7 @@ export const messagingRepo = {
    */
   listMessages: (
     db: DbOrTx,
+    projectId: string,
     roomId: string,
     { before, limit }: { before?: MessageCursor; limit: number },
   ): Promise<RoomMessageRow[]> =>
@@ -92,6 +105,9 @@ export const messagingRepo = {
       .where(
         and(
           eq(roomMessages.roomId, roomId),
+          // Redundant given the composite foreign key, which already stops the two disagreeing,
+          // and kept anyway so no read of a Room's history omits the Project it belongs to.
+          eq(roomMessages.projectId, projectId),
           // A row comparison, not the equivalent OR of two predicates. Postgres can use a
           // composite index as a range bound for `(a, b) < (x, y)` and seek straight to the
           // cursor; given the disjunction it starts at the newest row and filters forward, so

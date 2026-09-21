@@ -35,7 +35,7 @@ beforeAll(async () => {
 afterAll(closeDb);
 
 const say = (text: string | null, over: Partial<Parameters<typeof messagingRepo.insertMessage>[2]> = {}) =>
-  messagingRepo.insertMessage(ctx.db, room.id, {
+  messagingRepo.insertMessage(ctx.db, room, {
     text,
     authorPersonId: jason.id,
     authorName: jason.name,
@@ -59,8 +59,15 @@ async function expectRejectedBy(promise: Promise<unknown>, constraint: string) {
 
 describe("rooms and participants", () => {
   it("reads a Room back by id and in its Project", async () => {
-    expect(await messagingRepo.findRoomById(ctx.db, room.id)).toMatchObject({ name: "Launch", type: "group" });
+    expect(await messagingRepo.findRoom(ctx.db, project.id, room.id)).toMatchObject({ name: "Launch", type: "group" });
     expect(await messagingRepo.listRoomsForProject(ctx.db, project.id)).toHaveLength(1);
+  });
+
+  it("hides a Room and its history from another Project asking by id", async () => {
+    const elsewhere = await makeProject(ctx, "ELS");
+    await say("Only for this Project");
+    expect(await messagingRepo.findRoom(ctx.db, elsewhere.id, room.id)).toBeUndefined();
+    expect(await messagingRepo.listMessages(ctx.db, elsewhere.id, room.id, { limit: 10 })).toEqual([]);
   });
 
   it("admits a Person once however many times they are added", async () => {
@@ -141,7 +148,7 @@ describe("history", () => {
     // failing the assertions below for a reason that has nothing to do with paging.
     const at = (i: number) => new Date(Date.UTC(2026, 0, 1, 12, 0, i));
     for (let i = 1; i <= 5; i++) {
-      await messagingRepo.insertMessage(ctx.db, paged.id, {
+      await messagingRepo.insertMessage(ctx.db, paged, {
         text: `m${i}`,
         authorPersonId: jason.id,
         authorName: jason.name,
@@ -149,12 +156,12 @@ describe("history", () => {
       });
     }
 
-    const first = await messagingRepo.listMessages(ctx.db, paged.id, { limit: 2 });
+    const first = await messagingRepo.listMessages(ctx.db, project.id, paged.id, { limit: 2 });
     expect(first.map((m) => m.text)).toEqual(["m5", "m4"]);
 
     // A newer Chat Message arrives before the reader scrolls back. A keyset cursor ignores it;
     // an offset would have shifted the window and repeated m3.
-    await messagingRepo.insertMessage(ctx.db, paged.id, {
+    await messagingRepo.insertMessage(ctx.db, paged, {
       text: "m6",
       authorPersonId: jason.id,
       authorName: jason.name,
@@ -162,7 +169,7 @@ describe("history", () => {
     });
 
     const last = first.at(-1)!;
-    const second = await messagingRepo.listMessages(ctx.db, paged.id, {
+    const second = await messagingRepo.listMessages(ctx.db, project.id, paged.id, {
       before: { createdAt: last.createdAt, id: last.id },
       limit: 2,
     });
@@ -183,7 +190,7 @@ describe("history", () => {
     const prefix = randomUUID();
     const ids = ["a", "b", "c"].map((suffix) => `${prefix}-${suffix}`);
     for (const id of ids) {
-      await messagingRepo.insertMessage(ctx.db, tied.id, {
+      await messagingRepo.insertMessage(ctx.db, tied, {
         id,
         text: id,
         authorPersonId: jason.id,
@@ -193,11 +200,11 @@ describe("history", () => {
     }
     const [a, b, c] = ids;
 
-    const page1 = await messagingRepo.listMessages(ctx.db, tied.id, { limit: 2 });
+    const page1 = await messagingRepo.listMessages(ctx.db, project.id, tied.id, { limit: 2 });
     expect(page1.map((m) => m.id)).toEqual([c, b]);
 
     const cursor = page1.at(-1)!;
-    const page2 = await messagingRepo.listMessages(ctx.db, tied.id, {
+    const page2 = await messagingRepo.listMessages(ctx.db, project.id, tied.id, {
       before: { createdAt: cursor.createdAt, id: cursor.id },
       limit: 2,
     });
@@ -295,7 +302,7 @@ describe("messaging credentials stay on the server", () => {
 describe("what survives a delete", () => {
   it("keeps the Chat Message and its author name when the Person is deleted", async () => {
     const leaver = await peopleService.createPerson(ctx, { projectId: project.id, name: "Wei Ling" });
-    const said = await messagingRepo.insertMessage(ctx.db, room.id, {
+    const said = await messagingRepo.insertMessage(ctx.db, room, {
       text: "Handing over",
       authorPersonId: leaver.id,
       authorName: leaver.name,
@@ -317,7 +324,7 @@ describe("what survives a delete", () => {
       createdBy: doomedCtx.userId,
     });
     await messagingRepo.addParticipant(doomedCtx.db, r.id, person.id);
-    await messagingRepo.insertMessage(doomedCtx.db, r.id, {
+    await messagingRepo.insertMessage(doomedCtx.db, r, {
       text: "Short lived",
       authorPersonId: person.id,
       authorName: person.name,
