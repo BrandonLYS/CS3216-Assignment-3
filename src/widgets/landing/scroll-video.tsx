@@ -212,7 +212,7 @@ export function ScrollVideo() {
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(to top, var(--color-canvas) 0%, color-mix(in srgb, var(--color-canvas) 88%, transparent) 26%, color-mix(in srgb, var(--color-canvas) 45%, transparent) 48%, transparent 70%), linear-gradient(to bottom, var(--color-canvas) 0%, transparent 20%)",
+                "linear-gradient(to top, var(--color-canvas) 0%, color-mix(in srgb, var(--color-canvas) 70%, transparent) 20%, color-mix(in srgb, var(--color-canvas) 28%, transparent) 42%, transparent 62%), linear-gradient(to bottom, var(--color-canvas) 0%, transparent 16%)",
             }}
           />
 
