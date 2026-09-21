@@ -36,29 +36,30 @@ const capabilities = [
 
 export function LandingCapabilities() {
   return (
-    <section id="capabilities" className="mx-auto max-w-[1280px] px-6 py-24">
+    <section id="capabilities" className="mx-auto max-w-[1280px] px-6 py-32">
       <Reveal>
         <span data-reveal className="text-eyebrow font-medium tracking-[0.4px] text-ink-tertiary uppercase">
           Capabilities
         </span>
-        <h2 data-reveal className="mt-4 max-w-2xl text-display-md text-ink">
-          The base is boring on purpose
+        <h2 data-reveal className="mt-5 max-w-2xl text-display-md text-balance text-ink">
+          Made to be looked at closely
         </h2>
-        <p data-reveal className="mt-5 max-w-xl text-body-lg text-ink-subtle">
-          An intelligence layer is only as good as the record under it. Vantage keeps that record strict enough to
+        <p data-reveal className="mt-6 max-w-xl text-body-lg text-pretty text-ink-subtle">
+          An intelligence layer is only as good as the record beneath it. Vantage keeps that record strict enough to
           reason over.
         </p>
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Hairlines rather than six floating boxes: the grid reads as one structure. */}
+        <div className="mt-16 grid gap-px bg-hairline sm:grid-cols-2 lg:grid-cols-3">
           {capabilities.map(({ icon: Icon, title, body }) => (
             <article
               key={title}
               data-reveal
-              className="rounded-lg border border-hairline bg-surface-1 p-6 transition-colors hover:border-hairline-strong hover:bg-surface-2"
+              className="group bg-canvas p-8 transition-colors duration-300 hover:bg-surface-1"
             >
-              <Icon className="size-4 text-ink-subtle" />
-              <h3 className="mt-4 text-card-title text-ink">{title}</h3>
-              <p className="mt-2 text-body-sm text-ink-subtle">{body}</p>
+              <Icon className="size-4 text-ink-tertiary transition-colors duration-300 group-hover:text-primary" />
+              <h3 className="mt-6 text-subhead font-medium text-ink">{title}</h3>
+              <p className="mt-3 text-body-sm text-pretty text-ink-subtle">{body}</p>
             </article>
           ))}
         </div>

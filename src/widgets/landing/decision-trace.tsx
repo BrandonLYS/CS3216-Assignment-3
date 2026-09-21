@@ -75,7 +75,7 @@ export function DecisionTrace() {
   }, []);
 
   return (
-    <svg ref={ref} viewBox="-24 0 296 274" className="h-auto w-full max-w-[380px]" role="img">
+    <svg ref={ref} viewBox="-24 0 296 274" className="h-auto w-full max-w-[440px]" role="img">
       <title>A decision, the evidence it cites, the assumption it rests on and the risk that follows</title>
       {edges.map((d) => (
         <path
@@ -94,8 +94,8 @@ export function DecisionTrace() {
             cx={node.x}
             cy={node.y}
             r="5"
-            fill={i === 1 ? "var(--color-primary)" : "var(--color-surface-4)"}
-            stroke={i === 1 ? "var(--color-primary)" : "var(--color-hairline-tertiary)"}
+            fill={i === 1 ? "var(--color-primary)" : "var(--color-surface-3)"}
+            stroke={i === 1 ? "var(--color-primary)" : "var(--color-ink-tertiary)"}
             strokeWidth="1"
           />
           <text
