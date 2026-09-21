@@ -2,7 +2,9 @@
 
 This change builds on [PR #78](https://github.com/BrandonLYS/CS3216-Assignment-3/pull/78) and implements the remaining landing-page work in [issue #72](https://github.com/BrandonLYS/CS3216-Assignment-3/issues/72).
 It is rebased onto `main` at `a0cb75506c74d807e28e09d42759855056c28f01`, including the PrismPM rename and Participant messaging changes.
-The verified application code is commit `82f9417395eff940353d5290b60f195d6af6ffd3`.
+The full-suite and Lighthouse baseline is application commit `82f9417395eff940353d5290b60f195d6af6ffd3`.
+The final application commit is `b957c8ca80364baded40b1f164aef8d9642f4047`; its only subsequent code change corrects the citation direction in the last film chapter.
+The production build and all 12 landing browser tests passed again after that correction, and the screenshots and SEO response evidence were refreshed.
 Verification took place on 21 September 2026.
 
 ## Scope and production status
@@ -108,6 +110,17 @@ The hero and film captures use normal motion on desktop.
 | Phone pricing   | Section did not exist                          | [Pricing](screenshots/after-pricing-mobile.png)  |
 
 [Hero](screenshots/after-hero-desktop.png), [scroll film](screenshots/after-film-desktop.png), [social preview](screenshots/social-preview.png), and [machine-readable SEO checks](seo-verification.json).
+
+## Pre-merge self-review
+
+The standards review found one incorrect domain statement: Evidence was described as citing a Passage, while the domain model says Decisions cite Passages through Sources.
+The corrected sentence is “Decisions cite the Passages they came from.”
+The reviewer confirmed the finding was resolved, with no remaining standards violations or actionable code smells.
+The [before](screenshots/before-citation-copy.png) and [after](screenshots/after-citation-copy.png) browser captures use the same 390 x 844 reduced-motion viewport and chapter.
+
+The specification review found no implementation blockers or unjustified scope expansion.
+It identified the already documented live-deployment acceptance gap below; issue #72 remains open until that evidence is available.
+Review totals: one standards finding resolved, zero outstanding standards findings; zero specification code blockers, one pending production acceptance gap.
 
 ## Remaining production acceptance
 

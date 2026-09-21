@@ -1,7 +1,7 @@
 {
-  "checkedAt": "2026-09-21T22:26:37.502Z",
+  "checkedAt": "2026-09-21T22:38:16.932Z",
   "scope": "Local optimized production build, not a deployed release",
-  "codeCommit": "82f9417395eff940353d5290b60f195d6af6ffd3",
+  "codeCommit": "b957c8ca80364baded40b1f164aef8d9642f4047",
   "baseCommit": "a0cb75506c74d807e28e09d42759855056c28f01",
   "url": "http://localhost:3000/",
   "canonicalFixture": "https://prismpm.example/",
