@@ -72,6 +72,7 @@ function start() {
   if (!key) return;
   posthog.init(key, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
+    advanced_disable_flags: true,
     capture_pageview: false,
     capture_pageleave: false,
     autocapture: false,

@@ -89,9 +89,11 @@ async function createProject(page: Page) {
   return request;
 }
 
-async function captured(name: string, userId?: string) {
-  await expect.poll(() => events.some((event) => event.event === name && (!userId || id(event) === userId))).toBe(true);
-  return events.findLast((event) => event.event === name && (!userId || id(event) === userId))!;
+async function captured(name: string, userId?: string, since = 0) {
+  await expect
+    .poll(() => events.slice(since).some((event) => event.event === name && (!userId || id(event) === userId)))
+    .toBe(true);
+  return events.slice(since).findLast((event) => event.event === name && (!userId || id(event) === userId))!;
 }
 
 test("landing, signup, Project creation, restoration, logout and returning/switching Users", async ({ page }) => {
@@ -104,6 +106,9 @@ test("landing, signup, Project creation, restoration, logout and returning/switc
     .click();
   await expect(page).toHaveURL("/signup");
   await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+  await expect
+    .poll(() => events.findLast((event) => event.event === "$pageview")?.properties.$current_url)
+    .toBe("/signup");
   await page.screenshot({ path: `${root}/screenshots/after-analytics-signup.png`, animations: "disabled" });
   const user = await signup(page);
   const signupEvent = await captured("signup_completed", user.id);
@@ -119,14 +124,42 @@ test("landing, signup, Project creation, restoration, logout and returning/switc
   expect(events.filter((event) => event.event === "signup_completed")).toHaveLength(1);
   await expect(page.getByRole("heading", { name: "Analytics Project" })).toBeVisible();
   await page.screenshot({ path: `${root}/screenshots/after-analytics-project.png`, animations: "disabled" });
-  await page.reload();
-  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  const projectUrl = new URL(page.url()).pathname;
   await expect
     .poll(() =>
       events.some(
-        (event) =>
-          event.event === "$pageview" && event.properties.$current_url === "/dashboard" && id(event) === user.id,
+        (event) => event.event === "$pageview" && event.properties.$current_url === projectUrl && id(event) === user.id,
       ),
+    )
+    .toBe(true);
+  const reloadStart = events.length;
+  await page.reload();
+  await expect
+    .poll(() =>
+      events
+        .slice(reloadStart)
+        .some(
+          (event) =>
+            event.event === "$pageview" &&
+            event.properties.$current_url === projectUrl &&
+            id(event) === user.id &&
+            session(event) === session(created),
+        ),
+    )
+    .toBe(true);
+  const navigationStart = events.length;
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect
+    .poll(() =>
+      events
+        .slice(navigationStart)
+        .some(
+          (event) =>
+            event.event === "$pageview" &&
+            event.properties.$current_url === "/dashboard" &&
+            id(event) === user.id &&
+            session(event) === session(created),
+        ),
     )
     .toBe(true);
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -136,11 +169,28 @@ test("landing, signup, Project creation, restoration, logout and returning/switc
     .toBe("/login");
   expect(id(events.findLast((event) => event.event === "$pageview")!)).not.toBe(user.id);
   expect(session(events.findLast((event) => event.event === "$pageview")!)).not.toBe(session(created));
+  const loginPageview = events.findLast((event) => event.event === "$pageview")!;
+  const signInStart = events.length;
   await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL("/dashboard");
-  await captured("$identify", user.id);
+  const returning = await captured("$identify", user.id, signInStart);
+  expect(returning.properties.$anon_distinct_id).toBe(id(loginPageview));
+  expect(session(returning)).toBe(session(loginPageview));
+  await expect
+    .poll(() =>
+      events
+        .slice(signInStart)
+        .some(
+          (event) =>
+            event.event === "$pageview" &&
+            event.properties.$current_url === "/dashboard" &&
+            id(event) === user.id &&
+            session(event) === session(returning),
+        ),
+    )
+    .toBe(true);
   expect(events.filter((event) => event.event === "signup_completed")).toHaveLength(1);
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/login");
