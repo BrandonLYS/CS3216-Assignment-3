@@ -51,8 +51,11 @@ function labelOf({ room, participants }: RoomListItem, viewer: MessagesViewer) {
  */
 function subtitleOf({ room, participants }: RoomListItem, viewer: MessagesViewer) {
   const rest = others(participants, viewer);
-  if (!room.name) return rest.length ? "Direct message" : null;
-  return rest.length ? rest.map((p) => p.name).join(", ") : "No participants yet";
+  if (rest.length) return room.name ? rest.map((p) => p.name).join(", ") : "Direct message";
+  // Nobody else to name. To the PM that is a Room with no Person in it yet; to a Participant
+  // it is a Room holding them and the PM, which is not empty and which the label already
+  // describes. Only the PM is told a Room is waiting for someone.
+  return viewer.kind === "pm" && room.name ? "No participants yet" : null;
 }
 
 export function MessagesView({
