@@ -366,12 +366,17 @@ Asks: sponsor support escalating IAM credentials with Acme.`,
     body: `Deliverable A (settlement service): 90% complete.\nPlanned finish ${d(-2)}; new forecast ${d(7)}.\nBlocker: customer credentials.`,
   });
 
-  const launch = await messagingService.createRoom(ctx, { projectId: pid, type: "group", name: "Launch readiness" });
-  for (const person of [jason, sarah, marcus]) {
-    await messagingService.addParticipant(ctx, { projectId: pid, roomId: launch.id, personId: person.id });
-  }
-  const withBen = await messagingService.createRoom(ctx, { projectId: pid, type: "one_to_one" });
-  await messagingService.addParticipant(ctx, { projectId: pid, roomId: withBen.id, personId: ben.id });
+  const launch = await messagingService.createRoom(ctx, {
+    projectId: pid,
+    type: "group",
+    name: "Launch readiness",
+    personIds: [jason.id, sarah.id, marcus.id],
+  });
+  const withBen = await messagingService.createRoom(ctx, {
+    projectId: pid,
+    type: "one_to_one",
+    personIds: [ben.id],
+  });
 
   // A Person's reply goes in through the repository because the service that lets a Person
   // write is issue #55; only the PM can post today. Replace both calls when #55 lands.

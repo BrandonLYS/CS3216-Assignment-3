@@ -1,9 +1,10 @@
-import type { Ctx } from "@/server/core/context";
+import type { Ctx, ParticipantCtx } from "@/server/core/context";
 import { NotFoundError, ValidationError } from "@/server/core/errors";
-import { mutate } from "@/server/core/mutation";
-import type { DbOrTx } from "@/server/db/client";
+import { mutate, type Recorder } from "@/server/core/mutation";
+import type { DbOrTx, Tx } from "@/server/db/client";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
+import { projectsRepo } from "@/server/modules/projects/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import type { RoomType } from "@/shared/domain";
 import { messagingRepo, type MessageCursor, type RoomParticipantItem } from "./repository";
@@ -45,6 +46,52 @@ async function resolveRoom(db: DbOrTx, userId: string, { projectId, roomId }: Ro
   return room;
 }
 
+/**
+ * The second authorization seam (ADR 0009), and the mirror of `resolveRoom`: the Person still
+ * exists and is still in this Project, the Room is in that Project, and the Person was admitted
+ * to it. It is the first line of every service a Participant can reach.
+ *
+ * The Person is re-read rather than trusted from the cookie, which is what catches a Person
+ * deleted or moved since they signed in.
+ *
+ * Every failure is `NotFoundError("Room")`, never a "forbidden": a Participant must not be able
+ * to map the Rooms they are not in.
+ */
+export async function assertParticipates(
+  db: DbOrTx,
+  personId: string,
+  { projectId, roomId }: RoomRef,
+): Promise<RoomRow> {
+  const person = await peopleRepo.findById(db, personId);
+  if (!person || person.projectId !== projectId) throw new NotFoundError("Room");
+  const room = await messagingRepo.findRoom(db, projectId, roomId);
+  if (!room) throw new NotFoundError("Room");
+  if (!(await messagingRepo.isParticipant(db, room.id, personId))) throw new NotFoundError("Room");
+  return room;
+}
+
+/**
+ * Admit one Person to a Room. Shared by `createRoom` and `addParticipant` so the one-to-one
+ * invariant has a single implementation; admitting the same Person twice is a no-op and records
+ * nothing. The Room must already be locked by the caller when it might have concurrent writers.
+ */
+async function admit(tx: Tx, rec: Recorder, room: RoomRow, personId: string) {
+  await assertPersonInProject(tx, room.projectId, personId, "personId");
+  const person = (await peopleRepo.findById(tx, personId))!;
+  if (room.type === "one_to_one") {
+    const existing = await messagingRepo.listParticipants(tx, room.id);
+    // A repeat admission of the same Person is still a no-op, not an error.
+    if (existing.some((p) => p.personId !== personId)) {
+      throw new ValidationError("A one-to-one room already has its Person", { personId: ["Not allowed"] });
+    }
+  }
+  const [added] = await messagingRepo.addParticipant(tx, room.id, personId);
+  if (!added) return null;
+  const snapshot: ParticipantSnapshot = { roomId: room.id, personId, personName: person.name };
+  rec.created("participant", room.projectId, personId, person.name, snapshot);
+  return added;
+}
+
 export const messagingService = {
   listRooms: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
@@ -83,7 +130,18 @@ export const messagingService = {
     });
   },
 
-  createRoom: (ctx: Ctx, input: { projectId: string; type: RoomType; name?: string | null }) =>
+  /** The messaging state of every Person in the Project, for the PM's Participants dialog. */
+  listInviteStates: async (ctx: Ctx, projectId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    return peopleRepo.listMessagingStates(ctx.db, projectId);
+  },
+
+  /**
+   * A Room and the People it exists for, in one transaction. `personIds` is required because a
+   * Room with nobody in it is not a conversation: only the PM could see it, and a one-to-one
+   * Room would have nothing to be named after. A rejected Room leaves nothing behind.
+   */
+  createRoom: (ctx: Ctx, input: { projectId: string; type: RoomType; name?: string | null; personIds: string[] }) =>
     mutate(ctx, async (tx, rec) => {
       await assertOwnsProject(tx, ctx.userId, input.projectId);
       // The schema cannot express this: `rooms.name` is nullable because a one-to-one Room
@@ -95,6 +153,13 @@ export const messagingService = {
       if (input.type === "one_to_one" && name) {
         throw new ValidationError("A one-to-one room is named by its Person", { name: ["Not allowed"] });
       }
+      // Deduplicated here rather than in the schema, so a picker that submits a Person twice is
+      // a Room with one Participant instead of an error the PM cannot act on.
+      const personIds = [...new Set(input.personIds)];
+      if (!personIds.length) throw new ValidationError("Choose who is in this room", { personIds: ["Required"] });
+      if (input.type === "one_to_one" && personIds.length > 1) {
+        throw new ValidationError("A one-to-one room holds exactly one person", { personIds: ["Choose one person"] });
+      }
       const room = await messagingRepo.insertRoom(tx, {
         projectId: input.projectId,
         type: input.type,
@@ -102,29 +167,19 @@ export const messagingService = {
         createdBy: ctx.userId,
       });
       rec.created("room", room.projectId, room.id, roomLabel(room));
+      // No row lock: the Room was inserted by this transaction moments ago and its id is not
+      // yet known to anyone, so there is no concurrent writer to serialise against.
+      for (const personId of personIds) await admit(tx, rec, room, personId);
       return room;
     }),
 
   /** Admitting the same Person twice succeeds and records nothing the second time. */
   addParticipant: (ctx: Ctx, { personId, ...ref }: RoomRef & { personId: string }) =>
     mutate(ctx, async (tx, rec) => {
-      // Locked: the one-to-one check below reads the Participants and then writes one, and
-      // two admissions racing on the same Room would otherwise both pass the check.
+      // Locked: the one-to-one check inside `admit` reads the Participants and then writes one,
+      // and two admissions racing on the same Room would otherwise both pass the check.
       const room = await resolveRoom(tx, ctx.userId, ref, true);
-      await assertPersonInProject(tx, room.projectId, personId, "personId");
-      const person = (await peopleRepo.findById(tx, personId))!;
-      if (room.type === "one_to_one") {
-        const existing = await messagingRepo.listParticipants(tx, room.id);
-        // A repeat admission of the same Person is still a no-op, not an error.
-        if (existing.some((p) => p.personId !== personId)) {
-          throw new ValidationError("A one-to-one room already has its Person", { personId: ["Not allowed"] });
-        }
-      }
-      const [added] = await messagingRepo.addParticipant(tx, room.id, personId);
-      if (!added) return null;
-      const snapshot: ParticipantSnapshot = { roomId: room.id, personId, personName: person.name };
-      rec.created("participant", room.projectId, personId, person.name, snapshot);
-      return added;
+      return admit(tx, rec, room, personId);
     }),
 
   /**
@@ -158,4 +213,51 @@ export const messagingService = {
       });
       return message;
     }),
+};
+
+/**
+ * What a Person sees of messaging: their own Rooms in their own Project, and nothing else
+ * (ADR 0009). Every function starts with `assertParticipates` or is scoped by the Person's own
+ * Project id, and none of them can reach `assertOwnsProject`, which has no User to check.
+ *
+ * Sending is issue #55; this service reads only.
+ */
+export const participantMessagingService = {
+  /**
+   * Everything the shell-free Participant page needs: which Project this is, and their Rooms
+   * with the People in each. The Project's name comes from `projectsRepo.findName`, because
+   * `projectsService.get` proves ownership and a Participant owns nothing.
+   */
+  workspace: async (pctx: ParticipantCtx) => {
+    const { id: personId, projectId } = pctx.person;
+    const person = await peopleRepo.findById(pctx.db, personId);
+    if (!person || person.projectId !== projectId) throw new NotFoundError("Project");
+    const [project, rooms, participants] = await Promise.all([
+      projectsRepo.findName(pctx.db, projectId),
+      messagingRepo.listRoomsForPerson(pctx.db, projectId, personId),
+      messagingRepo.listParticipantsForProject(pctx.db, projectId),
+    ]);
+    if (!project) throw new NotFoundError("Project");
+    const mine = new Set(rooms.map((r) => r.id));
+    const byRoom = new Map<string, { personId: string; name: string }[]>();
+    for (const p of participants) {
+      // Only the Rooms this Person is in, and only the columns the pane renders: the email of
+      // the People in a Room is their login identifier and has no business in the browser.
+      if (!mine.has(p.roomId)) continue;
+      byRoom.set(p.roomId, [...(byRoom.get(p.roomId) ?? []), { personId: p.personId, name: p.name }]);
+    }
+    return {
+      project,
+      person: { id: person.id, name: person.name },
+      rooms: rooms.map((room) => ({ room, participants: byRoom.get(room.id) ?? [] })),
+    };
+  },
+
+  listMessages: async (pctx: ParticipantCtx, ref: RoomRef, page: { before?: MessageCursor; limit: number }) => {
+    const room = await assertParticipates(pctx.db, pctx.person.id, ref);
+    return messagingRepo.listMessages(pctx.db, room.projectId, room.id, {
+      before: page.before,
+      limit: Math.min(Math.max(page.limit, 1), MESSAGE_PAGE_MAX),
+    });
+  },
 };
