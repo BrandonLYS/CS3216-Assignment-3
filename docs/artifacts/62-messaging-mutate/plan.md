@@ -55,7 +55,7 @@ Out of scope, deliberately: the 4,000-character cap is #57, attachments are #56.
 
 For Chat Messages it is wrong, in order of weight:
 
-1. An Activity Event for a Chat Message is a copy of the Chat Message. `activity_events` exists to record *change*: one row per changed field, so a reader can see what is different since they last looked (ADR 0005). A Chat Message is never updated and never deleted, so `created` is the only event it can ever have, and that row would carry the same project, author, timestamp and text preview that `room_messages` already stores immutably. Compare `comment.created`, which earns its row: its snapshot carries the parent `{entityType, entityId}` that `historyForEntity`'s jsonb query needs (`comments/service.ts:22`). A Chat Message has no parent item to point at, so the snapshot would only point at itself.
+1. An Activity Event for a Chat Message is a copy of the Chat Message. `activity_events` exists to record _change_: one row per changed field, so a reader can see what is different since they last looked (ADR 0005). A Chat Message is never updated and never deleted, so `created` is the only event it can ever have, and that row would carry the same project, author, timestamp and text preview that `room_messages` already stores immutably. Compare `comment.created`, which earns its row: its snapshot carries the parent `{entityType, entityId}` that `historyForEntity`'s jsonb query needs (`comments/service.ts:22`). A Chat Message has no parent item to point at, so the snapshot would only point at itself.
 2. Chat volume is unlike every other entity's. `activityRepo.recentForProject` (`activity/service.ts:22`) and `recentForProjects` (`:25`, behind the dashboard through `workspace/queries.ts:114`) are unfiltered `ORDER BY occurred_at DESC LIMIT 50/30`, so one busy Room would evict every Task, Risk and Decision event from both feeds. This is repairable with one `ne()` in two queries, which is why it is the second reason and not the first - but it is a filter every future reader of `activity_events` would have to remember, and forgetting it is silent.
 
 Not a reason: leaking message text. Every reader of `activity_events` is behind `assertOwnsProject`, so a Participant never sees it. The duplication is the problem, not the exposure.
@@ -64,7 +64,7 @@ So `postMessage` uses `rec.signal("chat_message.created", { action: "created", .
 
 The signal carries `entityId` (the Chat Message id), `entityLabel` (the Room's label, not the text - the text stays in `room_messages` where a subscriber reads it by id) and `changes: []`. It cannot carry a `snapshot` or an `activityEventId`: `Recorder.signal`'s parameter type excludes the first (`core/mutation.ts:40`) and the second is only assigned while flushing rows (`:92`). #59's SSE fan-out and the future AI layer both refetch by id, so neither is needed; ADR 0010 states this explicitly so a later subscriber is not surprised.
 
-AGENTS.md currently states that `project.deleted` is the *only* exception to "call `rec.created/updated/deleted`". This PR therefore also:
+AGENTS.md currently states that `project.deleted` is the _only_ exception to "call `rec.created/updated/deleted`". This PR therefore also:
 
 - adds `docs/adr/0010-chat-messages-publish-without-an-activity-event.md` recording the decision, the reasons above, what the event carries, and the rejected alternative (write the row and teach every activity reader to filter `entity_type <> 'chat_message'`);
 - amends the AGENTS.md sentence to name both exceptions.

@@ -23,7 +23,7 @@ The two columns coexist and do not interact: `user_id` stays an identity link, `
 
 ## Consequences
 
-- There are two authorization seams, not one. `assertOwnsProject` covers every PM path; `assertParticipates` (issue #62) covers the Person path and must be the first line of every service a Participant can reach. A reviewer's question on any messaging service is "which seam guards this, and is it the right one".
+- There are two authorization seams, not one. `assertOwnsProject` covers every PM path; `assertParticipates` (issue #54, with the invite flow that gives it a caller) covers the Person path and must be the first line of every service a Participant can reach. A reviewer's question on any messaging service is "which seam guards this, and is it the right one".
 - Credentials are per Project, because a Person is per Project. The same human on two Projects is two Person rows and signs in twice. This follows directly from ADR 0004 and is accepted for the same reasons.
 - The member surface must never render Vantage navigation, the Assistant dock or the command palette. Reusing the `/projects/[id]/messages` route for both audiences (issue #58) means the shell is chosen by viewer, so a leaked link shows a Participant only their own Rooms.
 - `room_messages.author_user_id` and `room_messages.author_person_id` both exist and both are nullable, so a Chat Message keeps a real foreign key whichever audience wrote it. Attribution survives either row being deleted through the `author_name` snapshot, exactly as ADR 0006 does for Comments.
