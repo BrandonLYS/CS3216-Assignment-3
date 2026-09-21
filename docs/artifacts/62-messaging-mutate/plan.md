@@ -1,8 +1,8 @@
-# Issue #62 - messaging writes follow the Vantage mutate architecture
+# Issue #62 - messaging writes follow the PrismPM mutate architecture
 
 ## What the issue asks
 
-> Align the messaging implementation with existing Vantage patterns.
+> Align the messaging implementation with existing PrismPM patterns.
 >
 > - First line of every project-scoped service is assertOwnsProject.
 > - Writes for rooms, participants, and messages go through mutate(ctx, (tx, rec) => ...).

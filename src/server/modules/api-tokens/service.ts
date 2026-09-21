@@ -5,7 +5,7 @@ import { ForbiddenError } from "@/server/core/errors";
 import type { DbOrTx } from "@/server/db/client";
 import { apiTokens } from "./schema";
 
-const PREFIX = "vtg_";
+const PREFIX = "prismpm_";
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 /** Personal access tokens are the User's own credentials, not Project items: no Activity Event, no `mutate`. */

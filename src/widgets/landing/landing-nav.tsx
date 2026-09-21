@@ -33,7 +33,7 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
       <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-6 px-6">
         <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           <Logo className="size-5" />
-          <span className="text-body-sm font-medium tracking-[-0.2px] text-ink">Vantage</span>
+          <span className="text-body-sm font-medium tracking-[-0.2px] text-ink">PrismPM</span>
         </Link>
 
         <nav className="hidden flex-1 items-center gap-6 md:flex">

@@ -34,7 +34,7 @@ export function Sidebar({
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-hairline bg-canvas">
       <div className="flex h-14 items-center gap-2 px-4">
         <Logo className="size-5" />
-        <span className="text-body-sm font-medium tracking-[-0.2px]">Vantage</span>
+        <span className="text-body-sm font-medium tracking-[-0.2px]">PrismPM</span>
       </div>
 
       <button

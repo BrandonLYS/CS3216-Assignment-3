@@ -10,10 +10,12 @@ import { Sidebar } from "./sidebar";
 export { useShell } from "@/shared/lib/shell-context";
 
 /** Dock open state lives in localStorage so a refresh mid-Conversation keeps the dock open. */
-const ASSISTANT_OPEN_KEY = "vantage.assistant-open";
+const ASSISTANT_OPEN_KEY = "prismpm.assistant-open";
+// Kept only to migrate preferences saved before the PrismPM rename.
+const LEGACY_ASSISTANT_OPEN_KEY = "vantage.assistant-open";
 const listeners = new Set<() => void>();
 const assistantOpenStore = {
-  get: () => localStorage.getItem(ASSISTANT_OPEN_KEY) === "1",
+  get: () => (localStorage.getItem(ASSISTANT_OPEN_KEY) ?? localStorage.getItem(LEGACY_ASSISTANT_OPEN_KEY)) === "1",
   set: (open: boolean) => {
     localStorage.setItem(ASSISTANT_OPEN_KEY, open ? "1" : "0");
     listeners.forEach((l) => l());
@@ -37,6 +39,16 @@ export function AppShell({
   const [newProject, setNewProject] = React.useState(false);
   const assistantOpen = React.useSyncExternalStore(assistantOpenStore.subscribe, assistantOpenStore.get, () => false);
   const toggleAssistant = React.useCallback(() => assistantOpenStore.set(!assistantOpenStore.get()), []);
+
+  React.useEffect(() => {
+    const legacy = localStorage.getItem(LEGACY_ASSISTANT_OPEN_KEY);
+    if (legacy !== null) {
+      if (localStorage.getItem(ASSISTANT_OPEN_KEY) === null) {
+        localStorage.setItem(ASSISTANT_OPEN_KEY, legacy);
+      }
+      localStorage.removeItem(LEGACY_ASSISTANT_OPEN_KEY);
+    }
+  }, []);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

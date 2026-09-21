@@ -58,6 +58,6 @@ Two contexts rather than one union, because `Ctx` and `ParticipantCtx` are delib
 
 - There are now two exceptions to "every mutation records an Activity Event": `project.deleted`, because the Project's events cascade away with the row, and `chat_message.created`, for the reasons above. AGENTS.md names both.
 - A Project's history will never show what was said in a Room, only that a Room was created and who was admitted to it. That is the intended reading of ADR 0009's separation between the messaging surface and the Project.
-- If Vantage ever wants "3 new messages" in the activity feed, the answer is a read model over `room_messages`, not an Activity Event per Chat Message.
+- If PrismPM ever wants "3 new messages" in the activity feed, the answer is a read model over `room_messages`, not an Activity Event per Chat Message.
 - A subscriber that needs the text must read `room_messages` by `entityId`. The event is a notification, not a payload.
 - A subscriber must handle `actorId: null`, which `DomainEvent` has always allowed. Any subscriber that needs to know who spoke reads the Chat Message row.

@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Vantage — project management base for a future AI intelligence layer
+# PrismPM - project management base for a future AI intelligence layer
 
 Vocabulary lives in `CONTEXT.md`; use its terms (Task, not issue; Person, not assignee; Evidence, not document). Decisions with trade-offs are in `docs/adr/`. Visual language is `DESIGN.md`; tokens are already in `src/app/globals.css` (`bg-surface-1`, `text-ink-subtle`, `text-tag-red`, `panel`, …) — reach for those, never raw hex.
 
