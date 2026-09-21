@@ -4,17 +4,7 @@ import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
-
-/**
- * Paths whose URL carries a secret. `/invite/<token>` is a live credential: anyone holding it
- * can set that Person's password (ADR 0009), so the token must never leave the browser in a
- * captured URL. The path is reported without it rather than dropped, so the funnel still shows
- * that an invite was opened.
- */
-const redactPath = (pathname: string) => (pathname.startsWith("/invite/") ? "/invite/[token]" : pathname);
-
-/** The same redaction for a value that may be a whole URL rather than a path. */
-const redactUrl = (value: string) => value.replace(/\/invite\/[^/?#]+/, "/invite/[token]");
+import { carriesSecret, redactUrl } from "./redact";
 
 function PostHogPageView() {
   const pathname = usePathname();
@@ -22,7 +12,7 @@ function PostHogPageView() {
 
   useEffect(() => {
     if (!pathname) return;
-    const redacted = redactPath(pathname);
+    const redacted = redactUrl(pathname);
     // The query string goes with it: a redacted path next to the real one would be pointless.
     const query = redacted === pathname ? searchParams?.toString() : undefined;
     const url = query ? `${redacted}?${query}` : redacted;
@@ -42,10 +32,12 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       capture_pageview: false,
       // Autocapture reports the address bar on every event it sends, not only on the pageview
       // above, so the redaction has to happen here too or the invite token still escapes.
+      // Every string property is rewritten rather than a named list of them: the SDK adds URL
+      // properties of its own ($session_entry_url, $referrer, $initial_*), and a list is a list
+      // that the next version of posthog-js can grow past.
       sanitize_properties: (properties) => {
-        for (const key of ["$current_url", "$pathname", "$initial_current_url", "$initial_pathname"]) {
-          const value = properties[key];
-          if (typeof value === "string") properties[key] = redactUrl(value);
+        for (const [key, value] of Object.entries(properties)) {
+          if (carriesSecret(value)) properties[key] = redactUrl(value);
         }
         return properties;
       },
