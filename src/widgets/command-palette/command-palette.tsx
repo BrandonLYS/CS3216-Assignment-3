@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ListTodo,
   Loader2,
+  MessagesSquare,
   Plus,
   Settings,
   Sparkles,
@@ -32,6 +33,7 @@ export const PROJECT_SECTIONS = [
   { slug: "decisions", label: "Decisions", icon: GitBranch },
   { slug: "evidence", label: "Evidence", icon: FileText },
   { slug: "people", label: "People", icon: Users },
+  { slug: "messages", label: "Messages", icon: MessagesSquare },
   { slug: "settings", label: "Settings", icon: Settings },
 ] as const;
 
