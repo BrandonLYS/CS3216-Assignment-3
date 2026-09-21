@@ -11,9 +11,9 @@ import {
 } from "@/widgets/landing";
 
 export const metadata: Metadata = {
-  title: "Vantage - project management with a memory",
+  title: "PrismPM - project management with a memory",
   description:
-    "Vantage records the tasks, milestones and risks you would expect, and underneath them the decisions, the assumptions they rest on and the evidence they came from.",
+    "PrismPM records the tasks, milestones and risks you would expect, and underneath them the decisions, the assumptions they rest on and the evidence they came from.",
 };
 
 /**

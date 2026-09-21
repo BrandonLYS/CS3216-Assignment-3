@@ -3,7 +3,7 @@ import { getParticipantSession, type ParticipantSession } from "./participant-se
 import { getSession } from "./session";
 
 /**
- * Who is looking at a page: the PM who owns Vantage, or a Person with a messaging-only login
+ * Who is looking at a page: the PM who owns PrismPM, or a Person with a messaging-only login
  * (ADR 0009). The two layouts under `(app)` choose the chrome from this, and the messages page
  * chooses which service to read through.
  */
@@ -12,7 +12,7 @@ export type Viewer =
   | { kind: "participant"; session: ParticipantSession }
   | null;
 
-/** The User wins when both cookies are present: a PM testing the member view still gets Vantage. */
+/** The User wins when both cookies are present: a PM testing the member view still gets PrismPM. */
 export const getViewer = cache(async (): Promise<Viewer> => {
   const session = await getSession();
   if (session) {

@@ -84,7 +84,7 @@ Records: the PM remains the single User of a Project (ADR 0002 stands); a Person
 
 The ADR must also address the column it sits next to. `people.userId` already exists and already points at `user.id`; ADR 0004 calls it "the only cross-project hook". It is deliberately **not** the login mechanism here: promoting a Person to a real `user` row would give them a workspace, Projects of their own and everything `assertOwnsProject` guards, which is the opposite of "can only see the messages". The two coexist without interacting - `userId` stays a link to a PM who happens to appear in someone else's roster, `passwordHash` is a messaging-only credential - and the ADR says so explicitly so a later reader does not try to merge them.
 
-Consequences: a Person's credentials are per Project, so the same human on two Projects signs in twice; the member surface must never render Vantage navigation; `room_messages.authorUserId` exists only so PM-authored messages keep a real foreign key.
+Consequences: a Person's credentials are per Project, so the same human on two Projects signs in twice; the member surface must never render PrismPM navigation; `room_messages.authorUserId` exists only so PM-authored messages keep a real foreign key.
 
 ## 3. Changes, grouped into commit points
 

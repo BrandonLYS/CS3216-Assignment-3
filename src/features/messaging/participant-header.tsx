@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui";
 import { Logo } from "@/shared/ui/logo";
 
 /**
- * The Participant surface has no Vantage shell (ADR 0009), so the one thing that would
+ * The Participant surface has no PrismPM shell (ADR 0009), so the one thing that would
  * otherwise live there - which Project this is, who you are, and how to leave - lives here.
  */
 export function ParticipantHeader({

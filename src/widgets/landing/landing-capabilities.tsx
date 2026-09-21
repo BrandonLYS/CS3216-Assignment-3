@@ -45,7 +45,7 @@ export function LandingCapabilities() {
           The base is boring on purpose
         </h2>
         <p data-reveal className="mt-5 max-w-xl text-body-lg text-ink-subtle">
-          An intelligence layer is only as good as the record under it. Vantage keeps that record strict enough to
+          An intelligence layer is only as good as the record under it. PrismPM keeps that record strict enough to
           reason over.
         </p>
 

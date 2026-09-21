@@ -6,7 +6,7 @@ import { AppShell } from "@/widgets/app-shell/app-shell";
 
 /**
  * The shell is chosen by viewer (ADR 0009). A Participant reaches exactly one page in this
- * group, `/projects/[id]/messages`, and must see none of Vantage around it: no sidebar, no
+ * group, `/projects/[id]/messages`, and must see none of PrismPM around it: no sidebar, no
  * command palette, no Assistant. Every other page here builds a `Ctx` and turns them away.
  */
 export default async function AppLayout({ children }: LayoutProps<"/">) {

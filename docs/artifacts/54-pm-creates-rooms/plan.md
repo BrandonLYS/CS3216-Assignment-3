@@ -101,7 +101,7 @@ Both functions return the session payload for the caller to set as a cookie.
 Passwords are at least 12 characters with no other rule, matching the demo password's shape and better-auth's default posture.
 The accept form has a confirm field, checked in the Zod schema with `refine`.
 
-Rate limiting is out of scope and recorded as such: Vantage has no rate limiter anywhere, and introducing one for this surface alone is a larger decision than this issue.
+Rate limiting is out of scope and recorded as such: PrismPM has no rate limiter anywhere, and introducing one for this surface alone is a larger decision than this issue.
 
 ### 3. Actions that do not have a User (`src/server/core/action.ts`)
 
@@ -197,7 +197,7 @@ ADR 0009 fixes the shape: the same `/projects/[projectId]/messages` URL, with th
 2. `Sign a Participant into a messaging-only session` - `participant-session.ts`, `viewer.ts`, the `runAction` split, the credential repository reads, the participant service and its validation, tests. No UI.
 3. `Guard the Participant path with assertParticipates` - the seam, `ParticipantCtx`, `participantMessagingService`, `admit` extracted, `createRoom` taking `personIds`, seed and test callers updated.
 4. `Let the PM create rooms and invite people` - actions, `MessagesView` dialogs, `listInviteStates`, the page's extra reads.
-5. `Show a Participant their rooms without the Vantage shell` - the `(member)` routes, both layout branches, the proxy, the page branch, seeded emails and a seeded password.
+5. `Show a Participant their rooms without the PrismPM shell` - the `(member)` routes, both layout branches, the proxy, the page branch, seeded emails and a seeded password.
 6. `Record the Participant session decisions` - ADR 0009 consequences (a Person's own credential write bypasses `mutate`, no session revocation, no rate limiting, the cookie scheme and its dependence on `BETTER_AUTH_SECRET`), the AGENTS.md line that still calls `assertOwnsProject` the only seam, and a `CONTEXT.md` entry for Invite.
 
 ## Tests
