@@ -8,12 +8,13 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type UIMessage,
 } from "ai";
-import { ArrowUp, History, Loader2, Pin, Sparkles, SquarePen, X } from "lucide-react";
+import { ArrowUp, History, Loader2, Pin, Sparkles, SquarePen, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useShell } from "@/shared/lib/shell-context";
 import {
   createConversationAction,
+  deleteConversationAction,
   grantToolPermissionAction,
   loadConversationAction,
   pinConversationAction,
@@ -168,6 +169,21 @@ export function AssistantDock({
     if (!res.ok) console.error(res.error);
     router.refresh();
   };
+  const remove = async (c: ConversationSummary) => {
+    const res = await deleteConversationAction({ conversationId: c.id });
+    if (!res.ok) return console.error(res.error);
+    if (c.id === active.conversation.id) {
+      const next = conversations.find((x) => x.id !== c.id);
+      if (next) {
+        const t = await loadConversationAction({ conversationId: next.id });
+        if (t.ok) setActive({ conversation: { id: next.id }, messages: t.data.messages });
+      } else {
+        const n = await createConversationAction({ projectId });
+        if (n.ok) setActive({ conversation: { id: n.data.id }, messages: [] });
+      }
+    }
+    router.refresh();
+  };
 
   return (
     <aside aria-label="Assistant" className="flex shrink-0 border-l border-hairline bg-surface-1">
@@ -262,6 +278,18 @@ export function AssistantDock({
             >
               <Pin className="text-ink-faint size-3.5" />
               {menu.c.pinned ? "Unpin chat" : "Pin chat"}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-40 items-center gap-2 rounded px-2 py-1.5 text-left text-body-sm text-tag-red hover:bg-surface-3"
+              onClick={() => {
+                void remove(menu.c);
+                setMenu(null);
+              }}
+            >
+              <Trash2 className="size-3.5" />
+              Delete chat
             </button>
           </Panel>
         </div>

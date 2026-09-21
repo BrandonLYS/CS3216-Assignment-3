@@ -121,4 +121,13 @@ describe("assistantService conversations", () => {
     const stranger = await makeCtx();
     await expect(assistantService.pinConversation(stranger, first.id, true)).rejects.toBeInstanceOf(ForbiddenError);
   });
+
+  it("deletes a Conversation with its Messages, only for the owner", async () => {
+    const c = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, c.id, [msg("d1", "user", "to be deleted")]);
+    const stranger = await makeCtx();
+    await expect(assistantService.deleteConversation(stranger, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+    await assistantService.deleteConversation(ctx, c.id);
+    await expect(assistantService.thread(ctx, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
 });

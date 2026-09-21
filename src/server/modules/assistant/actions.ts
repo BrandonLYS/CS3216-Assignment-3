@@ -61,3 +61,10 @@ const pinSchema = z.object({ conversationId: z.string().min(1), pinned: z.boolea
 export async function pinConversationAction(input: { conversationId: string; pinned: boolean }) {
   return runAction(pinSchema, input, (ctx, i) => assistantService.pinConversation(ctx, i.conversationId, i.pinned));
 }
+
+/** Delete a Conversation and its Messages. */
+export async function deleteConversationAction(input: { conversationId: string }) {
+  return runAction(loadConversationSchema, input, (ctx, i) =>
+    assistantService.deleteConversation(ctx, i.conversationId),
+  );
+}

@@ -48,6 +48,9 @@ export const conversationsRepo = {
   setPinned: (db: DbOrTx, id: string, pinned: boolean) =>
     db.update(conversations).set({ pinned, updatedAt: conversations.updatedAt }).where(eq(conversations.id, id)),
 
+  /** Hard delete; Messages cascade. */
+  remove: (db: DbOrTx, id: string) => db.delete(conversations).where(eq(conversations.id, id)),
+
   /** Deletes empty Conversations in a scope, keeping `keepId` (the active one) and anything pinned. */
   pruneEmpty: (db: DbOrTx, userId: string, projectId: string | null, keepId: string) =>
     db

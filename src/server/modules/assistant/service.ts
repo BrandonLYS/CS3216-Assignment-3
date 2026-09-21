@@ -79,6 +79,12 @@ export const assistantService = {
     await conversationsRepo.setPinned(ctx.db, conversationId, pinned);
   },
 
+  /** Delete a Conversation the User owns; its Messages cascade away. */
+  deleteConversation: async (ctx: Ctx, conversationId: string) => {
+    await assistantService.getConversation(ctx, conversationId);
+    await conversationsRepo.remove(ctx.db, conversationId);
+  },
+
   /** The Conversation row if it belongs to the User, else Forbidden. */
   getConversation: async (ctx: Ctx, conversationId: string) => {
     const conversation = await conversationsRepo.findById(ctx.db, conversationId);
