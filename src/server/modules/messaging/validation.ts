@@ -36,6 +36,24 @@ export const postMessageSchema = z.object({
   text: z.string().trim().min(1, "Message is required"),
 });
 
+/**
+ * One page older than the cursor (issue #60). `before` is required: this is the only way to
+ * ask for an older page, and the newest page is the route's job, not an action's.
+ *
+ * `z.date()` rather than an ISO string: React serializes a `Date` across the server-action
+ * boundary, and the `createdAt` the pane sends back is one it was handed as a `Date`. It is
+ * also the stricter of the two - `z.coerce.date()` would accept any string a caller invented.
+ *
+ * No `limit`: the page size is `MESSAGE_PAGE_MORE`, and a client that could choose its own
+ * would be a knob with no user and one more thing to clamp.
+ */
+export const olderMessagesSchema = z.object({
+  projectId: z.string(),
+  roomId: z.string(),
+  before: z.object({ createdAt: z.date(), id: z.string() }),
+});
+
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type AddParticipantInput = z.infer<typeof addParticipantSchema>;
 export type PostMessageInput = z.infer<typeof postMessageSchema>;
+export type OlderMessagesInput = z.infer<typeof olderMessagesSchema>;
