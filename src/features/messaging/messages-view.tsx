@@ -106,11 +106,13 @@ function Room({
   // Newest last is the reading order of a chat; the copy keeps the prop array untouched.
   const ordered = React.useMemo(() => [...messages].reverse(), [messages]);
 
-  // A chat opens at its newest Chat Message, and returns there when one is sent.
+  // A chat opens at its newest Chat Message, and returns there when one is sent. Keyed on the
+  // newest id, not the count: a full page stays 50 rows long, so the count would stop changing.
+  const newestId = ordered.at(-1)?.id;
   React.useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [item.room.id, ordered.length]);
+  }, [item.room.id, newestId]);
 
   return (
     <>
@@ -170,17 +172,27 @@ function Composer({ projectId, roomId }: { projectId: string; roomId: string }) 
     setPending(true);
     setError(null);
     setFieldErrors({});
-    const res = await postMessageAction({ projectId, roomId, text });
-    if (!mounted.current) return;
-    setPending(false);
-    if (!res.ok) {
-      // Keep the draft: the PM should be able to fix and retry, not retype.
-      setError(res.error);
-      setFieldErrors(res.fieldErrors ?? {});
-      return;
+    const sent = text;
+    try {
+      const res = await postMessageAction({ projectId, roomId, text: sent });
+      if (!mounted.current) return;
+      if (!res.ok) {
+        // Keep the draft: the PM should be able to fix and retry, not retype.
+        setError(res.error);
+        setFieldErrors(res.fieldErrors ?? {});
+        return;
+      }
+      // Only what was sent is cleared. Anything typed while the request was in flight is a
+      // new draft and must survive.
+      setText((current) => (current === sent ? "" : current));
+      box.current?.focus();
+    } catch {
+      // A rejected action (network loss, an unexpected server error) must not leave Send
+      // disabled forever with nothing said.
+      if (mounted.current) setError("Message could not be sent. Try again.");
+    } finally {
+      if (mounted.current) setPending(false);
     }
-    setText("");
-    box.current?.focus();
   }
 
   return (
