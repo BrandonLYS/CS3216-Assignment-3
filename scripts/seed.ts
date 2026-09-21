@@ -9,8 +9,7 @@ import { db } from "@/server/db/client";
 import { dependenciesService } from "@/server/modules/dependencies/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { labelsService } from "@/server/modules/labels/service";
-import { messagingRepo } from "@/server/modules/messaging/repository";
-import { messagingService } from "@/server/modules/messaging/service";
+import { messagingService, participantMessagingService } from "@/server/modules/messaging/service";
 import { milestonesService } from "@/server/modules/milestones/service";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { peopleService } from "@/server/modules/people/service";
@@ -390,17 +389,13 @@ Asks: sponsor support escalating IAM credentials with Acme.`,
     personIds: [ben.id],
   });
 
-  // A Person's reply goes in through the repository because the service that lets a Person
-  // write is issue #55; only the PM can post today. Replace both calls when #55 lands.
-  const reply = async (roomId: string, person: { id: string; name: string }, text: string) =>
-    messagingRepo.insertMessage(
-      ctx.db,
-      { id: roomId, projectId: pid },
-      {
-        text,
-        authorPersonId: person.id,
-        authorName: person.name,
-      },
+  // Through the Participant's own service, so the seed exercises the seam a real Person goes
+  // through: a Person who was never admitted to the Room would fail here rather than seed a
+  // conversation nobody could have had. The author name is snapshotted from the Person row.
+  const reply = async (roomId: string, person: { id: string }, text: string) =>
+    participantMessagingService.postMessage(
+      { db: ctx.db, person: { id: person.id, projectId: pid } },
+      { projectId: pid, roomId, text },
     );
 
   const say = (roomId: string, text: string) => messagingService.postMessage(ctx, { projectId: pid, roomId, text });
