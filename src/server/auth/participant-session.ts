@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { PARTICIPANT_COOKIE } from "./participant-cookie";
+
+export { PARTICIPANT_COOKIE };
 
 /**
  * The messaging login's session (ADR 0009). Deliberately not better-auth: `session.userId` is a
@@ -16,7 +19,6 @@ export interface ParticipantSession {
   exp: number;
 }
 
-export const PARTICIPANT_COOKIE = "vantage_participant";
 const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 /**
