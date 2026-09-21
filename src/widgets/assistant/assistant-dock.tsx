@@ -16,6 +16,7 @@ import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/
 import { cn } from "@/shared/lib/cn";
 import { Button, Panel, SectionTitle, Textarea } from "@/shared/ui";
 import { LinkedText } from "./linked-text";
+import { MarkdownText } from "./markdown-text";
 
 const FRIENDLY: Record<string, string> = {
   [ASSISTANT_NOT_CONFIGURED]: "The Assistant is not configured. Set OPENAI_API_KEY to enable it.",
@@ -215,6 +216,7 @@ export function AssistantDock({
                   <Part
                     key={i}
                     part={part}
+                    markdown={m.role === "assistant"}
                     onAnswer={(id, approved) => void addToolApprovalResponse({ id, approved })}
                   />
                 ))}
@@ -281,12 +283,14 @@ function friendly(error: Error) {
 
 function Part({
   part,
+  markdown,
   onAnswer,
 }: {
   part: UIMessage["parts"][number];
+  markdown: boolean;
   onAnswer: (approvalId: string, approved: boolean) => void;
 }) {
-  if (part.type === "text") return <LinkedText text={part.text} />;
+  if (part.type === "text") return markdown ? <MarkdownText text={part.text} /> : <LinkedText text={part.text} />;
   if (!isToolUIPart(part)) return null;
   if (part.state === "approval-requested") {
     return <ConfirmCard approvalId={part.approval.id} reason={part.approval.requestReason} onAnswer={onAnswer} />;
