@@ -6,7 +6,7 @@ import { peopleRepo } from "@/server/modules/people/repository";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import type { RoomType } from "@/shared/domain";
-import { messagingRepo, type MessageCursor } from "./repository";
+import { messagingRepo, type MessageCursor, type RoomParticipantItem } from "./repository";
 import type { RoomRow } from "./schema";
 
 /**
@@ -49,6 +49,23 @@ export const messagingService = {
   listRooms: async (ctx: Ctx, projectId: string) => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     return messagingRepo.listRoomsForProject(ctx.db, projectId);
+  },
+
+  /**
+   * The Rooms of a Project with the People in each, which is what the Room list renders.
+   * One query for the Rooms and one for every Participant, never one per Room.
+   */
+  listRoomsWithParticipants: async (ctx: Ctx, projectId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    const [rooms, participants] = await Promise.all([
+      messagingRepo.listRoomsForProject(ctx.db, projectId),
+      messagingRepo.listParticipantsForProject(ctx.db, projectId),
+    ]);
+    const byRoom = new Map<string, RoomParticipantItem[]>();
+    for (const { roomId, ...person } of participants) {
+      byRoom.set(roomId, [...(byRoom.get(roomId) ?? []), person]);
+    }
+    return rooms.map((room) => ({ room, participants: byRoom.get(room.id) ?? [] }));
   },
 
   getRoom: (ctx: Ctx, ref: RoomRef) => resolveRoom(ctx.db, ctx.userId, ref),

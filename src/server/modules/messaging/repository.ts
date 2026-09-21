@@ -16,6 +16,9 @@ import {
 /** Where a page of history stopped. Keyset, not offset: a Room is appended to while it is read. */
 export type MessageCursor = { createdAt: Date; id: string };
 
+/** One Person in a Room, as the messages view renders them. */
+export type RoomParticipantItem = Awaited<ReturnType<typeof messagingRepo.listParticipants>>[number];
+
 export const messagingRepo = {
   insertRoom: async (db: DbOrTx, values: NewRoomRow): Promise<RoomRow> => {
     const [row] = await db.insert(rooms).values(values).returning();
@@ -70,6 +73,25 @@ export const messagingRepo = {
       .from(roomParticipants)
       .innerJoin(people, eq(people.id, roomParticipants.personId))
       .where(eq(roomParticipants.roomId, roomId))
+      .orderBy(asc(people.name)),
+
+  /**
+   * Every Room's Participants in one query, for a Room list that names the People in each
+   * Room. Per-Room reads would be an N+1 the moment a Project has more than a few Rooms.
+   */
+  listParticipantsForProject: (db: DbOrTx, projectId: string) =>
+    db
+      .select({
+        roomId: roomParticipants.roomId,
+        personId: people.id,
+        name: people.name,
+        email: people.email,
+        addedAt: roomParticipants.addedAt,
+      })
+      .from(roomParticipants)
+      .innerJoin(rooms, eq(rooms.id, roomParticipants.roomId))
+      .innerJoin(people, eq(people.id, roomParticipants.personId))
+      .where(eq(rooms.projectId, projectId))
       .orderBy(asc(people.name)),
 
   /** Project-scoped for the same reason as `listParticipants`: through the Room, not a column. */

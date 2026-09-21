@@ -8,6 +8,8 @@ import { db } from "@/server/db/client";
 import { dependenciesService } from "@/server/modules/dependencies/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { labelsService } from "@/server/modules/labels/service";
+import { messagingRepo } from "@/server/modules/messaging/repository";
+import { messagingService } from "@/server/modules/messaging/service";
 import { milestonesService } from "@/server/modules/milestones/service";
 import { peopleService } from "@/server/modules/people/service";
 import { projects } from "@/server/modules/projects/schema";
@@ -363,6 +365,37 @@ Asks: sponsor support escalating IAM credentials with Acme.`,
     notes: "Vendor claims 90% complete; internal acceptance evidence supports ~65%.",
     body: `Deliverable A (settlement service): 90% complete.\nPlanned finish ${d(-2)}; new forecast ${d(7)}.\nBlocker: customer credentials.`,
   });
+
+  const launch = await messagingService.createRoom(ctx, { projectId: pid, type: "group", name: "Launch readiness" });
+  for (const person of [jason, sarah, marcus]) {
+    await messagingService.addParticipant(ctx, { projectId: pid, roomId: launch.id, personId: person.id });
+  }
+  const withBen = await messagingService.createRoom(ctx, { projectId: pid, type: "one_to_one" });
+  await messagingService.addParticipant(ctx, { projectId: pid, roomId: withBen.id, personId: ben.id });
+
+  // A Person's reply goes in through the repository because the service that lets a Person
+  // write is issue #55; only the PM can post today. Replace both calls when #55 lands.
+  const reply = async (roomId: string, person: { id: string; name: string }, text: string) =>
+    messagingRepo.insertMessage(
+      ctx.db,
+      { id: roomId, projectId: pid },
+      {
+        text,
+        authorPersonId: person.id,
+        authorName: person.name,
+      },
+    );
+
+  const say = (roomId: string, text: string) => messagingService.postMessage(ctx, { projectId: pid, roomId, text });
+
+  await say(launch.id, "Acme still owes us the merchant credentials. Where are we on the pilot?");
+  await reply(launch.id, marcus, "Credentials are with our security team. I expect them released this week.");
+  await reply(launch.id, sarah, "UAT cannot start without them. Two of the six scenarios are blocked.");
+  await say(launch.id, "Noted. I am holding the launch date for now and will review on Friday.");
+  await reply(launch.id, jason, "Settlement service is code complete on our side, so we are ready when they are.");
+
+  await say(withBen.id, "Ben, can the security review start before the credentials arrive?");
+  await reply(withBen.id, ben, "Partly. I can review the architecture now and the live flows afterwards.");
 
   console.log(`Seeded ${project.name}`);
 }
