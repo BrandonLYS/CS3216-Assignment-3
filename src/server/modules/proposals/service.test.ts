@@ -143,7 +143,7 @@ describe("proposalsService.runPass", () => {
   it("falls back to the heuristic without a model and honours PROPOSALS_EXTRACTOR", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     vi.stubEnv("PROPOSALS_EXTRACTOR", "");
-    expect(proposalsService.enabled()).toBe(true);
+    expect(await proposalsService.enabled(ctx)).toBe(true);
     const p = await makeProject(ctx, "ENV");
     await evidenceService.create(ctx, {
       projectId: p.id,
@@ -153,7 +153,7 @@ describe("proposalsService.runPass", () => {
     });
     expect(await proposalsService.runPass(ctx, p.id)).toMatchObject({ extractor: "heuristic", proposed: 1 });
     vi.stubEnv("PROPOSALS_EXTRACTOR", "model");
-    expect(proposalsService.enabled()).toBe(false);
+    expect(await proposalsService.enabled(ctx)).toBe(false);
     vi.unstubAllEnvs();
   });
 });

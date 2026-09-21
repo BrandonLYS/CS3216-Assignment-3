@@ -24,7 +24,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
           projectId={projectId}
           conversationId={conversation.id}
           initialMessages={messages}
-          configured={getModel() !== null}
+          configured={(await getModel(ctx)) !== null}
         />
       </div>
     </>

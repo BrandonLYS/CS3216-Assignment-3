@@ -178,6 +178,10 @@ export type ProposalExtractor = (typeof PROPOSAL_EXTRACTORS)[number];
 export const ROOM_TYPES = ["group", "one_to_one"] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];
 
+/** LLM providers supported by a User's personal Assistant configuration. */
+export const AI_PROVIDERS = ["openai", "anthropic", "google", "openai_compatible"] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number];
+
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 // ---------------------------------------------------------------------------

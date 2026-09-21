@@ -48,11 +48,11 @@ export type AcceptOverrides = Partial<
  */
 export const proposalsService = {
   /** True when a pass can run at all (a model is configured or the heuristic is selected). */
-  enabled: () => pickExtractor() !== null,
+  enabled: async (ctx: Ctx) => (await pickExtractor(ctx)) !== null,
 
   runPass: async (ctx: Ctx, projectId: string, opts: { extract?: Extract } = {}): Promise<PassOutcome> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
-    const picked = pickExtractor();
+    const picked = await pickExtractor(ctx);
     const extract = opts.extract ?? picked?.extract;
     const extractorName: ProposalExtractor = opts.extract ? "heuristic" : (picked?.name ?? "heuristic");
     if (!extract) return { skipped: "not_configured" };

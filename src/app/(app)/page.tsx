@@ -28,7 +28,7 @@ export default async function DashboardPage() {
       projectId={null}
       conversationId={conversation.id}
       initialMessages={messages}
-      configured={getModel() !== null}
+      configured={(await getModel(ctx)) !== null}
     />
   );
 

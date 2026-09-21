@@ -24,6 +24,7 @@ import {
   STATUS_CATEGORIES,
   STATUS_SCOPES,
   VIA_ACTORS,
+  AI_PROVIDERS,
 } from "@/shared/domain";
 
 export const statusScopeEnum = pgEnum("status_scope", STATUS_SCOPES);
@@ -50,3 +51,4 @@ export const sourceKindEnum = pgEnum("source_kind", SOURCE_KINDS);
 export const proposalStatusEnum = pgEnum("proposal_status", PROPOSAL_STATUSES);
 export const proposalExtractorEnum = pgEnum("proposal_extractor", PROPOSAL_EXTRACTORS);
 export const roomTypeEnum = pgEnum("room_type", ROOM_TYPES);
+export const aiProviderEnum = pgEnum("ai_provider", AI_PROVIDERS);

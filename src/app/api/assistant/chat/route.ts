@@ -29,13 +29,13 @@ type ValidateTools = Parameters<typeof safeValidateUIMessages>[0]["tools"];
 const bodySchema = z.object({ projectId: z.string().nullable(), messages: z.array(z.unknown()) });
 
 export async function POST(req: Request) {
-  const model = getModel();
-  if (!model) return new Response(ASSISTANT_NOT_CONFIGURED, { status: 503 });
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return new Response("Bad request", { status: 400 });
   const { projectId } = parsed.data;
 
   const ctx = { ...(await ctxForCurrentUser()), via: "assistant" as const };
+  const model = await getModel(ctx);
+  if (!model) return new Response(ASSISTANT_NOT_CONFIGURED, { status: 503 });
   const { maxSteps, dailyTurnCap } = assistantConfig();
   try {
     const scope = projectId ? { projectId } : undefined;
