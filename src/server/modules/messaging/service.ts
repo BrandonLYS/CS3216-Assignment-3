@@ -38,9 +38,9 @@ const roomLabel = (room: Pick<RoomRow, "type" | "name">) => room.name ?? "Direct
  * A Room in another Project is `NotFoundError`, the same as a Room that does not exist:
  * a PM must not learn from the error which Room ids exist in Projects that are not theirs.
  */
-async function resolveRoom(db: DbOrTx, userId: string, { projectId, roomId }: RoomRef): Promise<RoomRow> {
+async function resolveRoom(db: DbOrTx, userId: string, { projectId, roomId }: RoomRef, lock = false): Promise<RoomRow> {
   await assertOwnsProject(db, userId, projectId);
-  const room = await messagingRepo.findRoom(db, projectId, roomId);
+  const room = await messagingRepo.findRoom(db, projectId, roomId, lock);
   if (!room) throw new NotFoundError("Room");
   return room;
 }
@@ -91,9 +91,18 @@ export const messagingService = {
   /** Admitting the same Person twice succeeds and records nothing the second time. */
   addParticipant: (ctx: Ctx, { personId, ...ref }: RoomRef & { personId: string }) =>
     mutate(ctx, async (tx, rec) => {
-      const room = await resolveRoom(tx, ctx.userId, ref);
+      // Locked: the one-to-one check below reads the Participants and then writes one, and
+      // two admissions racing on the same Room would otherwise both pass the check.
+      const room = await resolveRoom(tx, ctx.userId, ref, true);
       await assertPersonInProject(tx, room.projectId, personId, "personId");
       const person = (await peopleRepo.findById(tx, personId))!;
+      if (room.type === "one_to_one") {
+        const existing = await messagingRepo.listParticipants(tx, room.id);
+        // A repeat admission of the same Person is still a no-op, not an error.
+        if (existing.some((p) => p.personId !== personId)) {
+          throw new ValidationError("A one-to-one room already has its Person", { personId: ["Not allowed"] });
+        }
+      }
       const [added] = await messagingRepo.addParticipant(tx, room.id, personId);
       if (!added) return null;
       const snapshot: ParticipantSnapshot = { roomId: room.id, personId, personName: person.name };

@@ -25,12 +25,17 @@ export const messagingRepo = {
   /**
    * The only way to read one Room, and it takes the Project it is expected to be in, so
    * a caller cannot reach across Projects by knowing an id (issue #53).
+   *
+   * `lock` takes a row lock for the rest of the transaction. Admission uses it to serialise
+   * concurrent writers against one Room, which is what makes "a one-to-one Room holds one
+   * Person" hold under a race rather than only in the common case.
    */
-  findRoom: async (db: DbOrTx, projectId: string, id: string): Promise<RoomRow | undefined> => {
-    const [row] = await db
+  findRoom: async (db: DbOrTx, projectId: string, id: string, lock = false): Promise<RoomRow | undefined> => {
+    const query = db
       .select()
       .from(rooms)
       .where(and(eq(rooms.id, id), eq(rooms.projectId, projectId)));
+    const [row] = await (lock ? query.for("update") : query);
     return row;
   },
 

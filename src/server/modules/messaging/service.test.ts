@@ -153,6 +153,21 @@ describe("writing through mutate", () => {
     expect(events[0]!.newValue).toMatchObject({ roomId: created.id, personId: priya.id, personName: "Priya Nair" });
   });
 
+  /** CONTEXT.md defines a one-to-one Room as the PM and a single Person. */
+  it("admits one Person to a one-to-one Room and no more", async () => {
+    const direct = await messagingService.createRoom(ctx, { projectId: writeProject.id, type: "one_to_one" });
+    const ref = { projectId: writeProject.id, roomId: direct.id };
+    const other = await peopleService.createPerson(ctx, { projectId: writeProject.id, name: "Wei Ling" });
+
+    await messagingService.addParticipant(ctx, { ...ref, personId: priya.id });
+    // Re-admitting the same Person stays a no-op rather than becoming an error.
+    expect(await messagingService.addParticipant(ctx, { ...ref, personId: priya.id })).toBeNull();
+    await expect(messagingService.addParticipant(ctx, { ...ref, personId: other.id })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(await messagingService.listParticipants(ctx, ref)).toHaveLength(1);
+  });
+
   it("refuses a Person from another Project", async () => {
     const created = await group("Outsiders");
     await expect(

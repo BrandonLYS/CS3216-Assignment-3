@@ -103,3 +103,10 @@ DATABASE_URL=postgres://pm:pm@localhost:5434/pm_test npx vitest run
 ```
 
 No migration and no UI, so no ui-proof.
+
+## Added after review
+
+Codex round 1: `addParticipant` let a one-to-one Room hold two People, because `onConflictDoNothing` only deduplicates the same `(roomId, personId)` pair, while `CONTEXT.md` defines a one-to-one Room as the PM and a single Person.
+`addParticipant` now reads the Participants of a one-to-one Room and refuses a second, different Person with a `ValidationError`, while re-admitting the same Person stays a no-op.
+The Room row is locked with `select … for update` for the rest of the transaction (`findRoom(db, projectId, id, lock)`), so two concurrent admissions cannot both pass the check.
+A partial unique index would be the other way to enforce it, and was not taken: it needs a migration, and the same transaction already has to read the Participants to distinguish a repeat from a second Person.
