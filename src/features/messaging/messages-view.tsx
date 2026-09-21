@@ -160,7 +160,13 @@ function Room({
 
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {ordered.length === 0 ? (
-          <EmptyState icon={<MessagesSquare />} title="No messages yet" description="Say something to start." />
+          <EmptyState
+            icon={<MessagesSquare />}
+            title="No messages yet"
+            description={
+              viewer.kind === "pm" ? "Say something to start." : "The project manager has not posted here yet."
+            }
+          />
         ) : (
           // `justify-end` on a full-height column keeps a short history sitting on the
           // composer instead of floating at the top of an empty pane.
