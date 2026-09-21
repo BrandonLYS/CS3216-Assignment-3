@@ -1,8 +1,9 @@
 import type { Ctx, ParticipantCtx } from "@/server/core/context";
 import { NotFoundError, ValidationError } from "@/server/core/errors";
-import { mutate, type Recorder } from "@/server/core/mutation";
+import { mutate, mutateAsParticipant, type Recorder } from "@/server/core/mutation";
 import type { DbOrTx, Tx } from "@/server/db/client";
 import { peopleRepo } from "@/server/modules/people/repository";
+import type { PersonRow } from "@/server/modules/people/schema";
 import { assertPersonInProject } from "@/server/modules/people/service";
 import { projectsRepo } from "@/server/modules/projects/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
@@ -52,7 +53,9 @@ async function resolveRoom(db: DbOrTx, userId: string, { projectId, roomId }: Ro
  * to it. It is the first line of every service a Participant can reach.
  *
  * The Person is re-read rather than trusted from the cookie, which is what catches a Person
- * deleted or moved since they signed in.
+ * deleted or moved since they signed in. It is returned with the Room because the Person's
+ * name is the author snapshot of anything they write, and reading the row twice for it would
+ * be reading it twice for nothing.
  *
  * Every failure is `NotFoundError("Room")`, never a "forbidden": a Participant must not be able
  * to map the Rooms they are not in.
@@ -61,13 +64,13 @@ export async function assertParticipates(
   db: DbOrTx,
   personId: string,
   { projectId, roomId }: RoomRef,
-): Promise<RoomRow> {
+): Promise<{ room: RoomRow; person: PersonRow }> {
   const person = await peopleRepo.findById(db, personId);
   if (!person || person.projectId !== projectId) throw new NotFoundError("Room");
   const room = await messagingRepo.findRoom(db, projectId, roomId);
   if (!room) throw new NotFoundError("Room");
   if (!(await messagingRepo.isParticipant(db, room.id, personId))) throw new NotFoundError("Room");
-  return room;
+  return { room, person };
 }
 
 /**
@@ -91,6 +94,39 @@ async function admit(tx: Tx, rec: Recorder, room: RoomRow, personId: string) {
   rec.created("participant", room.projectId, personId, person.name, snapshot);
   return added;
 }
+
+/**
+ * Write one Chat Message and announce it. Shared by the PM's `postMessage` and the
+ * Participant's, which differ only in who the author is: the validation, the author snapshot
+ * (ADR 0006) and the event must not drift apart between the two audiences.
+ *
+ * The caller has already resolved the Room through its own seam.
+ */
+async function post(tx: Tx, rec: Recorder, room: RoomRow, text: string, author: MessageAuthor) {
+  const body = text.trim();
+  // The 4,000-character cap is #57 and attachments are #56; this is only what
+  // `room_messages_content_ck` would refuse anyway, raised as a domain error instead.
+  if (!body) throw new ValidationError("Message is required", { text: ["Required"] });
+  const message = await messagingRepo.insertMessage(tx, room, { text: body, ...author });
+  // Published, never persisted (ADR 0010): `room_messages` is already the immutable log
+  // an Activity Event would copy, at a volume that would crowd out the Project's history.
+  // A Participant's Chat Message carries no actor at all, for want of a `user` row to name.
+  rec.signal("chat_message.created", {
+    projectId: room.projectId,
+    entityType: "chat_message",
+    entityId: message.id,
+    // The Room, not the text: a subscriber reads the Chat Message by id.
+    entityLabel: roomLabel(room),
+    action: "created",
+    changes: [],
+  });
+  return message;
+}
+
+/** One author or the other, never both: `room_messages_author_ck` allows at most one. */
+type MessageAuthor = { authorName: string } & (
+  { authorUserId: string; authorPersonId?: never } | { authorPersonId: string; authorUserId?: never }
+);
 
 export const messagingService = {
   listRooms: async (ctx: Ctx, projectId: string) => {
@@ -182,36 +218,13 @@ export const messagingService = {
       return admit(tx, rec, room, personId);
     }),
 
-  /**
-   * Written by the PM. A Chat Message from a Person needs a Person session, which arrives
-   * with the invite flow (#54) and #55; `authorPersonId` is the column that will carry it.
-   */
+  /** Written by the PM; the Participant's own `postMessage` is on the service below. */
   postMessage: (ctx: Ctx, { text, ...ref }: RoomRef & { text: string }) =>
     mutate(ctx, async (tx, rec) => {
       const room = await resolveRoom(tx, ctx.userId, ref);
-      const body = text.trim();
-      // The 4,000-character cap is #57 and attachments are #56; this is only what
-      // `room_messages_content_ck` would refuse anyway, raised as a domain error instead.
-      if (!body) throw new ValidationError("Message is required", { text: ["Required"] });
       const authorName = await messagingRepo.findAuthorName(tx, ctx.userId);
       if (!authorName) throw new NotFoundError("User");
-      const message = await messagingRepo.insertMessage(tx, room, {
-        text: body,
-        authorUserId: ctx.userId,
-        authorName,
-      });
-      // Published, never persisted (ADR 0010): `room_messages` is already the immutable log
-      // an Activity Event would copy, at a volume that would crowd out the Project's history.
-      rec.signal("chat_message.created", {
-        projectId: room.projectId,
-        entityType: "chat_message",
-        entityId: message.id,
-        // The Room, not the text: a subscriber reads the Chat Message by id.
-        entityLabel: roomLabel(room),
-        action: "created",
-        changes: [],
-      });
-      return message;
+      return post(tx, rec, room, text, { authorUserId: ctx.userId, authorName });
     }),
 };
 
@@ -219,8 +232,6 @@ export const messagingService = {
  * What a Person sees of messaging: their own Rooms in their own Project, and nothing else
  * (ADR 0009). Every function starts with `assertParticipates` or is scoped by the Person's own
  * Project id, and none of them can reach `assertOwnsProject`, which has no User to check.
- *
- * Sending is issue #55; this service reads only.
  */
 export const participantMessagingService = {
   /**
@@ -254,10 +265,27 @@ export const participantMessagingService = {
   },
 
   listMessages: async (pctx: ParticipantCtx, ref: RoomRef, page: { before?: MessageCursor; limit: number }) => {
-    const room = await assertParticipates(pctx.db, pctx.person.id, ref);
+    const { room } = await assertParticipates(pctx.db, pctx.person.id, ref);
     return messagingRepo.listMessages(pctx.db, room.projectId, room.id, {
       before: page.before,
       limit: Math.min(Math.max(page.limit, 1), MESSAGE_PAGE_MAX),
     });
   },
+
+  /**
+   * Issue #55: a Person in a Room may say something in it, and only in it.
+   *
+   * The seam is inside the transaction so the Person, the Room and the insert see one
+   * snapshot. No row lock, unlike `addParticipant`: there is no read-modify-write invariant
+   * here, and a Room or Person deleted mid-write is refused by a foreign key.
+   *
+   * Nothing checks a credential: ADR 0009 defers revocation, so a signed cookie outlives a
+   * password change, and a PM who must cut someone off deletes the Person - which the seam
+   * catches on the next read.
+   */
+  postMessage: (pctx: ParticipantCtx, { text, ...ref }: RoomRef & { text: string }) =>
+    mutateAsParticipant(pctx, async (tx, rec) => {
+      const { room, person } = await assertParticipates(tx, pctx.person.id, ref);
+      return post(tx, rec, room, text, { authorPersonId: person.id, authorName: person.name });
+    }),
 };

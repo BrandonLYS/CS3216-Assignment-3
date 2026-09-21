@@ -340,8 +340,11 @@ describe("the Participant path", () => {
 
   const refTo = (room: RoomRow) => ({ projectId: project2.id, roomId: room.id });
 
-  it("admits the Person who was admitted to the Room", async () => {
-    expect(await assertParticipates(ctx.db, member.id, refTo(theirs))).toMatchObject({ id: theirs.id });
+  it("admits the Person who was admitted to the Room, and hands back both rows", async () => {
+    expect(await assertParticipates(ctx.db, member.id, refTo(theirs))).toMatchObject({
+      room: { id: theirs.id },
+      person: { id: member.id, name: "Mei Chen" },
+    });
   });
 
   it("refuses everyone else with NotFound, so no Room can be probed", async () => {
@@ -378,5 +381,88 @@ describe("the Participant path", () => {
     await expect(
       participantMessagingService.listMessages(stale, { projectId: sibling.id, roomId: theirs.id }, { limit: 10 }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  /** Issue #55. Its own Room, so the history assertions above stay exact. */
+  describe("sending", () => {
+    let sendable: RoomRow;
+    let sendRef: { projectId: string; roomId: string };
+
+    beforeAll(async () => {
+      sendable = await messagingService.createRoom(ctx, {
+        projectId: project2.id,
+        type: "group",
+        name: "Sendable",
+        personIds: [member.id],
+      });
+      sendRef = refTo(sendable);
+    });
+
+    it("stores a Chat Message with the Person as its author, where the PM can read it", async () => {
+      const message = await participantMessagingService.postMessage(pctx, { ...sendRef, text: "  On it  " });
+      expect(message).toMatchObject({
+        text: "On it",
+        projectId: project2.id,
+        authorPersonId: member.id,
+        authorUserId: null,
+        authorName: "Mei Chen",
+      });
+      const asPm = await messagingService.listMessages(ctx, sendRef, { limit: 10 });
+      expect(asPm.map((m) => m.text)).toContain("On it");
+    });
+
+    /** ADR 0010, and the Participant half of it: the signal carries no actor at all. */
+    it("publishes chat_message.created with a null actor and writes no Activity Event", async () => {
+      const received: DomainEvent[] = [];
+      const unsub = eventBus.subscribe("chat_message.created", (e) => void received.push(e));
+      const before = (await activityRepo.recentForProject(ctx.db, project2.id, 500)).length;
+      const message = await participantMessagingService.postMessage(pctx, {
+        ...sendRef,
+        text: "No activity row for this either",
+      });
+      unsub();
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({
+        name: "chat_message.created",
+        action: "created",
+        entityType: "chat_message",
+        entityId: message.id,
+        entityLabel: "Sendable",
+        projectId: project2.id,
+        actorId: null,
+      });
+      expect(received[0]!.entityLabel).not.toContain("No activity row");
+      expect((await activityRepo.recentForProject(ctx.db, project2.id, 500)).length).toBe(before);
+    });
+
+    it("refuses an empty body and writes nothing", async () => {
+      const before = await participantMessagingService.listMessages(pctx, sendRef, { limit: 100 });
+      await expect(participantMessagingService.postMessage(pctx, { ...sendRef, text: "   " })).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      expect(await participantMessagingService.listMessages(pctx, sendRef, { limit: 100 })).toHaveLength(before.length);
+    });
+
+    it("refuses everyone who is not in the Room, with NotFound", async () => {
+      const bystanderCtx: ParticipantCtx = { db: ctx.db, person: { id: bystander.id, projectId: project2.id } };
+      const strangerCtx: ParticipantCtx = { db: ctx.db, person: { id: randomUUID(), projectId: project2.id } };
+      // Thunks, not promises: a rejected promise built before its `await` is an unhandled one.
+      const refusals = [
+        // In the Project, not in this Room.
+        () => participantMessagingService.postMessage(bystanderCtx, { ...sendRef, text: "Let me in" }),
+        // In this Room, aiming at one they are not in.
+        () => participantMessagingService.postMessage(pctx, { ...refTo(notTheirs), text: "Let me in" }),
+        // In this Room, naming another Project.
+        () =>
+          participantMessagingService.postMessage(pctx, {
+            projectId: sibling.id,
+            roomId: sendable.id,
+            text: "Let me in",
+          }),
+        () => participantMessagingService.postMessage(strangerCtx, { ...sendRef, text: "Let me in" }),
+      ];
+      for (const attempt of refusals) await expect(attempt()).rejects.toBeInstanceOf(NotFoundError);
+    });
   });
 });
