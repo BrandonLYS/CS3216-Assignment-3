@@ -95,6 +95,25 @@ async function admit(tx: Tx, rec: Recorder, room: RoomRow, personId: string) {
   return added;
 }
 
+/** What a caller asks for: one page of history, optionally the one before a cursor. */
+export type MessagePage = { before?: MessageCursor; limit: number };
+
+/**
+ * One page of a Room's history, newest first, and whether there is an older one (issue #60).
+ * Shared by both audiences so the PM and a Participant page through the same history the same
+ * way; the caller has already resolved the Room through its own seam.
+ *
+ * `hasMore` is answered by reading one row past the page and not returning it. The cheaper
+ * alternatives are both worse: a second `count(*)` doubles the read, and letting the caller
+ * infer "fewer rows than I asked for" cannot tell a history whose length is an exact multiple
+ * of the page size from one that has ended, so the pane would always offer one empty page.
+ */
+async function pageOf(db: DbOrTx, room: RoomRow, { before, limit }: MessagePage) {
+  const capped = Math.min(Math.max(limit, 1), MESSAGE_PAGE_MAX);
+  const rows = await messagingRepo.listMessages(db, room.projectId, room.id, { before, limit: capped + 1 });
+  return { items: rows.slice(0, capped), hasMore: rows.length > capped };
+}
+
 /**
  * Write one Chat Message and announce it. Shared by the PM's `postMessage` and the
  * Participant's, which differ only in who the author is: the validation, the author snapshot
@@ -158,12 +177,9 @@ export const messagingService = {
     return messagingRepo.listParticipants(ctx.db, room.id);
   },
 
-  listMessages: async (ctx: Ctx, ref: RoomRef, page: { before?: MessageCursor; limit: number }) => {
+  listMessages: async (ctx: Ctx, ref: RoomRef, page: MessagePage) => {
     const room = await resolveRoom(ctx.db, ctx.userId, ref);
-    return messagingRepo.listMessages(ctx.db, room.projectId, room.id, {
-      before: page.before,
-      limit: Math.min(Math.max(page.limit, 1), MESSAGE_PAGE_MAX),
-    });
+    return pageOf(ctx.db, room, page);
   },
 
   /** The messaging state of every Person in the Project, for the PM's Participants dialog. */
@@ -264,12 +280,9 @@ export const participantMessagingService = {
     };
   },
 
-  listMessages: async (pctx: ParticipantCtx, ref: RoomRef, page: { before?: MessageCursor; limit: number }) => {
+  listMessages: async (pctx: ParticipantCtx, ref: RoomRef, page: MessagePage) => {
     const { room } = await assertParticipates(pctx.db, pctx.person.id, ref);
-    return messagingRepo.listMessages(pctx.db, room.projectId, room.id, {
-      before: page.before,
-      limit: Math.min(Math.max(page.limit, 1), MESSAGE_PAGE_MAX),
-    });
+    return pageOf(pctx.db, room, page);
   },
 
   /**

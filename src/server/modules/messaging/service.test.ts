@@ -8,8 +8,8 @@ import type { PersonRow } from "@/server/modules/people/schema";
 import { peopleService } from "@/server/modules/people/service";
 import type { ProjectRow } from "@/server/modules/projects/schema";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
-import { messagingRepo } from "./repository";
-import type { RoomRow } from "./schema";
+import { messagingRepo, type MessageCursor } from "./repository";
+import type { RoomMessageRow, RoomRow } from "./schema";
 import {
   assertParticipates,
   MESSAGE_PAGE_MAX,
@@ -61,12 +61,16 @@ afterAll(closeDb);
 
 const ref = () => ({ projectId: project.id, roomId: room.id });
 
+/** The keyset cursor the pane sends back: the oldest row it has, as a `(createdAt, id)` tuple. */
+const cursor = (m: RoomMessageRow): MessageCursor => ({ createdAt: m.createdAt, id: m.id });
+
 describe("reading a Room inside its Project", () => {
   it("returns the Room, its Participants and its history newest first", async () => {
     expect(await messagingService.getRoom(ctx, ref())).toMatchObject({ name: "Launch", projectId: project.id });
     expect((await messagingService.listParticipants(ctx, ref())).map((p) => p.name)).toEqual(["Jason Tan"]);
     const history = await messagingService.listMessages(ctx, ref(), { limit: 10 });
-    expect(history.map((m) => m.text)).toEqual(["m3", "m2", "m1"]);
+    expect(history.items.map((m) => m.text)).toEqual(["m3", "m2", "m1"]);
+    expect(history.hasMore).toBe(false);
   });
 
   it("lists only the Rooms of the Project asked for", async () => {
@@ -76,7 +80,40 @@ describe("reading a Room inside its Project", () => {
 
   it("clamps a page size so a caller cannot ask for the whole history", async () => {
     const page = await messagingService.listMessages(ctx, ref(), { limit: MESSAGE_PAGE_MAX + 5_000 });
-    expect(page).toHaveLength(3);
+    expect(page.items).toHaveLength(3);
+  });
+
+  /** Issue #60: the pane asks for a page at a time and needs to know when to stop asking. */
+  it("reports older history only while there is some", async () => {
+    const first = await messagingService.listMessages(ctx, ref(), { limit: 2 });
+    expect(first.items.map((m) => m.text)).toEqual(["m3", "m2"]);
+    expect(first.hasMore).toBe(true);
+
+    const second = await messagingService.listMessages(ctx, ref(), { limit: 2, before: cursor(first.items.at(-1)!) });
+    expect(second.items.map((m) => m.text)).toEqual(["m1"]);
+    expect(second.hasMore).toBe(false);
+  });
+
+  it("walks the whole history in pages, with no duplicate and no gap", async () => {
+    // `text` is nullable because a Chat Message may be an attachment alone (#56).
+    const seen: (string | null)[] = [];
+    let before: MessageCursor | undefined;
+    // Bounded so a bug that never lowers the cursor fails as an assertion, not a hung suite.
+    for (let guard = 0; guard < 10; guard++) {
+      const page = await messagingService.listMessages(ctx, ref(), { limit: 2, before });
+      seen.push(...page.items.map((m) => m.text));
+      if (!page.hasMore) break;
+      before = cursor(page.items.at(-1)!);
+    }
+    expect(seen).toEqual(["m3", "m2", "m1"]);
+  });
+
+  it("answers an exhausted or unrecognised cursor with an empty last page", async () => {
+    const pastTheBeginning = { createdAt: new Date(Date.UTC(2000, 0, 1)), id: randomUUID() };
+    expect(await messagingService.listMessages(ctx, ref(), { limit: 10, before: pastTheBeginning })).toEqual({
+      items: [],
+      hasMore: false,
+    });
   });
 });
 
@@ -367,7 +404,7 @@ describe("the Participant path", () => {
   });
 
   it("reads the history of a Room they are in and refuses one they are not", async () => {
-    expect(await participantMessagingService.listMessages(pctx, refTo(theirs), { limit: 10 })).toHaveLength(1);
+    expect((await participantMessagingService.listMessages(pctx, refTo(theirs), { limit: 10 })).items).toHaveLength(1);
     await expect(
       participantMessagingService.listMessages(pctx, refTo(notTheirs), { limit: 10 }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -408,7 +445,7 @@ describe("the Participant path", () => {
         authorName: "Mei Chen",
       });
       const asPm = await messagingService.listMessages(ctx, sendRef, { limit: 10 });
-      expect(asPm.map((m) => m.text)).toContain("On it");
+      expect(asPm.items.map((m) => m.text)).toContain("On it");
     });
 
     /** ADR 0010, and the Participant half of it: the signal carries no actor at all. */
@@ -441,7 +478,9 @@ describe("the Participant path", () => {
       await expect(participantMessagingService.postMessage(pctx, { ...sendRef, text: "   " })).rejects.toBeInstanceOf(
         ValidationError,
       );
-      expect(await participantMessagingService.listMessages(pctx, sendRef, { limit: 100 })).toHaveLength(before.length);
+      expect((await participantMessagingService.listMessages(pctx, sendRef, { limit: 100 })).items).toHaveLength(
+        before.items.length,
+      );
     });
 
     it("refuses everyone who is not in the Room, with NotFound", async () => {
@@ -463,6 +502,54 @@ describe("the Participant path", () => {
         () => participantMessagingService.postMessage(strangerCtx, { ...sendRef, text: "Let me in" }),
       ];
       for (const attempt of refusals) await expect(attempt()).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  /** Issue #60, through the second seam: a Person pages back through their own Room. */
+  describe("paging", () => {
+    let deep: RoomRow;
+    let deepRef: { projectId: string; roomId: string };
+
+    beforeAll(async () => {
+      deep = await messagingService.createRoom(ctx, {
+        projectId: project2.id,
+        type: "group",
+        name: "Deep",
+        personIds: [member.id],
+      });
+      deepRef = refTo(deep);
+      // Its own Room, so the counts here cannot be disturbed by the sending tests above.
+      for (const text of ["p1", "p2", "p3", "p4"]) {
+        await participantMessagingService.postMessage(pctx, { ...deepRef, text });
+      }
+    });
+
+    it("walks a Person's own history in pages that match reading it in one", async () => {
+      // Compared against the single-page read rather than against insertion order: four writes
+      // can land in the same millisecond, and then `(created_at, id)` - not arrival - is the
+      // order, for the pages and the whole alike.
+      const whole = await participantMessagingService.listMessages(pctx, deepRef, { limit: 100 });
+      expect(whole.items).toHaveLength(4);
+
+      const seen: string[] = [];
+      let before: MessageCursor | undefined;
+      for (let guard = 0; guard < 10; guard++) {
+        const page = await participantMessagingService.listMessages(pctx, deepRef, { limit: 2, before });
+        seen.push(...page.items.map((m) => m.id));
+        if (!page.hasMore) break;
+        before = cursor(page.items.at(-1)!);
+      }
+      expect(seen).toEqual(whole.items.map((m) => m.id));
+    });
+
+    it("refuses a cursor into a Room the Person is not in", async () => {
+      const bystanderCtx: ParticipantCtx = { db: ctx.db, person: { id: bystander.id, projectId: project2.id } };
+      await expect(
+        participantMessagingService.listMessages(bystanderCtx, deepRef, {
+          limit: 2,
+          before: { createdAt: new Date(), id: randomUUID() },
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
 });
