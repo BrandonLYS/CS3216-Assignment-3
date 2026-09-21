@@ -3,6 +3,8 @@
 This guide explains how PrismPM's Assistant, MCP endpoint, memory, proposal extraction, decision answers, and impact detection fit together.
 It describes the code that exists in this repository today and calls out what is deterministic, what uses a language model, and what is only planned.
 
+For the complete application diagram, UI-to-database flow, authentication, storage, messaging, analytics, and deployment boundaries, start with the [architecture guide](architecture.md).
+
 ## The short version
 
 PrismPM does not contain a group of independent agents.
@@ -89,7 +91,7 @@ The dock uses the Vercel AI SDK React `useChat` hook and posts to `/api/assistan
 Responses are streamed, so text and tool status appear while work is happening.
 If `create_project` succeeds from the dashboard, the dock navigates into the new Project.
 
-Sources: [dashboard page](<../src/app/(app)/page.tsx>), [Project layout](<../src/app/(app)/projects/[projectId]/layout.tsx>), [Assistant dock](../src/widgets/assistant/assistant-dock.tsx), [Assistant schema](../src/server/modules/assistant/schema.ts).
+Sources: [dashboard page](<../src/app/(app)/dashboard/page.tsx>), [Project layout](<../src/app/(app)/projects/[projectId]/layout.tsx>), [Assistant dock](../src/widgets/assistant/assistant-dock.tsx), [Assistant schema](../src/server/modules/assistant/schema.ts).
 
 ### 2.2 The server authenticates and validates the turn
 
