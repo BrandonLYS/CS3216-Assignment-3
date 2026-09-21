@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
     const { conversation } = await assistantService.conversation(ctx, projectId);
-    capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
+    await capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
     const [profile, workingMemory] = await Promise.all([
       memoryService.current(ctx, null),
       scope ? memoryService.current(ctx, projectId) : null,
