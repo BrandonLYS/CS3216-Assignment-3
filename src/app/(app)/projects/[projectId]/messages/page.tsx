@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/server/db/client";
 import { getViewer } from "@/server/auth/viewer";
 import { ctxForCurrentUser } from "@/server/core/action";
+import { NotFoundError } from "@/server/core/errors";
 import { messagingService, participantMessagingService } from "@/server/modules/messaging/service";
 import { peopleService } from "@/server/modules/people/service";
 import { MessagesView, type RoomListItem } from "@/features/messaging/messages-view";
@@ -70,7 +71,14 @@ async function participantView(
   // reading anything here. `assertParticipates` would refuse it in any case.
   if (session.projectId !== projectId) redirect(`/projects/${session.projectId}/messages`);
   const pctx = { db, person: { id: session.personId, projectId } };
-  const { project, person, rooms } = await participantMessagingService.workspace(pctx);
+  // A Person deleted since the cookie was signed has a session that verifies and names
+  // nobody. Back to the login form, which is where they can sign in again or stop; failing
+  // here would show an error page with no way off it.
+  const workspace = await participantMessagingService.workspace(pctx).catch((e: unknown) => {
+    if (e instanceof NotFoundError) redirect(`/m/${projectId}/login`);
+    throw e;
+  });
+  const { project, person, rooms } = workspace;
   const selected = pick(rooms, requested);
   const messages = selected
     ? await participantMessagingService.listMessages(pctx, { projectId, roomId: selected.room.id }, { limit: PAGE })

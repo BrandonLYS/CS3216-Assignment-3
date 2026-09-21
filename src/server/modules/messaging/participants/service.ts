@@ -98,6 +98,23 @@ export const participantsService = {
   },
 
   /**
+   * What the messaging login page may tell an anonymous visitor about a Project: its name, and
+   * nothing else. The decision about that lives here rather than in the page, so the route
+   * never reaches for a repository itself.
+   */
+  loginContext: (projectId: string) => projectsRepo.findName(db, projectId),
+
+  /**
+   * The Person a cookie still names, or null when they have been deleted or moved to another
+   * Project since it was signed. The cookie carries no credential version (ADR 0009), so this
+   * is what keeps a stale session from being treated as a live one.
+   */
+  sessionPerson: async ({ personId, projectId }: Omit<ParticipantSession, "exp">) => {
+    const person = await peopleRepo.findById(db, personId);
+    return person && person.projectId === projectId ? person : null;
+  },
+
+  /**
    * Who a live invite belongs to and which Project it is for, so the accept page can say both.
    * `null` rather than an error, because the page renders "this link is no longer valid" itself.
    */

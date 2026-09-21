@@ -159,7 +159,10 @@ export function RoomPeopleDialog({
               Send this link to {roster.find((r) => r.id === fresh.personId)?.name}. It is shown once and can be used
               once.
             </p>
-            <div className="mt-2 flex items-center gap-2">
+            {/* `ph-no-capture` keeps the link out of a PostHog session replay: a `$snapshot`
+                records the DOM verbatim and never passes through the analytics sanitizer, so
+                a live credential rendered here would otherwise leave the browser. */}
+            <div className="ph-no-capture mt-2 flex items-center gap-2">
               <code className="flex-1 truncate font-mono text-mono text-ink">{fresh.url}</code>
               <Button size="sm" onClick={() => void navigator.clipboard.writeText(fresh.url)}>
                 <Copy className="size-3" /> Copy
