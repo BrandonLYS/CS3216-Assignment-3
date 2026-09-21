@@ -255,6 +255,16 @@ components:
     padding: 64px 32px
 ---
 
+## PrismPM identity
+
+The visible product name is **PrismPM** and technical identifiers use `prismpm`.
+The brand mark is an original geometric prism: a white beam enters from the left and disperses into six colored bands on the right.
+Use the shared `Logo` component with its existing 24-unit viewBox at the established 20px and 24px display sizes.
+Its dark background and white outline use `canvas` and `ink`; its spectrum uses the existing `tag-red`, `tag-orange`, `tag-yellow`, `tag-green`, `tag-blue`, and `tag-purple` tokens.
+The spectrum is a brand-specific exception to the single-accent guidance in the Linear reference below.
+Keep primary controls and focus rings on the existing lavender palette.
+The favicon is generated from the same component and tokens with `npm run brand:icons`; regenerate it instead of editing its binary by hand.
+
 ## Overview
 
 Linear's marketing canvas is the deepest dark surface in this collection — `{colors.canvas}` is #010102, essentially pure black with a faint blue tint. On top sits a four-step surface ladder (`{colors.surface-1}` through `{colors.surface-4}`) for cards, panels, and lifted tiles, with hairline borders running from `{colors.hairline}` (#23252a) up through `{colors.hairline-strong}` and `{colors.hairline-tertiary}`. Light gray text (`{colors.ink}` #f7f8f8) carries the body and headlines.

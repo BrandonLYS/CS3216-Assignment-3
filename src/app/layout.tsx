@@ -7,7 +7,7 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Vantage", template: "%s · Vantage" },
+  title: { default: "PrismPM", template: "%s · PrismPM" },
   description: "Project management with a memory.",
 };
 

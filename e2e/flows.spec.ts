@@ -667,7 +667,12 @@ test.describe("attention", () => {
     const list = page.locator("section", { hasText: "Needs attention" }).first();
     await expect(list.getByText("Overdue", { exact: true }).first()).toBeVisible();
     // Tolerant of midnight/clock skew between Playwright and the server: any past-day count.
-    await expect(list.getByText(/Due .*, \d+ days? ago/)).toBeVisible();
+    await expect(
+      list
+        .getByTestId("attention-item")
+        .filter({ hasText: "Reconcile legacy ledger" })
+        .getByText(/Due .*, \d+ days? ago/),
+    ).toBeVisible();
     await expect(list.getByText("Blocked", { exact: true }).first()).toBeVisible();
     await expect(list.getByText("Late dependency", { exact: true }).first()).toBeVisible();
     await expect(list.getByText(/Depends on .*, due .*, after start/)).toBeVisible();

@@ -20,7 +20,7 @@ const edges = [
 ];
 
 /**
- * The shape of one record in Vantage: the evidence above, the decision and the assumption
+ * The shape of one record in PrismPM: the evidence above, the decision and the assumption
  * it rests on in the middle, the consequence below. anime.js draws the edges in on scroll,
  * then the nodes land.
  */

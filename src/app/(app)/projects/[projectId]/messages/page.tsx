@@ -15,7 +15,7 @@ export const metadata = { title: "Messages" };
 const PAGE = 50;
 
 /**
- * One route, two audiences (ADR 0009). The PM sees this inside Vantage with the tools to
+ * One route, two audiences (ADR 0009). The PM sees this inside PrismPM with the tools to
  * create a Room; a Person sees only the Rooms they were admitted to, with no shell at all.
  */
 export default async function MessagesPage({ params, searchParams }: PageProps<"/projects/[projectId]/messages">) {

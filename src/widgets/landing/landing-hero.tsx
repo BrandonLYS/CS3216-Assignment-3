@@ -78,7 +78,7 @@ export function LandingHero({ signedIn }: { signedIn: boolean }) {
         </h1>
 
         <p data-hero-fade className="mx-auto mt-6 max-w-xl text-body-lg text-ink-subtle">
-          Vantage holds the tasks, milestones and risks you would expect - and underneath them the decisions, the
+          PrismPM holds the tasks, milestones and risks you would expect - and underneath them the decisions, the
           assumptions they rest on, and the evidence they came from.
         </p>
 

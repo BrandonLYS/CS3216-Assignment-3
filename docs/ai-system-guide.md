@@ -1,11 +1,11 @@
-# Vantage AI System Guide
+# PrismPM AI System Guide
 
-This guide explains how Vantage's Assistant, MCP endpoint, memory, proposal extraction, decision answers, and impact detection fit together.
+This guide explains how PrismPM's Assistant, MCP endpoint, memory, proposal extraction, decision answers, and impact detection fit together.
 It describes the code that exists in this repository today and calls out what is deterministic, what uses a language model, and what is only planned.
 
 ## The short version
 
-Vantage does not contain a group of independent agents.
+PrismPM does not contain a group of independent agents.
 It has one tool-using Assistant exposed through two entry points:
 
 1. The Assistant dock in the web application sends chat turns to `/api/assistant/chat`.
@@ -223,19 +223,20 @@ This avoids sending internal app calls through HTTP and keeps one canonical impl
 
 The endpoint is `/api/mcp` and uses Streamable HTTP through `mcp-handler`.
 Both `GET` and `POST` are exported for the protocol handler.
-The server identifies itself as `vantage` version `1.0.0`.
+The server identifies itself as `prismpm` version `1.0.0`.
 
 Sources: [MCP route](../src/app/api/mcp/route.ts), [ADR 0007](adr/0007-assistant-acts-through-services-with-via-actor.md), [README MCP setup](../README.md#drive-it-from-an-mcp-client).
 
 ### 5.2 Authentication
 
 The User creates a personal token in Settings.
-Tokens start with `vtg_`, and the raw token is shown only once.
+New tokens start with `prismpm_`, and the raw token is shown only once.
+Previously issued `vtg_` tokens remain valid until revoked because authentication looks up the hash of the complete token.
 Only a SHA-256 hash and a short identifying prefix are stored.
 A revoked token is rejected, and successful resolution updates `lastUsedAt`.
 
-The client sends the token as `Authorization: Bearer vtg_...`.
-The MCP auth wrapper resolves that token to a Vantage User id and stores it in MCP auth metadata.
+The client sends the token as `Authorization: Bearer prismpm_...`.
+The MCP auth wrapper resolves that token to a PrismPM User id and stores it in MCP auth metadata.
 Each tool invocation then creates `{ db, userId, via: "assistant" }` and calls the same registry handler used by chat.
 
 Sources: [API token service](../src/server/modules/api-tokens/service.ts), [API token schema](../src/server/modules/api-tokens/schema.ts), [MCP route](../src/app/api/mcp/route.ts), [README MCP setup](../README.md#drive-it-from-an-mcp-client).
@@ -255,12 +256,12 @@ Source: [MCP route](../src/app/api/mcp/route.ts).
 ### 5.4 Why MCP exposes fewer tools
 
 `MCP_TOOLS` filters out every tool marked `requiresConfirmation`.
-The current MCP endpoint therefore does not expose `delete_task`, `delete_milestone`, or `update_project` because this adapter has no Vantage approval-card UI.
+The current MCP endpoint therefore does not expose `delete_task`, `delete_milestone`, or `update_project` because this adapter has no PrismPM approval-card UI.
 All other registry tools are exposed, including read and write tools.
 
 MCP itself does not call the OpenAI model.
-The external MCP host, such as Claude Desktop or Cursor, owns its own model loop and decides when to invoke Vantage tools.
-Vantage authenticates, validates, performs the requested service operation, and returns JSON.
+The external MCP host, such as Claude Desktop or Cursor, owns its own model loop and decides when to invoke PrismPM tools.
+PrismPM authenticates, validates, performs the requested service operation, and returns JSON.
 
 Sources: [tool registry](../src/server/modules/assistant/tools.ts), [MCP route](../src/app/api/mcp/route.ts), [README MCP setup](../README.md#drive-it-from-an-mcp-client).
 
@@ -268,14 +269,14 @@ Sources: [tool registry](../src/server/modules/assistant/tools.ts), [MCP route](
 
 ```text
 1. MCP client connects to https://host/api/mcp with a bearer token.
-2. Vantage hashes and resolves the token to a User id.
+2. PrismPM hashes and resolves the token to a User id.
 3. The client discovers tools and their Zod-derived input schemas.
 4. The client calls list_projects.
 5. The client selects an owned projectId.
 6. The client calls a Project tool with that projectId.
 7. The tool calls the normal service layer.
 8. A write is recorded in Project History with via = assistant.
-9. Vantage returns the service result as JSON text.
+9. PrismPM returns the service result as JSON text.
 ```
 
 Sources: [MCP route](../src/app/api/mcp/route.ts), [API token service](../src/server/modules/api-tokens/service.ts), [mutation core](../src/server/core/mutation.ts).
@@ -408,7 +409,7 @@ Sources: [Reflection service](../src/server/modules/reflection/service.ts), [mem
 ## 9. Evidence and transcript context
 
 Evidence ingestion supplies source material to the AI features, but ingestion itself is mostly deterministic.
-Vantage extracts text from supported uploaded files and stores it in `evidence.extractedText`, bounded by `EVIDENCE_EXTRACT_MAX_CHARS`.
+PrismPM extracts text from supported uploaded files and stores it in `evidence.extractedText`, bounded by `EVIDENCE_EXTRACT_MAX_CHARS`.
 It does not perform speech-to-text or audio diarization.
 
 Evidence marked as a transcript is split into ordered Passages with optional speaker and timestamp information.
@@ -447,7 +448,7 @@ Sources: [mutation core](../src/server/core/mutation.ts), [event bus](../src/ser
 
 ## 11. Model and configuration
 
-Vantage currently supports only the OpenAI provider in `getModel()`.
+PrismPM currently supports only the OpenAI provider in `getModel()`.
 The model defaults to `gpt-4o-mini` and can be changed through `AI_MODEL`.
 If `AI_PROVIDER` is not `openai` or `OPENAI_API_KEY` is absent, `getModel()` returns `null`.
 The application still boots, and the dock displays an “Assistant not configured” message.
@@ -508,7 +509,7 @@ The current code does not contain:
 - A multi-agent coordinator or specialist-agent handoffs.
 - A vector database, embeddings, or semantic retrieval.
 - A general background job queue for Reflection or proposal extraction.
-- An MCP client inside the Vantage Assistant.
+- An MCP client inside the PrismPM Assistant.
 - Autonomous acceptance of Decision Proposals.
 - A separate AI User account.
 - Model-based impact detection.
@@ -546,7 +547,7 @@ Sources: [ADR 0007](adr/0007-assistant-acts-through-services-with-via-actor.md),
 
 ## 16. A useful mental model
 
-Think of Vantage as a trusted Project system with an AI operator sitting on top of it.
+Think of PrismPM as a trusted Project system with an AI operator sitting on top of it.
 The operator can request actions, but application code defines its available controls, validates every input, checks ownership, records Project changes, and sometimes requires a human confirmation.
 MCP makes those same controls available to an external AI host.
 Proposal extraction and Reflection are specialized model passes with narrow schemas and post-processing checks.
