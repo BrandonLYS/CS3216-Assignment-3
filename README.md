@@ -4,6 +4,9 @@ Project management with a memory: the structured base (projects, tasks, mileston
 
 New contributors should follow the [developer onboarding guide](docs/developer-onboarding.md) for prerequisites, local setup, testing, and repository conventions.
 
+The [architecture guide](docs/architecture.md) maps the UI, services, repositories, PostgreSQL, AI, authentication, storage, messaging, and analytics, with end-to-end diagrams and implementation links.
+For the Assistant and MCP internals, see the [AI system guide](docs/ai-system-guide.md).
+
 ## Brand and compatibility
 
 The product name is **PrismPM**; package names, MCP server identity, and other technical identifiers use `prismpm`.

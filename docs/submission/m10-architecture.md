@@ -1,42 +1,20 @@
 # M10 - Architecture Evidence
 
-## High-level data flow
+The complete implementation guide is [PrismPM architecture](../architecture.md).
+It is audited against main commit `5880bc9` and distinguishes implemented behavior from planned capabilities.
 
-```
-Browser
-  ↕ Next.js App Router + Server Actions
-  ↕ Widgets / Features / Entities / Shared UI
-  ↕ Server actions ("use server") → service.ts → mutate(ctx, (tx, rec) => ...)
-  ↕ Drizzle ORM + PostgreSQL
-  ↕ Vercel Blob (files) / Better Auth (sessions)
-  ↕ OpenAI API via ai SDK (assistant, proposal extraction, why-did-we)
-```
+## Diagram and implementation evidence
 
-## Key seams
+| Area                      | Evidence                                                                                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Complete application      | [System map](../architecture.md#complete-system-map) connects UI, Next.js, authentication, AI/MCP, services, repositories, PostgreSQL, storage, events, and analytics                          |
+| UI to database            | [Read and write flows](../architecture.md#read-and-write-flows) includes the Task-edit sequence, transaction boundaries, Activity recording, and revalidation                                  |
+| Authentication            | [Authentication and authorization](../architecture.md#authentication-and-authorization) separates PM sessions, Participant cookies, and MCP bearer tokens                                      |
+| Data model                | [PostgreSQL and the domain model](../architecture.md#postgresql-and-the-domain-model) maps table families and key relationships                                                                |
+| AI and external tools     | [AI and MCP](../architecture.md#ai-and-mcp) includes separate Assistant and MCP sequences, approval boundaries, Proposals, and Reflection                                                      |
+| Files and source material | [Evidence and storage](../architecture.md#evidence-and-storage) includes ingestion, extraction, private downloads, and cleanup behavior                                                        |
+| Events and analytics      | [Events and consistency](../architecture.md#events-and-consistency) and [Analytics](../architecture.md#analytics) distinguish durable history, in-process notifications, and PostHog telemetry |
+| Deployment and limits     | [Deployment](../architecture.md#deployment-and-configuration), [verification](../architecture.md#verification-and-change-guide), and [current limits](../architecture.md#current-limits)       |
 
-- `src/server/core/action.ts` validates input and builds `Ctx` for every action.
-- `src/server/core/mutation.ts` wraps writes, persists Activity Events, and publishes domain events.
-- `src/server/events/bus.ts` emits `task.updated`, `milestone.updated`, `decision.created`, etc.
-- `src/server/modules/<feature>/service.ts` is the only place a module's rows are written.
-- `src/server/modules/<feature>/repository.ts` contains SQL; UI never imports repositories.
-
-## Assistant / AI integration
-
-- `src/app/api/assistant/chat/route.ts` streams tool calls from `getModel()`.
-- `src/server/modules/assistant/tools.ts` defines project-scoped and workspace-scoped tools.
-- `src/server/modules/assistant/prompt.ts` holds `WHY_RULES` and system prompts.
-- `src/server/modules/proposals/extract.ts` extracts structured decisions from Evidence/Comments.
-- `src/server/modules/decisions/answers.ts` ranks decisions and evidence for the "Why did we" question.
-
-## Auth and authorization
-
-- `src/server/auth/session.ts` validates the Better Auth session per request.
-- `assertOwnsProject` is the single project-level authorization seam in every service.
-
-## Frontend layering
-
-- `app` - routes, server fetches.
-- `widgets` - shell, timeline, calendar, assistant dock.
-- `features` - dialogs and views that call actions.
-- `entities` - display atoms.
-- `shared` - ui primitives, lib, domain constants.
+The [AI system guide](../ai-system-guide.md) provides the detailed tool catalogue and reasoning workflows.
+The [ADRs](../adr/) record the design decisions behind these boundaries.
