@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { user } from "@/server/auth/schema";
 import type { DbOrTx } from "@/server/db/client";
 import { people } from "@/server/modules/people/schema";
 import {
@@ -8,6 +9,7 @@ import {
   type NewRoomMessageRow,
   type NewRoomRow,
   type RoomMessageRow,
+  type RoomParticipantRow,
   type RoomRow,
 } from "./schema";
 
@@ -45,9 +47,13 @@ export const messagingRepo = {
       .orderBy(asc(rooms.createdAt), asc(rooms.id))
       .then((xs) => xs.map((x) => x.room)),
 
-  /** Admitting the same Person twice is a no-op, so callers need not check first. */
-  addParticipant: (db: DbOrTx, roomId: string, personId: string) =>
-    db.insert(roomParticipants).values({ roomId, personId }).onConflictDoNothing(),
+  /**
+   * Admitting the same Person twice is a no-op, so callers need not check first. The row is
+   * returned only when it was really inserted (Postgres returns nothing for a conflict), which
+   * is how the service knows whether to record an Activity Event.
+   */
+  addParticipant: (db: DbOrTx, roomId: string, personId: string): Promise<RoomParticipantRow[]> =>
+    db.insert(roomParticipants).values({ roomId, personId }).onConflictDoNothing().returning(),
 
   /**
    * Takes no `projectId`: `room_participants` has no such column to filter on. The Room is
@@ -69,6 +75,16 @@ export const messagingRepo = {
       .where(and(eq(roomParticipants.roomId, roomId), eq(roomParticipants.personId, personId)))
       .limit(1)
       .then((xs) => xs.length > 0),
+
+  /**
+   * The PM's display name, snapshotted onto a Chat Message at write time (ADR 0006). Read
+   * here rather than joined at read time because `room_messages.author_name` is NOT NULL and
+   * must survive the `user` row; `comments/repository.ts` reads the same table the same way.
+   */
+  findAuthorName: async (db: DbOrTx, userId: string): Promise<string | undefined> => {
+    const [row] = await db.select({ name: user.name }).from(user).where(eq(user.id, userId));
+    return row?.name;
+  },
 
   /**
    * Takes the Room row, not its id: `projectId` is then copied from the Room and never

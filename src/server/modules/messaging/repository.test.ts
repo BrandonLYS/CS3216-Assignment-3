@@ -71,8 +71,10 @@ describe("rooms and participants", () => {
   });
 
   it("admits a Person once however many times they are added", async () => {
-    await messagingRepo.addParticipant(ctx.db, room.id, jason.id);
-    await messagingRepo.addParticipant(ctx.db, room.id, jason.id);
+    // The returned rows are the service's only way to tell a real admission from a repeat,
+    // and so whether to record an Activity Event.
+    expect(await messagingRepo.addParticipant(ctx.db, room.id, jason.id)).toHaveLength(1);
+    expect(await messagingRepo.addParticipant(ctx.db, room.id, jason.id)).toEqual([]);
     expect(await messagingRepo.listParticipants(ctx.db, room.id)).toHaveLength(1);
     expect(await messagingRepo.isParticipant(ctx.db, room.id, jason.id)).toBe(true);
   });
