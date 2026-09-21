@@ -5,14 +5,15 @@ import { ctxForCurrentUser } from "@/server/core/action";
 import { NotFoundError } from "@/server/core/errors";
 import { messagingService, participantMessagingService } from "@/server/modules/messaging/service";
 import { peopleService } from "@/server/modules/people/service";
+import { MESSAGE_PAGE_FIRST } from "@/shared/domain";
 import { MessagesView, type RoomListItem } from "@/features/messaging/messages-view";
 import { ParticipantHeader } from "@/features/messaging/participant-header";
 import type { RosterPerson } from "@/features/messaging/room-dialogs";
 
 export const metadata = { title: "Messages" };
 
-/** Newest 50; scrolling back through older pages is issue #60. */
-const PAGE = 50;
+/** The newest page; the pane pulls older ones in through its own action (issue #60). */
+const EMPTY_PAGE = { items: [], hasMore: false };
 
 /**
  * One route, two audiences (ADR 0009). The PM sees this inside PrismPM with the tools to
@@ -32,15 +33,16 @@ async function pmView(projectId: string, requested: string | undefined) {
   const ctx = await ctxForCurrentUser();
   const [rooms, roster] = await Promise.all([messagingService.listRoomsWithParticipants(ctx, projectId), loadRoster()]);
   const selected = pick(rooms, requested);
-  const messages = selected
-    ? await messagingService.listMessages(ctx, { projectId, roomId: selected.room.id }, { limit: PAGE })
-    : [];
+  const page = selected
+    ? await messagingService.listMessages(ctx, { projectId, roomId: selected.room.id }, { limit: MESSAGE_PAGE_FIRST })
+    : EMPTY_PAGE;
   return (
     <MessagesView
       projectId={projectId}
       rooms={rooms}
       selected={selected}
-      messages={messages}
+      messages={page.items}
+      hasMore={page.hasMore}
       viewer={{ kind: "pm", userId: ctx.userId, roster }}
     />
   );
@@ -80,9 +82,13 @@ async function participantView(
   });
   const { project, person, rooms } = workspace;
   const selected = pick(rooms, requested);
-  const messages = selected
-    ? await participantMessagingService.listMessages(pctx, { projectId, roomId: selected.room.id }, { limit: PAGE })
-    : [];
+  const page = selected
+    ? await participantMessagingService.listMessages(
+        pctx,
+        { projectId, roomId: selected.room.id },
+        { limit: MESSAGE_PAGE_FIRST },
+      )
+    : EMPTY_PAGE;
   return (
     // `h-screen overflow-hidden` is what `AppShell` gives the PM and what the pane's internal
     // scrolling needs; without it a long history grows the page instead of scrolling itself.
@@ -92,7 +98,8 @@ async function participantView(
         projectId={projectId}
         rooms={rooms}
         selected={selected}
-        messages={messages}
+        messages={page.items}
+        hasMore={page.hasMore}
         viewer={{ kind: "participant", personId: person.id }}
       />
     </div>

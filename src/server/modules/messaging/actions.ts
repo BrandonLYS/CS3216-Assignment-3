@@ -3,8 +3,9 @@
 import type { z } from "zod";
 import { runAction, runParticipantAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
+import { MESSAGE_PAGE_MORE } from "@/shared/domain";
 import { messagingService, participantMessagingService } from "./service";
-import { addParticipantSchema, createRoomSchema, postMessageSchema } from "./validation";
+import { addParticipantSchema, createRoomSchema, olderMessagesSchema, postMessageSchema } from "./validation";
 
 export async function createRoomAction(input: z.input<typeof createRoomSchema> | FormData) {
   const res = await runAction(createRoomSchema, input, (ctx, i) => messagingService.createRoom(ctx, i));
@@ -42,4 +43,22 @@ export async function participantPostMessageAction(input: z.input<typeof postMes
   );
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
+}
+
+/**
+ * Read-only: the pane's only way to reach further back than the page the route rendered
+ * (issue #60). No revalidation - nothing changed - which is what `searchTasksAction` does too.
+ * Each audience enters through the seam it already uses, so a Room the caller is not entitled
+ * to answers exactly as it would for their first page.
+ */
+export async function olderMessagesAction(input: z.input<typeof olderMessagesSchema>) {
+  return runAction(olderMessagesSchema, input, (ctx, { projectId, roomId, before }) =>
+    messagingService.listMessages(ctx, { projectId, roomId }, { before, limit: MESSAGE_PAGE_MORE }),
+  );
+}
+
+export async function participantOlderMessagesAction(input: z.input<typeof olderMessagesSchema>) {
+  return runParticipantAction(olderMessagesSchema, input, (pctx, { projectId, roomId, before }) =>
+    participantMessagingService.listMessages(pctx, { projectId, roomId }, { before, limit: MESSAGE_PAGE_MORE }),
+  );
 }
