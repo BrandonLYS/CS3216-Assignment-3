@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { preload } from "react-dom";
 import { getSession } from "@/server/auth/session";
+import { isPreview } from "@/shared/lib/site-url";
 import {
   LandingCapabilities,
   LandingCta,
@@ -7,13 +9,40 @@ import {
   LandingHero,
   LandingMemory,
   LandingNav,
+  LandingPricing,
   ScrollVideo,
 } from "@/widgets/landing";
 
+const title = "PrismPM - project management with a memory";
+const description =
+  "Keep Tasks, Decisions and Evidence in one workspace. See which Assumptions have broken, understand what changed, and recover the reasoning behind your Project.";
+const socialImage = {
+  url: "/opengraph-image",
+  alt: "PrismPM. Stand above the whole project. Project management with a memory.",
+  width: 1200,
+  height: 630,
+};
+
 export const metadata: Metadata = {
-  title: "PrismPM - project management with a memory",
-  description:
-    "PrismPM records the tasks, milestones and risks you would expect, and underneath them the decisions, the assumptions they rest on and the evidence they came from.",
+  title: { absolute: title },
+  description,
+  alternates: { canonical: "/" },
+  robots: { index: !isPreview, follow: !isPreview },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "PrismPM",
+    title,
+    description,
+    url: "/",
+    images: [socialImage],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: [socialImage],
+  },
 };
 
 /**
@@ -29,16 +58,18 @@ async function isSignedIn() {
 }
 
 export default async function LandingPage() {
+  preload("/landing/prismpm-scroll-poster.jpg", { as: "image", fetchPriority: "high" });
   const signedIn = await isSignedIn();
 
   return (
     <div data-landing className="flex flex-1 flex-col bg-canvas">
       <LandingNav signedIn={signedIn} />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <LandingHero signedIn={signedIn} />
         <ScrollVideo />
         <LandingMemory />
         <LandingCapabilities />
+        <LandingPricing signedIn={signedIn} />
         <LandingCta signedIn={signedIn} />
       </main>
       <LandingFooter />
