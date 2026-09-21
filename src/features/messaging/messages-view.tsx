@@ -44,12 +44,14 @@ function labelOf({ room, participants }: RoomListItem, viewer: MessagesViewer) {
 }
 
 /**
- * The line under a Room's name. A one-to-one Room is already named after its Person, so
- * repeating that name would say the same thing twice.
+ * The line under a Room's name, or nothing when it would only repeat it. A one-to-one Room is
+ * already named after its Person, so the subtitle says what kind of Room it is instead - and
+ * for the Person on the other side of it, whose own name is not the label, that is what the
+ * label already says.
  */
 function subtitleOf({ room, participants }: RoomListItem, viewer: MessagesViewer) {
-  if (!room.name) return "Direct message";
   const rest = others(participants, viewer);
+  if (!room.name) return rest.length ? "Direct message" : null;
   return rest.length ? rest.map((p) => p.name).join(", ") : "No participants yet";
 }
 
@@ -85,6 +87,7 @@ export function MessagesView({
         <ul className="flex-1 overflow-y-auto border-t border-hairline">
           {rooms.map((item) => {
             const active = item.room.id === selected?.room.id;
+            const subtitle = subtitleOf(item, viewer);
             return (
               <li key={item.room.id}>
                 <Link
@@ -96,7 +99,7 @@ export function MessagesView({
                   )}
                 >
                   <span className="truncate text-body-sm text-ink">{labelOf(item, viewer)}</span>
-                  <span className="truncate text-caption text-ink-tertiary">{subtitleOf(item, viewer)}</span>
+                  {subtitle && <span className="truncate text-caption text-ink-tertiary">{subtitle}</span>}
                 </Link>
               </li>
             );
@@ -154,11 +157,13 @@ function Room({
   const mine = (m: RoomMessageRow) =>
     viewer.kind === "pm" ? m.authorUserId === viewer.userId : m.authorPersonId === viewer.personId;
 
+  const subtitle = subtitleOf(item, viewer);
+
   return (
     <>
       <div className="flex shrink-0 items-baseline gap-2 border-b border-hairline px-5 py-3">
         <h2 className="text-body font-medium text-ink">{labelOf(item, viewer)}</h2>
-        <p className="truncate text-caption text-ink-tertiary">{subtitleOf(item, viewer)}</p>
+        {subtitle && <p className="truncate text-caption text-ink-tertiary">{subtitle}</p>}
         {viewer.kind === "pm" && (
           <Button size="sm" className="ml-auto shrink-0" onClick={() => setPeople(true)}>
             <Users className="size-3.5" /> People
