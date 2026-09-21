@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { MessagesSquare, Plus, Send, Users } from "lucide-react";
+import { ArrowUp, MessagesSquare, Plus, Send, Users } from "lucide-react";
 import * as React from "react";
-import { participantPostMessageAction, postMessageAction } from "@/server/modules/messaging/actions";
+import {
+  olderMessagesAction,
+  participantOlderMessagesAction,
+  participantPostMessageAction,
+  postMessageAction,
+} from "@/server/modules/messaging/actions";
 import type { ActionResult } from "@/server/core/action";
 import type { RoomMessageRow, RoomRow } from "@/server/modules/messaging/schema";
 import { fmtDateTime, relative } from "@/shared/lib/dates";
@@ -63,13 +68,16 @@ export function MessagesView({
   rooms,
   selected,
   messages,
+  hasMore,
   viewer,
 }: {
   projectId: string;
   rooms: RoomListItem[];
   selected: RoomListItem | null;
-  /** Newest first, as the keyset page returns them. */
+  /** The newest page, newest first; `Room` merges the older pages it loads into it (#60). */
   messages: RoomMessageRow[];
+  /** Whether the Room has history older than that page. */
+  hasMore: boolean;
   viewer: MessagesViewer;
 }) {
   const [newRoom, setNewRoom] = React.useState(false);
@@ -122,7 +130,14 @@ export function MessagesView({
             }
           />
         ) : (
-          <Room key={selected.room.id} projectId={projectId} item={selected} messages={messages} viewer={viewer} />
+          <Room
+            key={selected.room.id}
+            projectId={projectId}
+            item={selected}
+            messages={messages}
+            hasMore={hasMore}
+            viewer={viewer}
+          />
         )}
       </div>
 
@@ -137,25 +152,62 @@ function Room({
   projectId,
   item,
   messages,
+  hasMore: hasMoreOnServer,
   viewer,
 }: {
   projectId: string;
   item: RoomListItem;
   messages: RoomMessageRow[];
+  hasMore: boolean;
   viewer: MessagesViewer;
 }) {
   const scroller = React.useRef<HTMLDivElement>(null);
   const [people, setPeople] = React.useState(false);
-  // Newest last is the reading order of a chat; the copy keeps the prop array untouched.
-  const ordered = React.useMemo(() => [...messages].reverse(), [messages]);
+  const history = useRoomHistory({ projectId, roomId: item.room.id, page: messages, hasMoreOnServer, viewer });
+  // Newest last is the reading order of a chat; the copy keeps the state array untouched.
+  const ordered = React.useMemo(() => [...history.messages].reverse(), [history.messages]);
 
   // A chat opens at its newest Chat Message, and returns there when one is sent. Keyed on the
   // newest id, not the count: a full page stays 50 rows long, so the count would stop changing.
+  // A prepend does not change it either, which is what stops loading older history from
+  // throwing the reader back to the bottom.
   const newestId = ordered.at(-1)?.id;
   React.useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [item.room.id, newestId]);
+
+  /**
+   * Hold the reader's place across a prepend. The distance from the bottom is the anchor,
+   * measured before the new rows exist and restored in the same commit that adds them.
+   *
+   * `keepInView` is for the button: a history shorter than the pane sits at the bottom with
+   * nothing scrolled, so restoring the distance from the bottom would leave the loaded block
+   * out of sight above the reader and the click would look like it did nothing. Then the
+   * Chat Message they were reading goes to the top of the pane instead.
+   */
+  const anchor = React.useRef<{ distanceFromBottom: number; oldestId: string; keepInView: boolean } | null>(null);
+  const loadOlder = async ({ keepInView = false } = {}) => {
+    const el = scroller.current;
+    const oldest = history.messages.at(-1);
+    if (el && oldest) {
+      anchor.current = { distanceFromBottom: el.scrollHeight - el.scrollTop, oldestId: oldest.id, keepInView };
+    }
+    await history.loadOlder();
+  };
+
+  React.useLayoutEffect(() => {
+    const held = anchor.current;
+    const el = scroller.current;
+    if (!held || !el) return;
+    anchor.current = null;
+    const previouslyOldest = el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(held.oldestId)}"]`);
+    if (held.keepInView && previouslyOldest) {
+      el.scrollTop += previouslyOldest.getBoundingClientRect().top - el.getBoundingClientRect().top;
+      return;
+    }
+    el.scrollTop = el.scrollHeight - held.distanceFromBottom;
+  }, [history.messages]);
 
   const mine = (m: RoomMessageRow) =>
     viewer.kind === "pm" ? m.authorUserId === viewer.userId : m.authorPersonId === viewer.personId;
@@ -181,8 +233,9 @@ function Room({
           // `justify-end` on a full-height column keeps a short history sitting on the
           // composer instead of floating at the top of an empty pane.
           <ol className="flex min-h-full flex-col justify-end gap-3">
+            <Older history={history} scroller={scroller} onLoad={loadOlder} />
             {ordered.map((m) => (
-              <li key={m.id} className="flex gap-2.5">
+              <li key={m.id} data-message-id={m.id} className="flex gap-2.5">
                 <Avatar name={m.authorName} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
@@ -219,6 +272,157 @@ function Room({
         />
       )}
     </>
+  );
+}
+
+type RoomHistory = ReturnType<typeof useRoomHistory>;
+
+/** Newest first, `(createdAt, id)` descending - the order the keyset read returns and pages by. */
+const newestFirst = (a: RoomMessageRow, b: RoomMessageRow) =>
+  b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+
+/**
+ * Union by id. A Chat Message is never edited and never deleted (ADR 0009), so a merge never
+ * has to remove or replace a row, which is what makes this safe to run on every render pass.
+ */
+function merge(current: RoomMessageRow[], incoming: RoomMessageRow[]) {
+  const known = new Set(current.map((m) => m.id));
+  if (incoming.every((m) => known.has(m.id))) return current;
+  const byId = new Map(current.map((m) => [m.id, m]));
+  for (const m of incoming) byId.set(m.id, m);
+  return [...byId.values()].sort(newestFirst);
+}
+
+/**
+ * The history the pane shows: the newest page the route rendered, plus every older page the
+ * reader has pulled in (issue #60).
+ *
+ * The route's page is merged rather than adopted. It is re-rendered whenever a Chat Message is
+ * posted, and it only ever describes the newest 50, so replacing would throw away the older
+ * pages - and, in a Room busy enough to push one out of that window, leave a hole.
+ */
+function useRoomHistory({
+  projectId,
+  roomId,
+  page,
+  hasMoreOnServer,
+  viewer,
+}: {
+  projectId: string;
+  roomId: string;
+  page: RoomMessageRow[];
+  hasMoreOnServer: boolean;
+  viewer: MessagesViewer;
+}) {
+  const [messages, setMessages] = React.useState(page);
+  const [hasMore, setHasMore] = React.useState(hasMoreOnServer);
+  const [loadedOlder, setLoadedOlder] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [seenPage, setSeenPage] = React.useState(page);
+
+  // Adjusting state while rendering, rather than in an effect: React re-runs this component
+  // before touching the DOM, so the merged history is what paints, with no second pass.
+  if (page !== seenPage) {
+    setSeenPage(page);
+    setMessages((current) => merge(current, page));
+    // The prop may narrow this and never widen it: it describes the newest page, so it is
+    // `true` again after every post, while a reader who has reached the first Chat Message of
+    // the Room has nothing left to load.
+    setHasMore((current) => current && hasMoreOnServer);
+  }
+  // One request at a time: the button and the observer call the same function, and the
+  // observer keeps firing while the sentinel is on screen.
+  const inFlight = React.useRef(false);
+  // A Room switch unmounts this; never set state on the way out.
+  const mounted = React.useRef(true);
+
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /**
+   * Fetch the page before the oldest Chat Message on screen. Scrolling is the caller's: it
+   * owns the pane, and holds the reader's place in a layout effect on `messages`.
+   */
+  const loadOlder = React.useCallback(async () => {
+    const oldest = messages.at(-1);
+    if (!oldest || !hasMore || inFlight.current) return;
+    inFlight.current = true;
+    setLoading(true);
+    setError(null);
+    const ask = viewer.kind === "pm" ? olderMessagesAction : participantOlderMessagesAction;
+    try {
+      const res = await ask({ projectId, roomId, before: { createdAt: oldest.createdAt, id: oldest.id } });
+      if (!mounted.current) return;
+      if (!res.ok) {
+        // The button stays, and so does `hasMore`: a failed page must be retryable.
+        setError(res.error);
+        return;
+      }
+      setMessages((current) => merge(current, res.data.items));
+      setHasMore(res.data.hasMore);
+      setLoadedOlder(true);
+    } catch {
+      if (!mounted.current) return;
+      setError("Older messages could not be loaded. Try again.");
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setLoading(false);
+    }
+  }, [hasMore, messages, projectId, roomId, viewer.kind]);
+
+  return { messages, hasMore, loadedOlder, loading, error, loadOlder };
+}
+
+/**
+ * The top of the history: a sentinel that loads the next page as it scrolls into view, the
+ * button that does the same thing deliberately, and the end of the Room when there is one.
+ */
+function Older({
+  history,
+  scroller,
+  onLoad,
+}: {
+  history: RoomHistory;
+  scroller: React.RefObject<HTMLDivElement | null>;
+  onLoad: (opts?: { keepInView?: boolean }) => Promise<void>;
+}) {
+  const { hasMore, loadedOlder, loading, error } = history;
+  const sentinel = React.useRef<HTMLLIElement>(null);
+
+  React.useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !hasMore) return;
+    // Rooted on the scrolling pane, not the viewport: on the Participant's full-screen page a
+    // viewport root would fire merely because the pane itself came into view. A sentinel at
+    // the top of a bottom-anchored list is on screen from the start, so this fires at once and
+    // keeps firing until the pane is full - one page at a time, by the in-flight guard.
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void onLoad();
+      },
+      { root: scroller.current, rootMargin: "150px" },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [hasMore, onLoad, scroller]);
+
+  // Once the reader has pulled a page, say where the history ends. Without it the button
+  // simply vanishes, and "that is everything" looks the same as "that failed".
+  if (!hasMore) {
+    return loadedOlder ? <li className="pb-1 text-center text-caption text-ink-tertiary">Start of the room</li> : null;
+  }
+  return (
+    <li ref={sentinel} className="flex flex-col items-center gap-1 pb-1">
+      <Button size="sm" loading={loading} onClick={() => void onLoad({ keepInView: true })}>
+        <ArrowUp className="size-3.5" /> Load older messages
+      </Button>
+      {error && <p className="text-caption text-tag-red">{error}</p>}
+    </li>
   );
 }
 

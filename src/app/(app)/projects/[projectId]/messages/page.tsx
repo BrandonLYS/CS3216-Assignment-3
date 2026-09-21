@@ -42,6 +42,7 @@ async function pmView(projectId: string, requested: string | undefined) {
       rooms={rooms}
       selected={selected}
       messages={page.items}
+      hasMore={page.hasMore}
       viewer={{ kind: "pm", userId: ctx.userId, roster }}
     />
   );
@@ -98,6 +99,7 @@ async function participantView(
         rooms={rooms}
         selected={selected}
         messages={page.items}
+        hasMore={page.hasMore}
         viewer={{ kind: "participant", personId: person.id }}
       />
     </div>
