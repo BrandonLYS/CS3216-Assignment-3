@@ -171,10 +171,21 @@ function Room({
   // newest id, not the count: a full page stays 50 rows long, so the count would stop changing.
   // A prepend does not change it either, which is what stops loading older history from
   // throwing the reader back to the bottom.
+  //
+  // Applied again on the next frame: on first load the effect runs before the browser has
+  // finished laying the history out, and a single assignment leaves the pane at the top. That
+  // was survivable when the pane only ever held one page; now it means the sentinel below is
+  // on screen at once and the reader is handed the entire Room without asking.
   const newestId = ordered.at(-1)?.id;
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const toNewest = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    toNewest();
+    const frame = requestAnimationFrame(toNewest);
+    return () => cancelAnimationFrame(frame);
   }, [item.room.id, newestId]);
 
   /**
@@ -187,14 +198,39 @@ function Room({
    * Chat Message they were reading goes to the top of the pane instead.
    */
   const anchor = React.useRef<{ distanceFromBottom: number; oldestId: string; keepInView: boolean } | null>(null);
-  const loadOlder = async ({ keepInView = false } = {}) => {
+  const load = history.loadOlder;
+  const oldestId = history.messages.at(-1)?.id;
+  const loadOlder = React.useCallback(
+    async ({ keepInView = false } = {}) => {
+      const el = scroller.current;
+      if (el && oldestId) {
+        anchor.current = { distanceFromBottom: el.scrollHeight - el.scrollTop, oldestId, keepInView };
+      }
+      await load();
+    },
+    [load, oldestId],
+  );
+
+  /**
+   * Scrolling back to the top asks for the next page. A scroll listener rather than an
+   * `IntersectionObserver` on a sentinel: after a prepend the browser keeps `scrollTop`, so
+   * the reader is momentarily at the top of the new block, and the observer - which reports
+   * on the frame that was painted - fires again on that intermediate state and walks the
+   * whole Room in one gesture. A listener reads the position as it is now, after the anchor
+   * below has put the reader back where they were.
+   */
+  React.useEffect(() => {
     const el = scroller.current;
-    const oldest = history.messages.at(-1);
-    if (el && oldest) {
-      anchor.current = { distanceFromBottom: el.scrollHeight - el.scrollTop, oldestId: oldest.id, keepInView };
-    }
-    await history.loadOlder();
-  };
+    if (!el || !history.hasMore) return;
+    // Fires a little before the very top, so the next page is on its way by the time the
+    // reader gets there. The button above stays for the keyboard, and for retrying a page
+    // that failed - which is also when it is on screen long enough to be read.
+    const onScroll = () => {
+      if (el.scrollTop <= 200) void loadOlder();
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [history.hasMore, loadOlder]);
 
   React.useLayoutEffect(() => {
     const held = anchor.current;
@@ -233,7 +269,7 @@ function Room({
           // `justify-end` on a full-height column keeps a short history sitting on the
           // composer instead of floating at the top of an empty pane.
           <ol className="flex min-h-full flex-col justify-end gap-3">
-            <Older history={history} scroller={scroller} onLoad={loadOlder} />
+            <Older history={history} onLoad={loadOlder} />
             {ordered.map((m) => (
               <li key={m.id} data-message-id={m.id} className="flex gap-2.5">
                 <Avatar name={m.authorName} size="sm" />
@@ -379,37 +415,17 @@ function useRoomHistory({
 }
 
 /**
- * The top of the history: a sentinel that loads the next page as it scrolls into view, the
- * button that does the same thing deliberately, and the end of the Room when there is one.
+ * The top of the history: the button that asks for the page before it, and the end of the
+ * Room once there is nothing left. Scrolling back asks for the same thing without the click.
  */
 function Older({
   history,
-  scroller,
   onLoad,
 }: {
   history: RoomHistory;
-  scroller: React.RefObject<HTMLDivElement | null>;
   onLoad: (opts?: { keepInView?: boolean }) => Promise<void>;
 }) {
   const { hasMore, loadedOlder, loading, error } = history;
-  const sentinel = React.useRef<HTMLLIElement>(null);
-
-  React.useEffect(() => {
-    const node = sentinel.current;
-    if (!node || !hasMore) return;
-    // Rooted on the scrolling pane, not the viewport: on the Participant's full-screen page a
-    // viewport root would fire merely because the pane itself came into view. A sentinel at
-    // the top of a bottom-anchored list is on screen from the start, so this fires at once and
-    // keeps firing until the pane is full - one page at a time, by the in-flight guard.
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) void onLoad();
-      },
-      { root: scroller.current, rootMargin: "150px" },
-    );
-    io.observe(node);
-    return () => io.disconnect();
-  }, [hasMore, onLoad, scroller]);
 
   // Once the reader has pulled a page, say where the history ends. Without it the button
   // simply vanishes, and "that is everything" looks the same as "that failed".
@@ -417,7 +433,7 @@ function Older({
     return loadedOlder ? <li className="pb-1 text-center text-caption text-ink-tertiary">Start of the room</li> : null;
   }
   return (
-    <li ref={sentinel} className="flex flex-col items-center gap-1 pb-1">
+    <li className="flex flex-col items-center gap-1 pb-1">
       <Button size="sm" loading={loading} onClick={() => void onLoad({ keepInView: true })}>
         <ArrowUp className="size-3.5" /> Load older messages
       </Button>
