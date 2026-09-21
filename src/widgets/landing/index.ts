@@ -4,5 +4,6 @@ export * from "./landing-footer";
 export * from "./landing-hero";
 export * from "./landing-memory";
 export * from "./landing-nav";
+export * from "./landing-pricing";
 export * from "./product-frame";
 export * from "./scroll-video";

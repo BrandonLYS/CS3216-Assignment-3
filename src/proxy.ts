@@ -2,8 +2,8 @@ import { getSessionCookie } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
 import { PARTICIPANT_COOKIE } from "@/server/auth/participant-cookie";
 
-/** The landing page renders for both states, so it is never redirected. */
-const LANDING = "/";
+/** Public marketing and metadata must also be accessible to anonymous crawlers. */
+const PUBLIC = new Set(["/", "/opengraph-image"]);
 const AUTH = new Set(["/login", "/signup"]);
 
 /**
@@ -18,7 +18,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(getSessionCookie(request));
 
-  if (pathname === LANDING) return NextResponse.next();
+  if (PUBLIC.has(pathname)) return NextResponse.next();
   if (MEMBER_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (AUTH.has(pathname)) {
     // A Participant cookie deliberately does not count here: `/login` is the PM's form, and

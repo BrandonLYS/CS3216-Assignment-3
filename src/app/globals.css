@@ -127,6 +127,10 @@
 
 /* The marketing page is the only screen that scrolls the document, so in-page
    anchors get smooth scrolling there and nowhere else. */
+[data-landing] [id] {
+  scroll-margin-top: 4.5rem;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html:has([data-landing]) {
     scroll-behavior: smooth;

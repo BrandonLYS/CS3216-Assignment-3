@@ -64,15 +64,12 @@ export function ScrollVideo() {
   const progress = useRef(0);
   const [active, setActive] = useState(0);
   const [video, setVideo] = useState<VideoState>("pending");
-  const [narrow, setNarrow] = useState(false);
+  const [loadVideo, setLoadVideo] = useState(false);
+  // Keep every chapter readable without JavaScript; enhance after the media-query check.
+  const [narrow, setNarrow] = useState(true);
 
-  const markReady = useCallback((el: HTMLVideoElement) => {
+  const markReady = useCallback(() => {
     setVideo("ready");
-    // Safari will not seek a video it has never decoded; prime it with a muted tick.
-    void el
-      .play()
-      .then(() => el.pause())
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -81,7 +78,7 @@ export function ScrollVideo() {
     // Loading finishes long before hydration attaches the handlers below, so settle
     // whatever already happened to the element before trusting its events.
     if (el.error || el.networkState === el.NETWORK_NO_SOURCE) setVideo("missing");
-    else if (el.readyState >= el.HAVE_METADATA) markReady(el);
+    else if (el.readyState >= el.HAVE_METADATA) markReady();
   }, [markReady]);
 
   useEffect(() => {
@@ -96,6 +93,12 @@ export function ScrollVideo() {
 
   /** The pinned shot only earns the screen when there is a shot to pin. */
   const cinema = !narrow && video !== "missing";
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!cinema || !el) return;
+    return inView(el, () => setLoadVideo(true));
+  }, [cinema]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -143,6 +146,11 @@ export function ScrollVideo() {
 
     // Only scrub while the stage is on screen; decoding frames off-screen is pure cost.
     const unwatch = inView(section, () => {
+      // Prime Safari only when the film is on screen, never during hero loading.
+      void el
+        .play()
+        .then(() => el.pause())
+        .catch(() => {});
       if (!frame) frame = requestAnimationFrame(tick);
       return stop;
     });
@@ -156,15 +164,15 @@ export function ScrollVideo() {
   const film = (
     <video
       ref={videoRef}
-      src={VIDEO_SRC}
+      src={loadVideo ? VIDEO_SRC : undefined}
       poster={POSTER_SRC}
       muted
       playsInline
       disablePictureInPicture
-      preload="auto"
+      preload={loadVideo ? "auto" : "none"}
       aria-hidden
       className={cn("h-full w-full object-cover", cinema ? "absolute inset-0" : "block aspect-video")}
-      onLoadedMetadata={(event) => markReady(event.currentTarget)}
+      onLoadedMetadata={markReady}
       onError={() => setVideo("missing")}
     />
   );

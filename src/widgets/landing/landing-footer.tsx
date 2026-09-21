@@ -9,7 +9,7 @@ export function LandingFooter() {
           <Logo className="size-4" />
           <span className="text-caption text-ink-subtle">PrismPM - project management with a memory</span>
         </div>
-        <nav className="flex items-center gap-5 text-caption text-ink-subtle">
+        <nav aria-label="Footer navigation" className="flex flex-wrap items-center gap-5 text-caption text-ink-subtle">
           <a href="#how" className="transition-colors hover:text-ink">
             How it works
           </a>
@@ -19,6 +19,9 @@ export function LandingFooter() {
           <Link href="/login" className="transition-colors hover:text-ink">
             Sign in
           </Link>
+          <a href="#pricing" className="transition-colors hover:text-ink">
+            Pricing
+          </a>
         </nav>
       </div>
     </footer>
