@@ -19,15 +19,12 @@ export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const ctx = await ctxForCurrentUser();
-  const [o, { conversation, messages }] = await Promise.all([
-    workspaceOverview(ctx),
-    assistantService.conversation(ctx, null),
-  ]);
+  const [o, assistantDock] = await Promise.all([workspaceOverview(ctx), assistantService.dock(ctx, null)]);
   const dock = (
     <AssistantDock
       projectId={null}
-      conversationId={conversation.id}
-      initialMessages={messages}
+      conversations={assistantDock.conversations}
+      thread={assistantDock.thread}
       configured={getModel() !== null}
     />
   );

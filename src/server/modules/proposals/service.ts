@@ -100,7 +100,9 @@ export const proposalsService = {
       peopleRepo.listByProject(ctx.db, projectId),
       milestonesRepo.listByProject(ctx.db, projectId),
       tasksRepo.listByProject(ctx.db, projectId),
-      conversationsRepo.findOrCreate(ctx.db, ctx.userId, projectId),
+      conversationsRepo
+        .latest(ctx.db, ctx.userId, projectId)
+        .then((c) => c ?? conversationsRepo.create(ctx.db, ctx.userId, projectId)),
     ]);
     const recent = (await messagesRepo.listByConversation(ctx.db, conversation.id)).slice(-12);
     const refs: TraceRefs = {

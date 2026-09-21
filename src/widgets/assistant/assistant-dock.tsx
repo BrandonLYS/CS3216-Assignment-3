@@ -8,48 +8,26 @@ import {
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type UIMessage,
 } from "ai";
-import { ArrowUp, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowUp, History, Loader2, Pin, Sparkles, SquarePen, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useShell } from "@/shared/lib/shell-context";
+import {
+  createConversationAction,
+  grantToolPermissionAction,
+  loadConversationAction,
+  pinConversationAction,
+} from "@/server/modules/assistant/actions";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 import { cn } from "@/shared/lib/cn";
+import { relative } from "@/shared/lib/dates";
 import { Button, Panel, SectionTitle, Textarea } from "@/shared/ui";
 import { LinkedText } from "./linked-text";
+import { ToolCall } from "./tool-call";
 
 const FRIENDLY: Record<string, string> = {
   [ASSISTANT_NOT_CONFIGURED]: "The Assistant is not configured. Set OPENAI_API_KEY to enable it.",
   [ASSISTANT_LIMIT_REACHED]: "You have reached today's Assistant limit. It resets at midnight UTC.",
-};
-
-const TOOL_LABEL: Record<string, string> = {
-  search_decisions: "Searched decisions",
-  get_project_summary: "Read the Project",
-  list_tasks: "Listed Tasks",
-  get_task: "Read a Task",
-  create_task: "Created Task",
-  update_task: "Updated Task",
-  create_milestone: "Created Milestone",
-  update_milestone: "Updated Milestone",
-  delete_task: "Deleted Task",
-  delete_milestone: "Deleted Milestone",
-  update_project: "Updated Project",
-  create_risk: "Logged Risk",
-  update_risk: "Updated Risk",
-  add_comment: "Commented",
-  add_dependency: "Added dependency",
-  remove_dependency: "Removed dependency",
-  list_people: "Listed People",
-  create_person: "Added Person",
-  list_teams: "Listed Teams",
-  list_labels: "Listed Labels",
-  create_label: "Created Label",
-  set_task_labels: "Tagged Task",
-  list_evidence: "Listed Evidence",
-  get_evidence: "Read Evidence",
-  link_evidence: "Linked Evidence",
-  list_projects: "Listed Projects",
-  create_project: "Created Project",
 };
 
 const isPendingCard = (part: UIMessage["parts"][number]) => isToolUIPart(part) && part.state === "approval-requested";
@@ -60,6 +38,9 @@ type ProjectSummary = {
   tasks?: { number?: number; title?: string; status?: string }[];
   risks?: { name?: string }[];
 };
+
+export type ConversationSummary = { id: string; title: string | null; pinned: boolean; updatedAt: Date };
+export type AssistantThread = { conversation: { id: string }; messages: UIMessage[] };
 
 function latestSummary(messages: UIMessage[]): ProjectSummary | null {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -135,10 +116,162 @@ function CurrentState({ messages }: { messages: UIMessage[] }) {
 
 /**
  * Right-side Assistant panel for one Project, or for the dashboard when `projectId` is null
- * (ADR 0007). The shell owns the open state so header buttons and the command palette can
- * toggle it, and it survives the navigation into a Project the Assistant just created.
+ * (ADR 0007). A User keeps as many Conversations per scope as they like: the header opens the
+ * history list and starts new chats; the active thread mounts its own chat state.
  */
 export function AssistantDock({
+  projectId,
+  conversations,
+  thread,
+  configured,
+}: {
+  projectId: string | null;
+  /** The User's Conversations in this scope, pinned first then newest. */
+  conversations: ConversationSummary[];
+  /** The Conversation opened on mount (the latest) with its Messages. */
+  thread: AssistantThread;
+  configured: boolean;
+}) {
+  const { assistantOpen, toggleAssistant } = useShell();
+  const router = useRouter();
+  const [active, setActive] = React.useState<AssistantThread>(thread);
+  const [showHistory, setShowHistory] = React.useState(false);
+  const [menu, setMenu] = React.useState<{ x: number; y: number; c: ConversationSummary } | null>(null);
+  React.useEffect(() => {
+    if (!menu) return;
+    const close = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [menu]);
+
+  if (!assistantOpen) return null;
+
+  const activeTitle = conversations.find((c) => c.id === active.conversation.id)?.title ?? "New chat";
+
+  const newChat = async () => {
+    setShowHistory(false);
+    if (!active.messages.length) return; // already on a fresh chat
+    const res = await createConversationAction({ projectId });
+    if (!res.ok) return console.error(res.error);
+    setActive({ conversation: { id: res.data.id }, messages: [] });
+    router.refresh();
+  };
+  const openChat = async (conversationId: string) => {
+    setShowHistory(false);
+    if (conversationId === active.conversation.id) return;
+    const res = await loadConversationAction({ conversationId });
+    if (!res.ok) return console.error(res.error);
+    setActive({ conversation: { id: conversationId }, messages: res.data.messages });
+  };
+  const pin = async (conversationId: string, pinned: boolean) => {
+    const res = await pinConversationAction({ conversationId, pinned });
+    if (!res.ok) console.error(res.error);
+    router.refresh();
+  };
+
+  return (
+    <aside aria-label="Assistant" className="flex shrink-0 border-l border-hairline bg-surface-1">
+      {showHistory && (
+        <div className="w-56 shrink-0 overflow-y-auto border-r border-hairline px-2 py-3">
+          <p className="px-2 pb-2 text-caption text-ink-subtle">Chats</p>
+          <ul className="flex flex-col gap-0.5">
+            {conversations.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => void openChat(c.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, c });
+                  }}
+                  className={cn(
+                    "w-full rounded-md px-3 py-2 text-left hover:bg-surface-3",
+                    c.id === active.conversation.id && "bg-surface-3",
+                  )}
+                >
+                  <span className="flex items-center gap-1.5 truncate text-body-sm text-ink">
+                    {c.pinned && <Pin className="size-3 shrink-0 text-primary" />}
+                    <span className="truncate">{c.title ?? "New chat"}</span>
+                  </span>
+                  <span className="text-ink-faint block text-caption">{relative(c.updatedAt)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="flex w-96 flex-col">
+        <div className="flex h-11 items-center gap-1 border-b border-hairline px-4">
+          <Sparkles className="size-3.5 shrink-0 text-primary" />
+          <h2 className="text-body-sm font-medium text-ink">Assistant</h2>
+          <span className="text-ink-faint min-w-0 truncate text-caption" title={activeTitle}>
+            {activeTitle}
+          </span>
+          <div className="ml-auto flex items-center gap-0.5">
+            <Button size="icon" variant="ghost" onClick={() => void newChat()} aria-label="New chat">
+              <SquarePen className="size-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setShowHistory((s) => !s)}
+              aria-label="Chat history"
+              aria-expanded={showHistory}
+            >
+              <History className="size-3.5" />
+            </Button>
+            <Button size="icon" variant="ghost" onClick={toggleAssistant} aria-label="Close Assistant">
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+        <ChatPanel
+          key={active.conversation.id}
+          projectId={projectId}
+          conversationId={active.conversation.id}
+          initialMessages={active.messages}
+          configured={configured}
+        />
+      </div>
+      {menu && (
+        <div
+          className="fixed inset-0 z-20"
+          onClick={() => setMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu(null);
+          }}
+        >
+          <Panel
+            role="menu"
+            className="fixed p-1"
+            style={{
+              top: Math.min(menu.y, window.innerHeight - 60),
+              left: Math.min(menu.x, window.innerWidth - 170),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-40 items-center gap-2 rounded px-2 py-1.5 text-left text-body-sm text-ink hover:bg-surface-3"
+              onClick={() => {
+                void pin(menu.c.id, !menu.c.pinned);
+                setMenu(null);
+              }}
+            >
+              <Pin className="text-ink-faint size-3.5" />
+              {menu.c.pinned ? "Unpin chat" : "Pin chat"}
+            </button>
+          </Panel>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/** One Conversation's chat state: messages, streaming, approvals, composer. */
+function ChatPanel({
   projectId,
   conversationId,
   initialMessages,
@@ -149,13 +282,12 @@ export function AssistantDock({
   initialMessages: UIMessage[];
   configured: boolean;
 }) {
-  const { assistantOpen, toggleAssistant } = useShell();
   const router = useRouter();
   const [input, setInput] = React.useState("");
   const { messages, sendMessage, addToolApprovalResponse, status, error } = useChat({
     id: conversationId,
     messages: initialMessages,
-    transport: new DefaultChatTransport({ api: "/api/assistant/chat", body: { projectId } }),
+    transport: new DefaultChatTransport({ api: "/api/assistant/chat", body: { conversationId } }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
     onFinish: ({ message }) => {
       const createdId = message.parts
@@ -174,25 +306,23 @@ export function AssistantDock({
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages, status]);
 
-  if (!assistantOpen) return null;
-
   const submit = () => {
     const text = input.trim();
     if (!text || busy || pendingCard) return;
     void sendMessage({ text });
     setInput("");
   };
+  // Grant first so the resumed turn (auto-sent on response) already sees the permission.
+  const alwaysAllow = async (approvalId: string, toolName: string) => {
+    const res = await grantToolPermissionAction({ projectId, toolName });
+    if (!res.ok) console.error(res.error);
+    router.refresh();
+    void addToolApprovalResponse({ id: approvalId, approved: true });
+  };
   const notice = !configured ? FRIENDLY[ASSISTANT_NOT_CONFIGURED] : error ? friendly(error) : null;
 
   return (
-    <aside aria-label="Assistant" className="flex w-96 shrink-0 flex-col border-l border-hairline bg-surface-1">
-      <div className="flex h-11 items-center gap-2 border-b border-hairline px-4">
-        <Sparkles className="size-3.5 text-primary" />
-        <h2 className="text-body-sm font-medium text-ink">Assistant</h2>
-        <Button size="icon" variant="ghost" className="ml-auto" onClick={toggleAssistant} aria-label="Close Assistant">
-          <X className="size-3.5" />
-        </Button>
-      </div>
+    <>
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {messages.length === 0 && !notice && (
           <p className="py-6 text-center text-caption text-ink-subtle">
@@ -216,6 +346,7 @@ export function AssistantDock({
                     key={i}
                     part={part}
                     onAnswer={(id, approved) => void addToolApprovalResponse({ id, approved })}
+                    onAlwaysAllow={alwaysAllow}
                   />
                 ))}
               </div>
@@ -271,7 +402,7 @@ export function AssistantDock({
           <ArrowUp className="size-3.5" />
         </Button>
       </form>
-    </aside>
+    </>
   );
 }
 
@@ -282,66 +413,13 @@ function friendly(error: Error) {
 function Part({
   part,
   onAnswer,
+  onAlwaysAllow,
 }: {
   part: UIMessage["parts"][number];
   onAnswer: (approvalId: string, approved: boolean) => void;
+  onAlwaysAllow: (approvalId: string, toolName: string) => Promise<void>;
 }) {
   if (part.type === "text") return <LinkedText text={part.text} />;
   if (!isToolUIPart(part)) return null;
-  if (part.state === "approval-requested") {
-    return <ConfirmCard approvalId={part.approval.id} reason={part.approval.requestReason} onAnswer={onAnswer} />;
-  }
-  const name = getToolName(part);
-  const label = TOOL_LABEL[name] ?? name;
-  if (part.state === "output-denied" || (part.state === "approval-responded" && !part.approval.approved)) {
-    return <p className="my-0.5 text-caption text-ink-subtle">Cancelled: {label.toLowerCase()}</p>;
-  }
-  const done = part.state === "output-available";
-  const failed = part.state === "output-error" || (done && isErrorResult(part.output));
-  const target = done ? entityLabel(part.output) : null;
-  return (
-    <p className="my-0.5 flex items-center gap-1.5 text-caption text-ink-subtle">
-      {done || failed ? (
-        <span className={cn("size-1.5 rounded-full", failed ? "bg-tag-red" : "bg-tag-green")} />
-      ) : (
-        <Loader2 className="size-3 animate-spin" />
-      )}
-      {failed ? `${label} failed` : label}
-      {target && <span className="truncate text-ink">{target}</span>}
-    </p>
-  );
-}
-
-const isErrorResult = (v: unknown): v is { error: string } => typeof v === "object" && v !== null && "error" in v;
-
-function entityLabel(v: unknown) {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v as { title?: string; name?: string; number?: number };
-  const text = o.title ?? o.name;
-  return text ? (o.number ? `#${o.number} ${text}` : text) : null;
-}
-
-/** Destructive or Project-level tool call waiting for the User (ADR 0007). Only Confirm runs it. */
-function ConfirmCard({
-  approvalId,
-  reason,
-  onAnswer,
-}: {
-  approvalId: string;
-  reason?: string;
-  onAnswer: (approvalId: string, approved: boolean) => void;
-}) {
-  return (
-    <div role="group" aria-label="Confirm" className="my-1 panel border-hairline-strong bg-surface-2 p-3">
-      <p className="text-body-sm text-ink">{reason ?? "Confirm this change?"}</p>
-      <div className="mt-3 flex justify-end gap-2">
-        <Button size="sm" onClick={() => onAnswer(approvalId, false)}>
-          Cancel
-        </Button>
-        <Button size="sm" variant="danger" onClick={() => onAnswer(approvalId, true)}>
-          Confirm
-        </Button>
-      </div>
-    </div>
-  );
+  return <ToolCall part={part} onAnswer={onAnswer} onAlwaysAllow={onAlwaysAllow} />;
 }

@@ -1,6 +1,7 @@
 import { tool, type ToolApprovalConfiguration, type ToolSet } from "ai";
 import type { Ctx } from "@/server/core/context";
 import { DomainError } from "@/server/core/errors";
+import { toolPermissionsRepo } from "./repository";
 import type { ToolDef } from "./tools";
 
 /** Convert service results to plain JSON so the AI SDK's ModelMessage schema accepts them. */
@@ -40,20 +41,23 @@ export function toAiTools(ctx: Ctx, defs: ToolDef[], scope?: { projectId: string
 }
 
 /**
- * `streamText` approval policy: tools flagged `requiresConfirmation` stop at a card whose text
- * comes from the tool's `describe`; everything else runs straight away.
+ * `streamText` approval policy: every write tool (`mutates`) stops at an approval card unless the
+ * User already always-allowed it in this scope — the grant is then applied automatically (ADR 0011).
+ * The card's text comes from the tool's `describe` when it has one. Read tools run straight away.
  */
-export function toolApprovalFor(
+export async function toolApprovalFor(
   ctx: Ctx,
   defs: ToolDef[],
   scope?: { projectId: string },
-): ToolApprovalConfiguration<ToolSet, never> {
+): Promise<ToolApprovalConfiguration<ToolSet, never>> {
+  const granted = new Set(await toolPermissionsRepo.listToolNames(ctx.db, ctx.userId, scope?.projectId ?? null));
   return Object.fromEntries(
     defs
-      .filter((d) => d.requiresConfirmation)
+      .filter((d) => d.mutates)
       .map((def) => [
         def.name,
         async (input: Record<string, unknown>) => {
+          if (granted.has(def.name)) return { type: "approved" as const, reason: "Always allowed in this scope" };
           const full = scope && "projectId" in def.input.shape ? { ...input, projectId: scope.projectId } : input;
           try {
             return { type: "user-approval" as const, reason: await def.describe?.(ctx, full) };

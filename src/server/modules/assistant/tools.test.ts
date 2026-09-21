@@ -5,6 +5,7 @@ import { activityRepo } from "@/server/modules/activity/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { toAiTools, toolApprovalFor } from "./ai-tools";
+import { assistantService } from "./service";
 import { ASSISTANT_TOOLS, MCP_TOOLS, PROJECT_TOOLS, WORKSPACE_TOOLS, findTool } from "./tools";
 
 let ctx: Ctx;
@@ -308,12 +309,15 @@ describe("toAiTools", () => {
     expect(out).toMatchObject({ error: expect.stringContaining("not found") });
   });
 
-  it("asks for User approval only on the flagged tools", async () => {
-    const approval = toolApprovalFor(ctx, ASSISTANT_TOOLS, { projectId }) as Record<
-      string,
-      (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>
-    >;
-    expect(Object.keys(approval).sort()).toEqual(["delete_milestone", "delete_task", "update_project"]);
+  type ApprovalMap = Record<string, (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>>;
+
+  it("asks for User approval on every write tool, never on read tools", async () => {
+    const approval = (await toolApprovalFor(ctx, ASSISTANT_TOOLS, { projectId })) as ApprovalMap;
+    const writes = ASSISTANT_TOOLS.filter((t) => t.mutates)
+      .map((t) => t.name)
+      .sort();
+    expect(Object.keys(approval).sort()).toEqual(writes);
+    expect(writes).not.toContain("list_tasks");
     const status = await approval.update_project!({ key: "NEW", description: null }, {});
     expect(status).toEqual({
       type: "user-approval",
@@ -321,11 +325,52 @@ describe("toAiTools", () => {
     });
   });
 
+  it("auto-approves a tool the User always-allowed, scoped to that Project", async () => {
+    const other = (await makeProject(ctx, "OTH")).id;
+    await assistantService.grantPermission(ctx, projectId, "create_task");
+    expect(await assistantService.permissions(ctx, projectId)).toEqual(["create_task"]);
+
+    const approval = (await toolApprovalFor(ctx, PROJECT_TOOLS, { projectId })) as ApprovalMap;
+    expect(await approval.create_task!({ title: "x" }, {})).toEqual({
+      type: "approved",
+      reason: "Always allowed in this scope",
+    });
+    expect((await approval.update_task!({ id: "x" }, {})).type).toBe("user-approval");
+
+    const elsewhere = (await toolApprovalFor(ctx, PROJECT_TOOLS, { projectId: other })) as ApprovalMap;
+    expect((await elsewhere.create_task!({ title: "x" }, {})).type).toBe("user-approval");
+
+    await assistantService.revokePermission(ctx, projectId, "create_task");
+    expect(await assistantService.permissions(ctx, projectId)).toEqual([]);
+  });
+
+  it("rejects grants for read tools and unknown names", async () => {
+    await expect(assistantService.grantPermission(ctx, projectId, "list_tasks")).rejects.toThrow("write tools");
+    await expect(assistantService.grantPermission(ctx, projectId, "nonsense")).rejects.toThrow("write tools");
+  });
+
+  it("grants and revokes several tools at once", async () => {
+    await assistantService.setPermissions(ctx, projectId, ["create_task", "update_task"], true);
+    expect(await assistantService.permissions(ctx, projectId)).toEqual(["create_task", "update_task"]);
+    await assistantService.setPermissions(ctx, projectId, ["update_task"], false);
+    expect(await assistantService.permissions(ctx, projectId)).toEqual(["create_task"]);
+    await expect(assistantService.setPermissions(ctx, projectId, ["list_tasks"], true)).rejects.toThrow("write tools");
+    await assistantService.setPermissions(ctx, projectId, ["create_task"], false);
+  });
+
+  it("lists every write tool in the settings permission groups", async () => {
+    const { PROJECT_TOOL_GROUPS, WORKSPACE_TOOL_GROUPS } = await import("@/shared/lib/assistant-tools");
+    const grouped = [...PROJECT_TOOL_GROUPS, ...WORKSPACE_TOOL_GROUPS]
+      .flatMap((g) => g.tools.map((t) => t.name))
+      .sort();
+    const writes = ASSISTANT_TOOLS.filter((t) => t.mutates)
+      .map((t) => t.name)
+      .sort();
+    expect(grouped).toEqual(writes);
+  });
+
   it("denies instead of failing the turn when the target of a confirmation no longer exists", async () => {
-    const approval = toolApprovalFor(ctx, ASSISTANT_TOOLS) as Record<
-      string,
-      (input: unknown, o: unknown) => Promise<{ type: string; reason?: string }>
-    >;
+    const approval = (await toolApprovalFor(ctx, ASSISTANT_TOOLS)) as ApprovalMap;
     const status = await approval.delete_task!({ id: "00000000-0000-0000-0000-000000000000" }, {});
     expect(status).toEqual({ type: "denied", reason: "Task not found" });
   });

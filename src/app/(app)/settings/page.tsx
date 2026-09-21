@@ -1,15 +1,22 @@
 import { ctxForCurrentUser } from "@/server/core/action";
 import { apiTokensService } from "@/server/modules/api-tokens/service";
+import { assistantService } from "@/server/modules/assistant/service";
 import { memoryService } from "@/server/modules/memory/service";
+import { WORKSPACE_TOOL_GROUPS } from "@/shared/lib/assistant-tools";
 import { PageHeader, SectionTitle } from "@/shared/ui";
 import { MemoryEditor } from "@/features/memory/memory-editor";
 import { ApiTokens } from "@/features/settings/api-tokens";
+import { AssistantPermissions } from "@/features/settings/assistant-permissions";
 
 export const metadata = { title: "Settings" };
 
 export default async function UserSettingsPage() {
   const ctx = await ctxForCurrentUser();
-  const [versions, tokens] = await Promise.all([memoryService.versions(ctx, null), apiTokensService.list(ctx)]);
+  const [versions, tokens, permissions] = await Promise.all([
+    memoryService.versions(ctx, null),
+    apiTokensService.list(ctx),
+    assistantService.permissions(ctx, null),
+  ]);
   const endpoint = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/api/mcp`;
   return (
     <>
@@ -31,6 +38,14 @@ export default async function UserSettingsPage() {
               placeholder="Always assign new tasks to me. Default to two-week milestones. Keep summaries short."
               hint="Markdown. Roughly 2,000 tokens at most."
             />
+            <div>
+              <h3 className="text-body-sm font-medium text-ink">Dashboard permissions</h3>
+              <p className="mt-1 text-caption text-ink-subtle">
+                Write tools the Assistant may run on the dashboard without asking. Project tools are switched per
+                Project under that Project&apos;s settings.
+              </p>
+            </div>
+            <AssistantPermissions projectId={null} groups={WORKSPACE_TOOL_GROUPS} permissions={permissions} />
           </section>
 
           <section className="flex flex-col gap-4">

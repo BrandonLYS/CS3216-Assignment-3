@@ -1,6 +1,7 @@
 import {
   convertToModelMessages,
   createUIMessageStreamResponse,
+  generateId,
   stepCountIs,
   streamText,
   toUIMessageStream,
@@ -26,18 +27,21 @@ export const maxDuration = 60;
 type ValidateTools = Parameters<typeof safeValidateUIMessages>[0]["tools"];
 
 // `messages` gets its real check from safeValidateUIMessages against the bound tools below.
-const bodySchema = z.object({ projectId: z.string().nullable(), messages: z.array(z.unknown()) });
+// The Conversation carries the scope: projectId on its row, null = dashboard.
+const bodySchema = z.object({ conversationId: z.string().min(1), messages: z.array(z.unknown()) });
 
 export async function POST(req: Request) {
   const model = getModel();
   if (!model) return new Response(ASSISTANT_NOT_CONFIGURED, { status: 503 });
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return new Response("Bad request", { status: 400 });
-  const { projectId } = parsed.data;
+  const { conversationId } = parsed.data;
 
   const ctx = { ...(await ctxForCurrentUser()), via: "assistant" as const };
   const { maxSteps, dailyTurnCap } = assistantConfig();
   try {
+    const conversation = await assistantService.getConversation(ctx, conversationId);
+    const projectId = conversation.projectId;
     const scope = projectId ? { projectId } : undefined;
     const tools = toAiTools(ctx, scope ? PROJECT_TOOLS : WORKSPACE_TOOLS, scope);
     const valid = await safeValidateUIMessages<UIMessage>({
@@ -48,7 +52,6 @@ export async function POST(req: Request) {
     const messages = valid.data;
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
-    const { conversation } = await assistantService.conversation(ctx, projectId);
     capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
     const [profile, workingMemory] = await Promise.all([
       memoryService.current(ctx, null),
@@ -64,7 +67,7 @@ export async function POST(req: Request) {
       system,
       messages: await convertToModelMessages(messages),
       tools,
-      toolApproval: scope ? toolApprovalFor(ctx, PROJECT_TOOLS, scope) : undefined,
+      toolApproval: await toolApprovalFor(ctx, scope ? PROJECT_TOOLS : WORKSPACE_TOOLS, scope),
       // Signs approval requests so a client cannot forge an "approved" response.
       experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
@@ -78,6 +81,9 @@ export async function POST(req: Request) {
       stream: toUIMessageStream({
         stream: result.stream,
         originalMessages: messages,
+        // Gives the response message a stable id so a turn paused for approval continues the same
+        // row on resubmit instead of saving an id-less message plus a duplicate (ADR 0011).
+        generateMessageId: generateId,
         onEnd: async ({ messages: all }) => {
           await assistantService.saveMessages(ctx, conversation.id, all).then(
             () => markSaved(true),

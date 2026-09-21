@@ -14,7 +14,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
     if (e instanceof DomainError) notFound();
     throw e;
   });
-  const { conversation, messages } = await assistantService.conversation(ctx, projectId);
+  const dock = await assistantService.dock(ctx, projectId);
   return (
     <>
       <ProjectHeader project={project} />
@@ -22,8 +22,8 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
         <AssistantDock
           projectId={projectId}
-          conversationId={conversation.id}
-          initialMessages={messages}
+          conversations={dock.conversations}
+          thread={dock.thread}
           configured={getModel() !== null}
         />
       </div>

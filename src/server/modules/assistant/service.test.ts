@@ -21,7 +21,7 @@ const msg = (id: string, role: UIMessage["role"], text: string): UIMessage => ({
 });
 
 describe("assistantService conversations", () => {
-  it("creates one Conversation per User per Project and returns the same one again", async () => {
+  it("returns the latest Conversation in a scope, creating one on first open", async () => {
     const a = await assistantService.conversation(ctx, projectId);
     const b = await assistantService.conversation(ctx, projectId);
     expect(a.conversation.id).toBe(b.conversation.id);
@@ -76,5 +76,49 @@ describe("assistantService conversations", () => {
   it("refuses a Project the User does not own", async () => {
     const stranger = await makeCtx();
     await expect(assistantService.conversation(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("creates additional Conversations and lists them newest first", async () => {
+    const before = await assistantService.dock(ctx, projectId);
+    const extra = await assistantService.createConversation(ctx, projectId);
+    const dock = await assistantService.dock(ctx, projectId);
+    expect(dock.conversations.length).toBe(before.conversations.length + 1);
+    expect(dock.conversations[0]?.id).toBe(extra.id);
+    expect(dock.thread.conversation.id).toBe(extra.id);
+    expect(dock.thread.messages).toEqual([]);
+  });
+
+  it("loads a Conversation by id and titles it from the first user message", async () => {
+    const c = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, c.id, [msg("t1", "user", "summarise the risks")]);
+    const thread = await assistantService.thread(ctx, c.id);
+    expect(thread.messages.map((m) => m.id)).toEqual(["t1"]);
+    const listed = (await assistantService.dock(ctx, projectId)).conversations.find((x) => x.id === c.id);
+    expect(listed?.title).toBe("summarise the risks");
+    const stranger = await makeCtx();
+    await expect(assistantService.thread(stranger, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("pins Conversations to the top and prunes empty ones", async () => {
+    const first = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, first.id, [msg("x1", "user", "thread one")]);
+    const empty = await assistantService.createConversation(ctx, projectId);
+    const pinnedEmpty = await assistantService.createConversation(ctx, projectId);
+    await assistantService.pinConversation(ctx, pinnedEmpty.id, true);
+    const latest = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, latest.id, [msg("x2", "user", "thread two")]);
+
+    const dock = await assistantService.dock(ctx, projectId);
+    expect(dock.conversations[0]?.id).toBe(pinnedEmpty.id); // pinned sorts first
+    expect(dock.conversations[0]?.pinned).toBe(true);
+    expect(dock.thread.conversation.id).toBe(latest.id); // but the latest still opens
+    expect(dock.conversations.map((c) => c.id)).not.toContain(empty.id); // empty pruned
+
+    await assistantService.pinConversation(ctx, pinnedEmpty.id, false);
+    const after = await assistantService.dock(ctx, projectId);
+    expect(after.conversations.map((c) => c.id)).not.toContain(pinnedEmpty.id); // unpinned + empty -> pruned
+
+    const stranger = await makeCtx();
+    await expect(assistantService.pinConversation(stranger, first.id, true)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
