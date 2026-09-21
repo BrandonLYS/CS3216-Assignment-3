@@ -1,8 +1,9 @@
 import type { UIMessage } from "ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
-import { ForbiddenError } from "@/server/core/errors";
+import { ForbiddenError, NotFoundError } from "@/server/core/errors";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
+import { messagesRepo } from "./repository";
 import { assistantService } from "./service";
 
 let ctx: Ctx;
@@ -97,6 +98,9 @@ describe("assistantService conversations", () => {
     expect(listed?.title).toBe("summarise the risks");
     const stranger = await makeCtx();
     await expect(assistantService.thread(stranger, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+    // A project Conversation cannot be resumed through the dashboard scope, or vice versa.
+    await expect(assistantService.thread(ctx, c.id, null)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(assistantService.thread(ctx, c.id, projectId)).resolves.toBeDefined();
   });
 
   it("pins Conversations to the top and prunes empty ones", async () => {
@@ -122,6 +126,25 @@ describe("assistantService conversations", () => {
     await expect(assistantService.pinConversation(stranger, first.id, true)).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  it("re-scopes a Conversation between a Project and overall, for the owner only", async () => {
+    const c = await assistantService.createConversation(ctx, null);
+    const other = (await makeProject(ctx, "SCP")).id;
+
+    await assistantService.setScope(ctx, c.id, projectId);
+    expect((await assistantService.getConversation(ctx, c.id)).projectId).toBe(projectId);
+
+    await assistantService.setScope(ctx, c.id, other);
+    expect((await assistantService.getConversation(ctx, c.id)).projectId).toBe(other);
+
+    await assistantService.setScope(ctx, c.id, null);
+    expect((await assistantService.getConversation(ctx, c.id)).projectId).toBeNull();
+
+    const stranger = await makeCtx();
+    const foreign = (await makeProject(stranger, "FRN")).id;
+    await expect(assistantService.setScope(ctx, c.id, foreign)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(assistantService.setScope(stranger, c.id, projectId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
   it("deletes a Conversation with its Messages, only for the owner", async () => {
     const c = await assistantService.createConversation(ctx, projectId);
     await assistantService.saveMessages(ctx, c.id, [msg("d1", "user", "to be deleted")]);
@@ -129,5 +152,37 @@ describe("assistantService conversations", () => {
     await expect(assistantService.deleteConversation(stranger, c.id)).rejects.toBeInstanceOf(ForbiddenError);
     await assistantService.deleteConversation(ctx, c.id);
     await expect(assistantService.thread(ctx, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe("assistantService.library", () => {
+  it("returns Conversations from every scope with their projectId", async () => {
+    const projectConvo = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, projectConvo.id, [msg("l1", "user", "project thread")]);
+    const dashConvo = await assistantService.createConversation(ctx, null);
+    await assistantService.saveMessages(ctx, dashConvo.id, [msg("l2", "user", "dashboard thread")]);
+
+    const byId = new Map((await assistantService.library(ctx)).map((c) => [c.id, c]));
+    expect(byId.get(projectConvo.id)?.projectId).toBe(projectId);
+    expect(byId.get(dashConvo.id)?.projectId).toBeNull();
+  });
+
+  it("prunes empty non-pinned Conversations but keeps keepId", async () => {
+    const empty = await assistantService.createConversation(ctx, projectId);
+    // keepId first: once pruned the row is gone, so it must survive this call.
+    const kept = (await assistantService.library(ctx, empty.id)).map((c) => c.id);
+    expect(kept).toContain(empty.id);
+    const after = (await assistantService.library(ctx)).map((c) => c.id);
+    expect(after).not.toContain(empty.id);
+  });
+
+  it("backfills a title from the first user Message", async () => {
+    const c = await assistantService.createConversation(ctx, null);
+    // Insert directly so saveMessages does not set the title first - this exercises the backfill.
+    await messagesRepo.upsertMany(ctx.db, [
+      { id: "b1", conversationId: c.id, role: "user", parts: [{ type: "text", text: "name me from this" }] },
+    ]);
+    const listed = (await assistantService.library(ctx)).find((x) => x.id === c.id);
+    expect(listed?.title).toBe("name me from this");
   });
 });

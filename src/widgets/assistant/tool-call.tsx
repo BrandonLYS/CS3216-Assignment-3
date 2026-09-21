@@ -33,6 +33,7 @@ export const TOOL_LABEL: Record<string, string> = {
   get_evidence: "Read Evidence",
   link_evidence: "Linked Evidence",
   list_projects: "Listed Projects",
+  open_project: "Opened Project",
   create_project: "Created Project",
 };
 

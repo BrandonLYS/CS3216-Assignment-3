@@ -3,6 +3,7 @@ import type { Ctx } from "@/server/core/context";
 import { ForbiddenError } from "@/server/core/errors";
 import { activityRepo } from "@/server/modules/activity/service";
 import { evidenceService } from "@/server/modules/evidence/service";
+import { projectsService } from "@/server/modules/projects/service";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { toAiTools, toolApprovalFor } from "./ai-tools";
 import { assistantService } from "./service";
@@ -20,9 +21,35 @@ afterAll(closeDb);
 const run = (name: string, input: Record<string, unknown>, c: Ctx = ctx) =>
   findTool(name).handler(c, findTool(name).input.parse(input));
 
+describe("open_project", () => {
+  it("resolves a Project by name and attaches the Conversation to it", async () => {
+    const conv = await assistantService.createConversation(ctx, null);
+    const res = (await run("open_project", { name: "AST", conversationId: conv.id })) as {
+      id: string;
+      attachedConversation: boolean;
+    };
+    expect(res).toMatchObject({ id: projectId, attachedConversation: true });
+    const dock = await assistantService.dock(ctx, projectId);
+    expect(dock.conversations.map((c) => c.id)).toContain(conv.id);
+    const ws = await assistantService.dock(ctx, null);
+    expect(ws.conversations.map((c) => c.id)).not.toContain(conv.id);
+  });
+
+  it("returns matches when the name is ambiguous and errors when there is none", async () => {
+    const other = await makeProject(ctx, "AST2");
+    const res = (await run("open_project", { name: "ast" })) as { error: string; matches: { id: string }[] };
+    expect(res.error).toMatch(/more than one/i);
+    expect(res.matches.map((m) => m.id).sort()).toEqual([projectId, other.id].sort());
+    await expect(run("open_project", { name: "no such project" })).rejects.toThrow();
+    const stranger = await makeCtx();
+    await expect(run("open_project", { id: projectId }, stranger)).rejects.toThrow();
+    await projectsService.delete(ctx, other.id);
+  });
+});
+
 describe("assistant tool registry", () => {
   it("exposes the v1 tools by name", () => {
-    expect(WORKSPACE_TOOLS.map((t) => t.name).sort()).toEqual(["create_project", "list_projects"]);
+    expect(WORKSPACE_TOOLS.map((t) => t.name).sort()).toEqual(["create_project", "list_projects", "open_project"]);
     expect(ASSISTANT_TOOLS).toHaveLength(PROJECT_TOOLS.length + WORKSPACE_TOOLS.length);
     expect(PROJECT_TOOLS.map((t) => t.name).sort()).toEqual([
       "add_comment",

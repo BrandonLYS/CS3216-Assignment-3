@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Ctx } from "@/server/core/context";
-import { NotFoundError } from "@/server/core/errors";
+import { NotFoundError, ValidationError } from "@/server/core/errors";
 import { hexColor } from "@/server/core/validation";
 import { commentsService } from "@/server/modules/comments/service";
 import { createCommentSchema } from "@/server/modules/comments/validation";
@@ -304,12 +304,57 @@ export const WORKSPACE_TOOLS: ToolDef[] = [
     },
   }),
   defineTool({
+    name: "open_project",
+    description:
+      "Open one of the User's Projects by id or (part of) its name. The whole Conversation - history included - moves into that Project and the app navigates there, so following messages act inside the Project. Call this before serving a request about a Project's Tasks, Milestones, Risks, People or Evidence.",
+    input: z.object({
+      // Bound by the chat route, absent under MCP (which has no Conversation to attach).
+      conversationId: z.string().optional(),
+      id: z.string().optional(),
+      name: z.string().optional(),
+    }),
+    handler: async (ctx, input) => {
+      const projects = await projectsService.list(ctx);
+      let project = input.id ? projects.find((p) => p.id === input.id) : undefined;
+      if (!project && input.name) {
+        const q = input.name.toLowerCase();
+        const exact = projects.filter((p) => p.name.toLowerCase() === q);
+        const hits = exact.length ? exact : projects.filter((p) => p.name.toLowerCase().includes(q));
+        if (hits.length === 1) project = hits[0];
+        else if (!hits.length) throw new NotFoundError(`No Project matches "${input.name}"`);
+        else
+          return {
+            error: "More than one Project matches - call open_project again with the right id.",
+            matches: hits.map((p) => ({ id: p.id, key: p.key, name: p.name })),
+          };
+      }
+      if (!project) throw new ValidationError("open_project needs a Project id or name");
+      if (input.conversationId) {
+        const { assistantService } = await import("./service");
+        await assistantService.attachToProject(ctx, input.conversationId, project.id);
+      }
+      return {
+        id: project.id,
+        key: project.key,
+        name: project.name,
+        attachedConversation: Boolean(input.conversationId),
+      };
+    },
+  }),
+  defineTool({
     name: "create_project",
     description:
-      "Create a Project. key is 2 to 6 letters or digits starting with a letter (e.g. WEB); dates are YYYY-MM-DD.",
-    input: createProjectSchema,
+      "Create a Project. key is 2 to 6 letters or digits starting with a letter (e.g. WEB); dates are YYYY-MM-DD. The Conversation moves into the new Project and the app navigates there.",
+    input: createProjectSchema.extend({ conversationId: z.string().optional() }),
     mutates: true,
-    handler: (ctx, input) => projectsService.create(ctx, input),
+    handler: async (ctx, { conversationId, ...input }) => {
+      const project = await projectsService.create(ctx, input);
+      if (conversationId) {
+        const { assistantService } = await import("./service");
+        await assistantService.attachToProject(ctx, conversationId, project.id);
+      }
+      return project;
+    },
   }),
 ];
 

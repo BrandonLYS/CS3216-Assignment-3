@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import type { Ctx } from "@/server/core/context";
-import { ForbiddenError, ValidationError } from "@/server/core/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { conversationsRepo, messagesRepo, toolPermissionsRepo } from "./repository";
 import { ASSISTANT_TOOLS } from "./tools";
@@ -47,6 +47,39 @@ export const assistantService = {
     };
   },
 
+  /**
+   * Every Conversation the User owns across all scopes, pinned first then newest - the
+   * ChatGPT-style index the dock and the /assistant page group by Project. `keepId` is the
+   * Conversation currently open in the caller, so it survives the empty-Conversation prune.
+   */
+  library: async (ctx: Ctx, keepId?: string) => {
+    let conversations = await conversationsRepo.listAll(ctx.db, ctx.userId);
+    // Empty Conversations are litter, not history: drop any that are not open or pinned.
+    const pruned = await conversationsRepo.pruneAllEmpty(ctx.db, ctx.userId, keepId ? [keepId] : []);
+    if (pruned.length) {
+      const gone = new Set(pruned.map((r) => r.id));
+      conversations = conversations.filter((c) => !gone.has(c.id));
+    }
+    // Backfill titles for Conversations saved before titling: first user Message, persisted so it is a one-off cost.
+    conversations = await Promise.all(
+      conversations.map(async (c) => {
+        if (c.title) return c;
+        const text = await messagesRepo.firstUserText(ctx.db, c.id);
+        if (!text) return c;
+        const title = text.slice(0, 80);
+        await conversationsRepo.setTitle(ctx.db, c.id, title);
+        return { ...c, title };
+      }),
+    );
+    return conversations.map(({ id, title, pinned, updatedAt, projectId }) => ({
+      id,
+      title,
+      pinned,
+      updatedAt,
+      projectId,
+    }));
+  },
+
   /** The User's most recent Conversation in a scope, or their dashboard one when `projectId` is null. */
   conversation: async (ctx: Ctx, projectId: string | null) => {
     if (projectId) await assertOwnsProject(ctx.db, ctx.userId, projectId);
@@ -57,9 +90,14 @@ export const assistantService = {
     return { conversation, messages: rows.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage) };
   },
 
-  /** One Conversation the User owns, with its Messages oldest first. */
-  thread: async (ctx: Ctx, conversationId: string) => {
+  /**
+   * One Conversation the User owns, with its Messages oldest first. When `projectId` is given it
+   * must match the Conversation's scope, so a dock can only resume chats that belong to it.
+   */
+  thread: async (ctx: Ctx, conversationId: string, projectId?: string | null) => {
     const conversation = await assistantService.getConversation(ctx, conversationId);
+    if (projectId !== undefined && conversation.projectId !== projectId)
+      throw new NotFoundError("Conversation not found in this scope");
     const rows = await messagesRepo.listByConversation(ctx.db, conversation.id);
     return {
       conversation,
@@ -84,6 +122,21 @@ export const assistantService = {
     await assistantService.getConversation(ctx, conversationId);
     await conversationsRepo.remove(ctx.db, conversationId);
   },
+
+  /**
+   * Re-scope a Conversation: onto a Project (project-level access) or back to the dashboard with
+   * null (overall access). Called by the open_project and create_project tools and by the dock's
+   * access control (ADR 0007).
+   */
+  setScope: async (ctx: Ctx, conversationId: string, projectId: string | null) => {
+    await assistantService.getConversation(ctx, conversationId);
+    if (projectId) await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    await conversationsRepo.setProject(ctx.db, conversationId, projectId);
+  },
+
+  /** Attach a Conversation to a Project; used by the open_project and create_project tools. */
+  attachToProject: (ctx: Ctx, conversationId: string, projectId: string) =>
+    assistantService.setScope(ctx, conversationId, projectId),
 
   /** The Conversation row if it belongs to the User, else Forbidden. */
   getConversation: async (ctx: Ctx, conversationId: string) => {

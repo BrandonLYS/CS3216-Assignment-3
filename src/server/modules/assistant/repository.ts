@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { conversations, messages, toolPermissions, type ConversationRow } from "./schema";
 
@@ -15,6 +15,14 @@ export const conversationsRepo = {
       .select()
       .from(conversations)
       .where(scopeWhere(userId, projectId))
+      .orderBy(desc(conversations.pinned), desc(conversations.updatedAt), desc(conversations.createdAt)),
+
+  /** A User's Conversations across every scope, pinned first then most recently touched. */
+  listAll: (db: DbOrTx, userId: string) =>
+    db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.userId, userId))
       .orderBy(desc(conversations.pinned), desc(conversations.updatedAt), desc(conversations.createdAt)),
 
   /** The most recently touched Conversation regardless of pinning. */
@@ -48,6 +56,10 @@ export const conversationsRepo = {
   setPinned: (db: DbOrTx, id: string, pinned: boolean) =>
     db.update(conversations).set({ pinned, updatedAt: conversations.updatedAt }).where(eq(conversations.id, id)),
 
+  /** Re-scope a Conversation onto a Project (or back to the dashboard with null). Bumps updatedAt so it opens first there. */
+  setProject: (db: DbOrTx, id: string, projectId: string | null) =>
+    db.update(conversations).set({ projectId }).where(eq(conversations.id, id)),
+
   /** Hard delete; Messages cascade. */
   remove: (db: DbOrTx, id: string) => db.delete(conversations).where(eq(conversations.id, id)),
 
@@ -59,6 +71,23 @@ export const conversationsRepo = {
         and(
           scopeWhere(userId, projectId),
           ne(conversations.id, keepId),
+          eq(conversations.pinned, false),
+          sql`not exists (select 1 from ${messages} where ${messages.conversationId} = ${conversations.id})`,
+        ),
+      )
+      .returning({ id: conversations.id }),
+
+  /**
+   * Deletes empty Conversations across every scope, keeping any id in `keepIds` (the ones a
+   * caller currently has open) and anything pinned.
+   */
+  pruneAllEmpty: (db: DbOrTx, userId: string, keepIds: string[]) =>
+    db
+      .delete(conversations)
+      .where(
+        and(
+          eq(conversations.userId, userId),
+          keepIds.length ? notInArray(conversations.id, keepIds) : undefined,
           eq(conversations.pinned, false),
           sql`not exists (select 1 from ${messages} where ${messages.conversationId} = ${conversations.id})`,
         ),

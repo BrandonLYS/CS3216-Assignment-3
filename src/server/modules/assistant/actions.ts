@@ -45,14 +45,28 @@ export async function createConversationAction(input: { projectId: string | null
   });
 }
 
-const loadConversationSchema = z.object({ conversationId: z.string().min(1) });
+const loadConversationSchema = z.object({
+  conversationId: z.string().min(1),
+  projectId: z.string().nullable().optional(),
+});
 
-/** Pick a Conversation from the history list: returns its Messages for the dock to mount. */
-export async function loadConversationAction(input: { conversationId: string }) {
+/**
+ * Pick a Conversation from the history list: returns its Messages. The scope check is skipped
+ * when `projectId` is omitted - used when opening a chat from another scope's group in the
+ * grouped list.
+ */
+export async function loadConversationAction(input: { conversationId: string; projectId?: string | null }) {
   return runAction(loadConversationSchema, input, async (ctx, i) => {
-    const thread = await assistantService.thread(ctx, i.conversationId);
+    const thread = await assistantService.thread(ctx, i.conversationId, i.projectId);
     return { messages: thread.messages };
   });
+}
+
+const scopeSchema = z.object({ conversationId: z.string().min(1), projectId: z.string().nullable() });
+
+/** Dock access control: attach a Conversation to a Project (project-level) or detach to overall (null). */
+export async function setConversationScopeAction(input: { conversationId: string; projectId: string | null }) {
+  return runAction(scopeSchema, input, (ctx, i) => assistantService.setScope(ctx, i.conversationId, i.projectId));
 }
 
 const pinSchema = z.object({ conversationId: z.string().min(1), pinned: z.boolean() });
