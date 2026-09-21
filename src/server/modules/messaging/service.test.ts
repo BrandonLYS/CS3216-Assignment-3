@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
-import { ForbiddenError, NotFoundError } from "@/server/core/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/server/core/errors";
+import { eventBus, type DomainEvent } from "@/server/events/bus";
+import { activityRepo } from "@/server/modules/activity/service";
 import type { PersonRow } from "@/server/modules/people/schema";
 import { peopleService } from "@/server/modules/people/service";
 import type { ProjectRow } from "@/server/modules/projects/schema";
@@ -95,5 +97,149 @@ describe("reaching across the seams", () => {
     await expect(
       messagingService.getRoom(outsider, { projectId: project.id, roomId: siblingRoom.id }),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+/** A Project of its own, so these writes cannot disturb the read assertions above. */
+describe("writing through mutate", () => {
+  let writeProject: ProjectRow;
+  let priya: PersonRow;
+
+  /** An explicit limit well above the default 50, so counting rows cannot hit the page size. */
+  const eventsOf = (projectId: string) => activityRepo.recentForProject(ctx.db, projectId, 500);
+
+  beforeAll(async () => {
+    writeProject = await makeProject(ctx, "WRT");
+    priya = await peopleService.createPerson(ctx, { projectId: writeProject.id, name: "Priya Nair" });
+  });
+
+  const group = (name = "Launch plan") =>
+    messagingService.createRoom(ctx, { projectId: writeProject.id, type: "group", name });
+
+  it("records a created Activity Event for a Room", async () => {
+    const created = await group("Vendor sync");
+    expect(created).toMatchObject({ projectId: writeProject.id, name: "Vendor sync", createdBy: ctx.userId });
+
+    const event = (await eventsOf(writeProject.id)).map((e) => e.event).find((e) => e.entityId === created.id);
+    expect(event).toMatchObject({ entityType: "room", action: "created", entityLabel: "Vendor sync" });
+  });
+
+  it("requires a name for a group Room and refuses one for a one-to-one Room", async () => {
+    await expect(group("   ")).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      messagingService.createRoom(ctx, { projectId: writeProject.id, type: "one_to_one", name: "Priya" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    const direct = await messagingService.createRoom(ctx, { projectId: writeProject.id, type: "one_to_one" });
+    expect(direct.name).toBeNull();
+    const event = (await eventsOf(writeProject.id)).map((e) => e.event).find((e) => e.entityId === direct.id);
+    expect(event?.entityLabel).toBe("Direct message");
+  });
+
+  it("records the admission of a Person once, however many times they are admitted", async () => {
+    const created = await group("Admissions");
+    const ref = { projectId: writeProject.id, roomId: created.id };
+
+    const added = await messagingService.addParticipant(ctx, { ...ref, personId: priya.id });
+    expect(added).toMatchObject({ roomId: created.id, personId: priya.id });
+    expect(await messagingService.addParticipant(ctx, { ...ref, personId: priya.id })).toBeNull();
+
+    expect(await messagingService.listParticipants(ctx, ref)).toHaveLength(1);
+    const events = (await eventsOf(writeProject.id))
+      .map((e) => e.event)
+      .filter((e) => e.entityType === "participant" && e.entityId === priya.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ action: "created", entityLabel: "Priya Nair" });
+    expect(events[0]!.newValue).toMatchObject({ roomId: created.id, personId: priya.id, personName: "Priya Nair" });
+  });
+
+  /** CONTEXT.md defines a one-to-one Room as the PM and a single Person. */
+  it("admits one Person to a one-to-one Room and no more", async () => {
+    const direct = await messagingService.createRoom(ctx, { projectId: writeProject.id, type: "one_to_one" });
+    const ref = { projectId: writeProject.id, roomId: direct.id };
+    const other = await peopleService.createPerson(ctx, { projectId: writeProject.id, name: "Wei Ling" });
+
+    await messagingService.addParticipant(ctx, { ...ref, personId: priya.id });
+    // Re-admitting the same Person stays a no-op rather than becoming an error.
+    expect(await messagingService.addParticipant(ctx, { ...ref, personId: priya.id })).toBeNull();
+    await expect(messagingService.addParticipant(ctx, { ...ref, personId: other.id })).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(await messagingService.listParticipants(ctx, ref)).toHaveLength(1);
+  });
+
+  it("refuses a Person from another Project", async () => {
+    const created = await group("Outsiders");
+    await expect(
+      messagingService.addParticipant(ctx, { projectId: writeProject.id, roomId: created.id, personId: jason.id }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("stores a Chat Message with the PM as its author", async () => {
+    const created = await group("Author");
+    const message = await messagingService.postMessage(ctx, {
+      projectId: writeProject.id,
+      roomId: created.id,
+      text: "  Gateway is live  ",
+    });
+    expect(message).toMatchObject({
+      text: "Gateway is live",
+      projectId: writeProject.id,
+      authorUserId: ctx.userId,
+      authorPersonId: null,
+      authorName: "Test User",
+    });
+    await expect(
+      messagingService.postMessage(ctx, { projectId: writeProject.id, roomId: created.id, text: "   " }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  /** ADR 0010: the Chat Message is its own log, so the event is published and not persisted. */
+  it("publishes chat_message.created without writing an Activity Event", async () => {
+    const created = await group("Signals");
+    const received: DomainEvent[] = [];
+    const unsub = eventBus.subscribe("chat_message.created", (e) => void received.push(e));
+    const before = (await eventsOf(writeProject.id)).length;
+    const message = await messagingService.postMessage(ctx, {
+      projectId: writeProject.id,
+      roomId: created.id,
+      text: "No activity row for this",
+    });
+    unsub();
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toMatchObject({
+      name: "chat_message.created",
+      action: "created",
+      entityType: "chat_message",
+      entityId: message.id,
+      entityLabel: "Signals",
+      projectId: writeProject.id,
+      actorId: ctx.userId,
+    });
+    expect(received[0]!.entityLabel).not.toContain("No activity row");
+    expect((await eventsOf(writeProject.id)).length).toBe(before);
+  });
+
+  it("refuses every write to a PM who does not own the Project, and every Room in another Project", async () => {
+    const created = await group("Guarded");
+    const owned = { projectId: writeProject.id, roomId: created.id };
+    await expect(
+      messagingService.createRoom(outsider, { projectId: writeProject.id, type: "group", name: "Theirs" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(messagingService.addParticipant(outsider, { ...owned, personId: priya.id })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    await expect(messagingService.postMessage(outsider, { ...owned, text: "Hello" })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+
+    const elsewhere = { projectId: sibling.id, roomId: created.id };
+    await expect(messagingService.addParticipant(ctx, { ...elsewhere, personId: priya.id })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    await expect(messagingService.postMessage(ctx, { ...elsewhere, text: "Hello" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 });
