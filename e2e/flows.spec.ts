@@ -844,6 +844,12 @@ test.describe("decisions", () => {
     await expect(edit).toBeVisible();
     await edit.getByRole("button", { name: "New assumption" }).click();
     const assumption = page.getByRole("dialog", { name: "New assumption" });
+    await expect(assumption).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(assumption).toBeHidden();
+    await expect(edit).toBeVisible();
+    await expect(edit.getByRole("button", { name: "New assumption" })).toBeFocused();
+    await edit.getByRole("button", { name: "New assumption" }).click();
     await assumption.getByLabel("Statement").fill("Merchant dataset arrives before UAT");
     await assumption.getByLabel("Subtype").selectOption("date");
     await assumption.getByRole("combobox", { name: "Target", exact: true }).selectOption({ label: "UAT begins" });

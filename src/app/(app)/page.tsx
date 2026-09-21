@@ -66,15 +66,15 @@ export default async function DashboardPage() {
         />
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Stat label="Overdue tasks" value={o.stats.overdue} tone={o.stats.overdue ? "danger" : "muted"} />
               <Stat label="Due in 7 days" value={o.stats.dueSoon} />
               <Stat label="Blocked" value={o.stats.blocked} tone={o.stats.blocked ? "warn" : "muted"} />
               <Stat label="Top risks" value={o.stats.topRisks} tone={o.stats.topRisks ? "danger" : "muted"} />
             </div>
 
-            <div className="grid grid-cols-3 gap-6">
-              <div className="col-span-2 flex flex-col gap-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="flex flex-col gap-6 lg:col-span-2">
                 <section>
                   <SectionTitle className="mb-2">Needs attention</SectionTitle>
                   <AttentionList

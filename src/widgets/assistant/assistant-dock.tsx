@@ -185,7 +185,10 @@ export function AssistantDock({
   const notice = !configured ? FRIENDLY[ASSISTANT_NOT_CONFIGURED] : error ? friendly(error) : null;
 
   return (
-    <aside aria-label="Assistant" className="flex w-96 shrink-0 flex-col border-l border-hairline bg-surface-1">
+    <aside
+      aria-label="Assistant"
+      className="fixed inset-x-0 top-12 bottom-0 z-30 flex min-h-0 flex-col border-l border-hairline bg-surface-1 md:static md:z-auto md:w-96 md:shrink-0"
+    >
       <div className="flex h-11 items-center gap-2 border-b border-hairline px-4">
         <Sparkles className="size-3.5 text-primary" />
         <h2 className="text-body-sm font-medium text-ink">Assistant</h2>

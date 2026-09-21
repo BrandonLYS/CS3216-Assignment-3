@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model,
       system,
-      messages: await convertToModelMessages(messages),
+      messages: await convertToModelMessages(messages, { tools }),
       tools,
       toolApproval: scope ? toolApprovalFor(ctx, PROJECT_TOOLS, scope) : undefined,
       // Signs approval requests so a client cannot forge an "approved" response.

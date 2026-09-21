@@ -51,14 +51,14 @@ export function TasksView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-hairline px-6 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-hairline px-4 py-2 md:px-6">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-ink-tertiary" />
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Filter tasks…"
-            className="h-7 w-56 pl-8 text-caption"
+            className="h-7 w-48 pl-8 text-caption md:w-56"
           />
         </div>
         <Select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="h-7 w-40 text-caption">

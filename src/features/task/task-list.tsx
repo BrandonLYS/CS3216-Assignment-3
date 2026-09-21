@@ -70,7 +70,7 @@ function TaskRow({ item, refs, onOpen }: { item: TaskListItem; refs: ProjectRefs
   return (
     <li
       onClick={onOpen}
-      className="group flex h-10 cursor-pointer items-center gap-3 border-b border-hairline/60 px-6 text-body-sm transition-colors hover:bg-surface-1"
+      className="group flex min-h-10 cursor-pointer flex-wrap items-center gap-2 border-b border-hairline/60 px-4 py-2 text-body-sm transition-colors hover:bg-surface-1 md:flex-nowrap md:gap-3 md:px-6 md:py-0"
     >
       <InlineSelect
         value={task.priority}
@@ -101,7 +101,7 @@ function TaskRow({ item, refs, onOpen }: { item: TaskListItem; refs: ProjectRefs
         onChange={(statusId) => patchTaskAction({ id: task.id, statusId })}
         render={() => <StatusGlyph status={status} />}
       />
-      <span className={cn("min-w-0 flex-1 truncate", done ? "text-ink-subtle line-through" : "text-ink")}>
+      <span className={cn("min-w-32 flex-1 truncate md:min-w-0", done ? "text-ink-subtle line-through" : "text-ink")}>
         {task.title}
       </span>
       <span className="flex shrink-0 items-center gap-1.5">

@@ -50,7 +50,7 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 p-6">
-        <Panel className="flex items-start justify-between gap-6 p-5">
+        <Panel className="flex flex-col items-start justify-between gap-6 p-5 sm:flex-row">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <HealthBadge health={project.health} />
@@ -76,7 +76,7 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
           </dl>
         </Panel>
 
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Stat
             label="Overdue"
             value={attention.counts.task_overdue}
@@ -99,8 +99,8 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          <div className="col-span-2 flex flex-col gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="flex flex-col gap-6 lg:col-span-2">
             <section className="flex flex-col gap-3">
               <SectionTitle>Needs attention</SectionTitle>
               <ImpactAlerts alerts={alerts} projectId={projectId} />

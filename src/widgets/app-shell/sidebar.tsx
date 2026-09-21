@@ -21,17 +21,21 @@ export function Sidebar({
   user,
   onOpenPalette,
   onNewProject,
+  onNavigate,
+  className,
 }: {
   projects: ProjectRow[];
   user: { name: string; email: string };
   onOpenPalette: () => void;
   onNewProject: () => void;
+  onNavigate?: () => void;
+  className?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
 
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-hairline bg-canvas">
+    <aside className={cn("flex h-full w-60 shrink-0 flex-col border-r border-hairline bg-canvas", className)}>
       <div className="flex h-14 items-center gap-2 px-4">
         <Logo className="size-5" />
         <span className="text-body-sm font-medium tracking-[-0.2px]">Vantage</span>
@@ -56,6 +60,7 @@ export function Sidebar({
             <Link
               key={href}
               href={href}
+              onClick={onNavigate}
               className={cn(
                 "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-body-sm transition-colors",
                 active ? "bg-surface-2 text-ink" : "text-ink-subtle hover:bg-surface-1 hover:text-ink",
@@ -86,6 +91,7 @@ export function Sidebar({
             <Link
               key={p.id}
               href={`/projects/${p.id}`}
+              onClick={onNavigate}
               className={cn(
                 "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-body-sm transition-colors",
                 active ? "bg-surface-2 text-ink" : "text-ink-subtle hover:bg-surface-1 hover:text-ink",
@@ -108,7 +114,12 @@ export function Sidebar({
           <p className="truncate text-[11px] text-ink-tertiary">{user.email}</p>
         </div>
         <button
-          onClick={() => signOut().then(() => router.push("/login"))}
+          onClick={() =>
+            signOut().then(() => {
+              onNavigate?.();
+              router.push("/login");
+            })
+          }
           className="rounded-xs p-1 text-ink-tertiary hover:bg-surface-2 hover:text-ink"
           aria-label="Sign out"
         >

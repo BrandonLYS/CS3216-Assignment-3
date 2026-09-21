@@ -14,9 +14,9 @@ export function ProjectHeader({ project }: { project: ProjectRow }) {
   const base = `/projects/${project.id}`;
   return (
     <div className="shrink-0 border-b border-hairline">
-      <div className="flex h-14 items-center gap-3 px-6">
+      <div className="flex min-h-14 flex-wrap items-center gap-2 px-4 py-2 md:gap-3 md:px-6">
         <HealthDot health={project.health} className="size-2.5" />
-        <h1 className="text-body font-medium text-ink">{project.name}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-body font-medium text-ink md:flex-none">{project.name}</h1>
         <span className="font-mono text-caption text-ink-tertiary">{project.key}</span>
         <span className="rounded-full bg-surface-2 px-2 py-0.5 text-caption text-ink-subtle">
           {labelFor(project.status)}
@@ -25,7 +25,7 @@ export function ProjectHeader({ project }: { project: ProjectRow }) {
           <AssistantToggle />
         </span>
       </div>
-      <nav className="flex gap-1 px-4">
+      <nav className="flex gap-1 overflow-x-auto px-4">
         {PROJECT_SECTIONS.map((s) => {
           const href = s.slug ? `${base}/${s.slug}` : base;
           const active = s.slug ? pathname.startsWith(href) : pathname === base;
@@ -34,7 +34,7 @@ export function ProjectHeader({ project }: { project: ProjectRow }) {
               key={s.slug}
               href={href}
               className={cn(
-                "-mb-px flex h-9 items-center gap-1.5 border-b-2 px-2 text-body-sm transition-colors",
+                "-mb-px flex h-9 shrink-0 items-center gap-1.5 border-b-2 px-2 text-body-sm transition-colors",
                 active ? "border-ink text-ink" : "border-transparent text-ink-subtle hover:text-ink",
               )}
             >
