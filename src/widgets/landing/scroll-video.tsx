@@ -50,7 +50,7 @@ const chapters = [
     index: "05",
     eyebrow: "Circulation",
     title: "Everything is wired to everything",
-    body: "Evidence cites the passage it came from. The Assistant reads and writes through the same services you do, so nothing moves without leaving a record.",
+    body: "Decisions cite the Passages they came from. The Assistant reads and writes through the same services you do, so nothing moves without leaving a record.",
   },
 ];
 
