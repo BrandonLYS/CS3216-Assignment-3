@@ -60,7 +60,7 @@ const graphCounts = async () => {
 describe("proposalsService.runPass", () => {
   it("proposes traceable Decisions from Evidence and Comments, never touching the graph, and is idempotent", async () => {
     const before = await graphCounts();
-    const out = await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract });
+    const out = await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract, trigger: "manual" });
     expect(out).toMatchObject({ sourcesPassed: 2, proposed: 2, discarded: 0 });
     expect(await graphCounts()).toEqual(before);
 
@@ -73,7 +73,7 @@ describe("proposalsService.runPass", () => {
     expect(fromMinutes.sources).toEqual([{ kind: "evidence", entityId: minutes.id, excerpt: SENTENCE }]);
     expect(pending.find((p) => p.sources[0]!.entityId === commentId)?.alternatives).toBe("a public call");
 
-    expect(await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract })).toEqual({
+    expect(await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract, trigger: "manual" })).toEqual({
       skipped: "nothing_new",
     });
     expect(await proposalsService.listPending(ctx, projectId)).toHaveLength(2);
@@ -116,7 +116,7 @@ describe("proposalsService.runPass", () => {
         },
       ],
     });
-    const out = await proposalsService.runPass(ctx, other.id, { extract: fabricating });
+    const out = await proposalsService.runPass(ctx, other.id, { extract: fabricating, trigger: "manual" });
     expect(out).toMatchObject({ proposed: 1, discarded: 2 });
     expect((await proposalsService.listPending(ctx, other.id)).map((p) => p.title)).toEqual(["Real"]);
   });
@@ -129,12 +129,12 @@ describe("proposalsService.runPass", () => {
       kind: "minutes",
       body: "We decided to ship on Friday.",
     });
-    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract });
+    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" });
     const [prop] = await proposalsService.listPending(ctx, p.id);
     await proposalsService.reject(ctx, prop!.id);
     expect(await proposalsService.listPending(ctx, p.id)).toHaveLength(0);
     await evidenceService.update(ctx, { id: ev.id, body: "We decided to ship on Friday. Lunch was late." });
-    const out = await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract });
+    const out = await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" });
     expect(out).toMatchObject({ sourcesPassed: 1, proposed: 0 });
     expect(await proposalsService.listPending(ctx, p.id)).toHaveLength(0);
     expect(await proposalsService.stats(ctx, p.id)).toMatchObject({ proposed: 1, rejected: 1, accepted: 0, rate: 0 });
@@ -151,7 +151,10 @@ describe("proposalsService.runPass", () => {
       kind: "minutes",
       body: "We agreed to pause hiring.",
     });
-    expect(await proposalsService.runPass(ctx, p.id)).toMatchObject({ extractor: "heuristic", proposed: 1 });
+    expect(await proposalsService.runPass(ctx, p.id, { trigger: "manual" })).toMatchObject({
+      extractor: "heuristic",
+      proposed: 1,
+    });
     vi.stubEnv("PROPOSALS_EXTRACTOR", "model");
     expect(proposalsService.enabled()).toBe(false);
     vi.unstubAllEnvs();
@@ -205,7 +208,7 @@ describe("accept and reject", () => {
         },
       ],
     });
-    await proposalsService.runPass(ctx, p.id, { extract: withAssumptions });
+    await proposalsService.runPass(ctx, p.id, { extract: withAssumptions, trigger: "manual" });
     const [prop] = await proposalsService.listPending(ctx, p.id);
     expect(prop!.assumptions).toHaveLength(2);
 
@@ -250,7 +253,7 @@ describe("accept and reject", () => {
       kind: "minutes",
       body: SENTENCE,
     });
-    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract });
+    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" });
     const [prop] = await proposalsService.listPending(ctx, p.id);
     const d = await decisionsService.create(
       { ...ctx, via: "assistant" },
@@ -285,7 +288,9 @@ describe("accept and reject", () => {
   it("refuses every entry point to a stranger", async () => {
     const stranger = await makeCtx();
     const [prop] = await proposalsService.listPending(ctx, projectId);
-    await expect(proposalsService.runPass(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(proposalsService.runPass(stranger, projectId, { trigger: "manual" })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
     await expect(proposalsService.listPending(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(proposalsService.stats(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(proposalsService.accept(stranger, { id: prop!.id })).rejects.toBeInstanceOf(ForbiddenError);
@@ -297,7 +302,7 @@ describe("races and tampering", () => {
   it("a Proposal rejected before the Decision commits rolls the create back", async () => {
     const p = await makeProject(ctx, "RCE");
     const ev = await evidenceService.create(ctx, { projectId: p.id, title: "M", kind: "minutes", body: SENTENCE });
-    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract });
+    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" });
     const [prop] = await proposalsService.listPending(ctx, p.id);
     await proposalsRepo.update(ctx.db, prop!.id, { status: "rejected" });
     await expect(
@@ -340,8 +345,8 @@ describe("races and tampering", () => {
       body: "We decided to go live in May.",
     });
     await Promise.all([
-      proposalsService.runPass(ctx, p.id, { extract: heuristicExtract }),
-      proposalsService.runPass(ctx, p.id, { extract: heuristicExtract }),
+      proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" }),
+      proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" }),
     ]);
     expect(await proposalsService.listPending(ctx, p.id)).toHaveLength(1);
   });
@@ -374,7 +379,7 @@ describe("transcripts (#42)", () => {
       seen = input;
       return heuristicExtract(input);
     };
-    const out = await proposalsService.runPass(ctx, pid, { extract: spy });
+    const out = await proposalsService.runPass(ctx, pid, { extract: spy, trigger: "manual" });
     expect(out).toMatchObject({ proposed: 2 });
     expect(seen!.sources.map((s) => [s.title, s.evidenceKind])).toEqual([
       ["Steering call", "transcript"],
@@ -405,7 +410,7 @@ describe("transcripts (#42)", () => {
       kind: "transcript",
       body: TRANSCRIPT,
     });
-    await proposalsService.runPass(ctx, pid, { extract: heuristicExtract });
+    await proposalsService.runPass(ctx, pid, { extract: heuristicExtract, trigger: "manual" });
     const [proposal] = await proposalsService.listPending(ctx, pid);
     expect(proposal!.sources[0]!.passageId).toBeTruthy();
     await evidenceService.update(ctx, { id: transcript.id, body: `${TRANSCRIPT}\nMarcus: One more thing.` });

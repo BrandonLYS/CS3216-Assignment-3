@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { runAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
-import { captureCurrent } from "@/shared/analytics/server";
 import { decisionsService } from "./service";
 import {
   attachAssumptionSchema,
@@ -18,17 +17,12 @@ import {
 } from "./validation";
 
 export async function createDecisionAction(fd: FormData) {
-  // Confirming a Proposal is the Assistant acting on the User's behalf (ADR 0007).
-  const proposalId = fd.get("proposalId") ? String(fd.get("proposalId")) : null;
+  // Confirming a Proposal is the Assistant acting on the User's behalf (ADR 0007); the service
+  // records the acceptance, because it is the only place that sees what was proposed (issue #74).
   const res = await runAction(createDecisionSchema, fd, (ctx, i) =>
     decisionsService.create(i.proposalId ? { ...ctx, via: "assistant" } : ctx, i),
   );
-  if (res.ok) {
-    revalidateProject(res.data.projectId);
-    if (proposalId) {
-      await captureCurrent("proposal_accepted", { proposal_id: proposalId, edited_before_accept: true });
-    }
-  }
+  if (res.ok) revalidateProject(res.data.projectId);
   return res;
 }
 export async function updateDecisionAction(fd: FormData) {
