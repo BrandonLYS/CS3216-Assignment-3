@@ -53,7 +53,22 @@ export const olderMessagesSchema = z.object({
   before: z.object({ createdAt: z.date(), id: z.string() }),
 });
 
+/**
+ * The mirror of `olderMessagesSchema`, and the other direction of the same cursor (issue
+ * #59): everything written after the newest Chat Message the pane holds.
+ *
+ * The pane sends a cursor deliberately older than that row - see `MESSAGE_POLL_OVERLAP_MS` -
+ * so nothing here tries to check `after` against what the caller could plausibly have seen.
+ * It cannot: any cursor is a legitimate question about a Room the seam has already allowed.
+ */
+export const newerMessagesSchema = z.object({
+  projectId: z.string(),
+  roomId: z.string(),
+  after: z.object({ createdAt: z.date(), id: z.string() }),
+});
+
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type AddParticipantInput = z.infer<typeof addParticipantSchema>;
 export type PostMessageInput = z.infer<typeof postMessageSchema>;
 export type OlderMessagesInput = z.infer<typeof olderMessagesSchema>;
+export type NewerMessagesInput = z.infer<typeof newerMessagesSchema>;

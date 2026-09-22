@@ -18,6 +18,13 @@ import type { RoomRow } from "./schema";
  */
 export const MESSAGE_PAGE_MAX = 100;
 
+/**
+ * How much of a Room a single catch-up may carry back (issue #59). A server limit for the
+ * same reason as `MESSAGE_PAGE_MAX` and not in `src/shared/domain` beside the poll's own
+ * constants: the browser never sends a limit, it only says where it got to.
+ */
+export const MESSAGE_CATCH_UP_MAX = 50;
+
 type RoomRef = { projectId: string; roomId: string };
 
 /**
@@ -114,6 +121,27 @@ async function pageOf(db: DbOrTx, room: RoomRow, { before, limit }: MessagePage)
   return { items: rows.slice(0, capped), hasMore: rows.length > capped };
 }
 
+/** Where a catch-up starts: the newest Chat Message its caller has, less the overlap. */
+export type MessagesSince = { after: MessageCursor; limit: number };
+
+/**
+ * Everything written after a cursor, oldest first, and whether there was more of it than one
+ * batch (issue #59). Shared by both audiences, like `pageOf`, so a Participant and the PM
+ * catch up on the same Room the same way.
+ *
+ * `truncated`, deliberately not `hasMore`: `pageOf` answers that question about the other end
+ * of the history, both results reach the same hook in the browser, and a mis-wiring between
+ * two booleans called the same thing would typecheck and quietly break paging.
+ *
+ * A truncated answer is not a page to merge - the rows above it are missing - so the caller's
+ * only correct move is to start again from the newest page.
+ */
+async function sinceOf(db: DbOrTx, room: RoomRow, { after, limit }: MessagesSince) {
+  const capped = Math.min(Math.max(limit, 1), MESSAGE_PAGE_MAX);
+  const rows = await messagingRepo.listMessagesAfter(db, room.projectId, room.id, { after, limit: capped + 1 });
+  return { items: rows.slice(0, capped), truncated: rows.length > capped };
+}
+
 /**
  * Write one Chat Message and announce it. Shared by the PM's `postMessage` and the
  * Participant's, which differ only in who the author is: the validation, the author snapshot
@@ -180,6 +208,12 @@ export const messagingService = {
   listMessages: async (ctx: Ctx, ref: RoomRef, page: MessagePage) => {
     const room = await resolveRoom(ctx.db, ctx.userId, ref);
     return pageOf(ctx.db, room, page);
+  },
+
+  /** What has been said in this Room since the caller's cursor (issue #59). */
+  messagesSince: async (ctx: Ctx, ref: RoomRef, since: MessagesSince) => {
+    const room = await resolveRoom(ctx.db, ctx.userId, ref);
+    return sinceOf(ctx.db, room, since);
   },
 
   /** The messaging state of every Person in the Project, for the PM's Participants dialog. */
@@ -283,6 +317,16 @@ export const participantMessagingService = {
   listMessages: async (pctx: ParticipantCtx, ref: RoomRef, page: MessagePage) => {
     const { room } = await assertParticipates(pctx.db, pctx.person.id, ref);
     return pageOf(pctx.db, room, page);
+  },
+
+  /**
+   * The Participant's half of issue #59, behind the same seam as everything else they can
+   * reach: a Person catches up only on a Room they were admitted to, and a Person deleted
+   * since they signed in catches up on nothing.
+   */
+  messagesSince: async (pctx: ParticipantCtx, ref: RoomRef, since: MessagesSince) => {
+    const { room } = await assertParticipates(pctx.db, pctx.person.id, ref);
+    return sinceOf(pctx.db, room, since);
   },
 
   /**

@@ -117,6 +117,53 @@ describe("reading a Room inside its Project", () => {
   });
 });
 
+/** Issue #59: what an open pane asks for on a timer to learn what the other side said. */
+describe("catching up on a Room", () => {
+  const beginning = { createdAt: new Date(Date.UTC(2000, 0, 1)), id: randomUUID() };
+
+  it("returns what was written after the cursor, oldest first", async () => {
+    const whole = await messagingService.listMessages(ctx, ref(), { limit: 10 });
+    const middle = cursor(whole.items[1]!); // m2
+    const since = await messagingService.messagesSince(ctx, ref(), { after: middle, limit: 10 });
+    expect(since.items.map((m) => m.text)).toEqual(["m3"]);
+    expect(since.truncated).toBe(false);
+  });
+
+  it("says nothing new when the cursor is the newest Chat Message", async () => {
+    const whole = await messagingService.listMessages(ctx, ref(), { limit: 10 });
+    const since = await messagingService.messagesSince(ctx, ref(), { after: cursor(whole.items[0]!), limit: 10 });
+    expect(since).toEqual({ items: [], truncated: false });
+  });
+
+  /**
+   * `truncated` is the pane's signal to stop merging and start again from the newest page:
+   * the rows it did not get are above the ones it did, so merging would leave a hole.
+   */
+  it("truncates a catch-up larger than the batch, and still returns the batch", async () => {
+    const since = await messagingService.messagesSince(ctx, ref(), { after: beginning, limit: 2 });
+    expect(since.items.map((m) => m.text)).toEqual(["m1", "m2"]);
+    expect(since.truncated).toBe(true);
+  });
+
+  it("clamps the batch so a caller cannot ask for the whole Room", async () => {
+    const since = await messagingService.messagesSince(ctx, ref(), {
+      after: beginning,
+      limit: MESSAGE_PAGE_MAX + 5000,
+    });
+    expect(since.items).toHaveLength(3);
+    expect(since.truncated).toBe(false);
+  });
+
+  it("refuses a Room in another Project, and a PM who owns neither", async () => {
+    await expect(
+      messagingService.messagesSince(ctx, { projectId: sibling.id, roomId: room.id }, { after: beginning, limit: 10 }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(
+      messagingService.messagesSince(outsider, ref(), { after: beginning, limit: 10 }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
 describe("reaching across the seams", () => {
   /** The PM owns both Projects, so only the Room scoping can refuse this. */
   it("does not find a Room of another Project of the same PM", async () => {
@@ -408,6 +455,54 @@ describe("the Participant path", () => {
     await expect(
       participantMessagingService.listMessages(pctx, refTo(notTheirs), { limit: 10 }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  /** Issue #59, from the other side of ADR 0009: the same catch-up, behind the other seam. */
+  describe("catching up", () => {
+    let caught: RoomRow;
+    let caughtRef: { projectId: string; roomId: string };
+    const beginning = { createdAt: new Date(Date.UTC(2000, 0, 1)), id: randomUUID() };
+
+    beforeAll(async () => {
+      caught = await messagingService.createRoom(ctx, {
+        projectId: project2.id,
+        type: "group",
+        name: "Catching up",
+        personIds: [member.id],
+      });
+      caughtRef = refTo(caught);
+    });
+
+    /** The whole feature in one test: each audience sees what the other just wrote. */
+    it("hands a Person what the PM wrote after their cursor, and the reverse", async () => {
+      const opened = await participantMessagingService.listMessages(pctx, caughtRef, { limit: 10 });
+      expect(opened.items).toEqual([]);
+
+      const fromPm = await messagingService.postMessage(ctx, { ...caughtRef, text: "Standup at ten" });
+      const forMember = await participantMessagingService.messagesSince(pctx, caughtRef, {
+        after: beginning,
+        limit: 10,
+      });
+      expect(forMember.items.map((m) => m.text)).toEqual(["Standup at ten"]);
+      expect(forMember.truncated).toBe(false);
+
+      await participantMessagingService.postMessage(pctx, { ...caughtRef, text: "See you there" });
+      const forPm = await messagingService.messagesSince(ctx, caughtRef, { after: cursor(fromPm), limit: 10 });
+      expect(forPm.items.map((m) => m.text)).toEqual(["See you there"]);
+    });
+
+    it("refuses a Room the Person was not admitted to", async () => {
+      await expect(
+        participantMessagingService.messagesSince(pctx, refTo(notTheirs), { after: beginning, limit: 10 }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it("refuses a Person who no longer exists", async () => {
+      const deleted: ParticipantCtx = { db: ctx.db, person: { id: randomUUID(), projectId: project2.id } };
+      await expect(
+        participantMessagingService.messagesSince(deleted, caughtRef, { after: beginning, limit: 10 }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
   });
 
   it("refuses a Person whose row moved to another Project since they signed in", async () => {

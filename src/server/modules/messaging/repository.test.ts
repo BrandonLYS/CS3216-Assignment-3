@@ -10,6 +10,7 @@ import { projects, type ProjectRow } from "@/server/modules/projects/schema";
 import { projectsService } from "@/server/modules/projects/service";
 import { risksService } from "@/server/modules/risks/service";
 import { tasksService } from "@/server/modules/tasks/service";
+import { MESSAGE_POLL_OVERLAP_MS } from "@/shared/domain";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { messagingRepo } from "./repository";
 import { roomMessages, roomParticipants, rooms, type RoomRow } from "./schema";
@@ -211,6 +212,128 @@ describe("history", () => {
       limit: 2,
     });
     expect(page2.map((m) => m.id)).toEqual([a]);
+  });
+});
+
+describe("catching up from a cursor", () => {
+  const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+  /** A Room of its own per test: another test's Chat Messages must not be in these answers. */
+  async function roomWith(name: string, texts: Array<{ text: string; at: Date; id?: string }>) {
+    const room = await messagingRepo.insertRoom(ctx.db, {
+      projectId: project.id,
+      type: "group",
+      name,
+      createdBy: ctx.userId,
+    });
+    for (const { text, at, id } of texts) {
+      await messagingRepo.insertMessage(ctx.db, room, {
+        ...(id ? { id } : {}),
+        text,
+        authorPersonId: jason.id,
+        authorName: jason.name,
+        createdAt: at,
+      });
+    }
+    return room;
+  }
+
+  const at = (second: number) => new Date(Date.UTC(2026, 1, 1, 8, 0, second));
+
+  it("returns what was written after the cursor, oldest first, and never the cursor row", async () => {
+    const room = await roomWith(
+      "Catch up",
+      [1, 2, 3, 4].map((i) => ({ text: `m${i}`, at: at(i) })),
+    );
+
+    const newest = await messagingRepo.listMessages(ctx.db, project.id, room.id, { limit: 2 });
+    const cursorRow = newest.at(-1)!; // m3
+    const since = await messagingRepo.listMessagesAfter(ctx.db, project.id, room.id, {
+      after: { createdAt: cursorRow.createdAt, id: cursorRow.id },
+      limit: 10,
+    });
+    expect(since.map((m) => m.text)).toEqual(["m4"]);
+  });
+
+  it("stops at the limit, so a caller can tell a batch from the whole of it", async () => {
+    const room = await roomWith(
+      "Capped",
+      [1, 2, 3, 4, 5].map((i) => ({ text: `m${i}`, at: at(i) })),
+    );
+
+    // The nil UUID as the tiebreak id is what the pane sends with an overlapped cursor: it
+    // sorts below every generated id, so a row sharing the cursor's instant is included.
+    const since = await messagingRepo.listMessagesAfter(ctx.db, project.id, room.id, {
+      after: { createdAt: at(1), id: NIL_UUID },
+      limit: 3,
+    });
+    expect(since.map((m) => m.text)).toEqual(["m1", "m2", "m3"]);
+  });
+
+  it("breaks a shared instant on id, ascending", async () => {
+    const prefix = randomUUID();
+    const ids = ["a", "b", "c"].map((suffix) => `${prefix}-${suffix}`);
+    const instant = at(20);
+    const room = await roomWith(
+      "Tied forward",
+      ids.map((id) => ({ text: id, at: instant, id })),
+    );
+
+    const since = await messagingRepo.listMessagesAfter(ctx.db, project.id, room.id, {
+      after: { createdAt: instant, id: ids[0]! },
+      limit: 10,
+    });
+    expect(since.map((m) => m.id)).toEqual([ids[1], ids[2]]);
+  });
+
+  it("never reaches into another Room or another Project", async () => {
+    const mine = await roomWith("Mine", [{ text: "mine", at: at(30) }]);
+    await roomWith("Theirs", [{ text: "theirs", at: at(31) }]);
+    const elsewhere = await makeProject(ctx, "OTH");
+
+    const inMine = await messagingRepo.listMessagesAfter(ctx.db, project.id, mine.id, {
+      after: { createdAt: at(0), id: NIL_UUID },
+      limit: 10,
+    });
+    expect(inMine.map((m) => m.text)).toEqual(["mine"]);
+
+    // The same Room id read as though it belonged to another Project answers with nothing,
+    // the way `listMessages` does: a Room's history is never readable across Projects.
+    const crossProject = await messagingRepo.listMessagesAfter(ctx.db, elsewhere.id, mine.id, {
+      after: { createdAt: at(0), id: NIL_UUID },
+      limit: 10,
+    });
+    expect(crossProject).toEqual([]);
+  });
+
+  /**
+   * Why the pane overlaps its cursor (ADR 0011). `created_at` defaults to `now()`, which is
+   * the *transaction's* start time, so a writer that began earlier and committed later leaves
+   * a row below a cursor the reader has already passed. A strict cursor loses it for good.
+   */
+  it("misses a row written by a transaction that started before the cursor row", async () => {
+    const room = await roomWith("Out of order", [
+      { text: "committed first", at: at(40) },
+      // Same Room, earlier timestamp, written afterwards: the slow writer committing late.
+      { text: "started earlier", at: at(39) },
+    ]);
+
+    const newest = await messagingRepo.listMessages(ctx.db, project.id, room.id, { limit: 1 });
+    const cursorRow = newest[0]!;
+    expect(cursorRow.text).toBe("committed first");
+
+    const strict = await messagingRepo.listMessagesAfter(ctx.db, project.id, room.id, {
+      after: { createdAt: cursorRow.createdAt, id: cursorRow.id },
+      limit: 10,
+    });
+    expect(strict).toEqual([]);
+
+    // The same cursor, moved back by the overlap the pane applies, finds it.
+    const overlapped = await messagingRepo.listMessagesAfter(ctx.db, project.id, room.id, {
+      after: { createdAt: new Date(cursorRow.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS), id: NIL_UUID },
+      limit: 10,
+    });
+    expect(overlapped.map((m) => m.text)).toEqual(["started earlier", "committed first"]);
   });
 });
 

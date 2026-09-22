@@ -123,6 +123,20 @@ export const COMMENT_MAX_LENGTH = 4000;
 export const MESSAGE_PAGE_FIRST = 50;
 export const MESSAGE_PAGE_MORE = 20;
 
+/**
+ * How an open pane learns what the other side said (issue #59, ADR 0011): it asks for the
+ * Chat Messages written after the newest one it holds, every `MESSAGE_POLL_MS`.
+ *
+ * The cursor is moved back by `MESSAGE_POLL_OVERLAP_MS` first, and that is not a safety
+ * margin - it is load-bearing. `room_messages.created_at` defaults to `now()`, which is the
+ * writing transaction's *start* time, so a transaction that began earlier and committed
+ * later leaves a row below a cursor the reader has already passed, where a strict cursor
+ * would never see it again. Re-reading the last few seconds costs nothing: the pane unions
+ * by id, so a row it already has is dropped on arrival.
+ */
+export const MESSAGE_POLL_MS = 4000;
+export const MESSAGE_POLL_OVERLAP_MS = 10_000;
+
 /** Items an Evidence record can be linked to (same set as Comments). */
 export const LINKABLE_ENTITY_TYPES = COMMENTABLE_ENTITY_TYPES;
 export type LinkableEntityType = CommentableEntityType;
