@@ -403,15 +403,17 @@ const POLL_MAX_READS = 20;
  * Where a catch-up asks from: the confirmed cursor, or the Room's own creation for a pane
  * with nothing in it - nothing predates its Room.
  *
- * The cursor is moved back by the overlap only while the region behind it could still be
- * moving. `heldFor` is how long the pane has held this cursor, measured on one clock - no
- * comparison between the browser's time and the database's, which may disagree. Once that
- * exceeds the window, every transaction that could have landed a row below the cursor has
- * finished, so the cursor is exact and a dense Room stops being re-read on every tick.
+ * `settled` retires the overlap, and only the caller can work it out, because elapsed time
+ * alone does not: a tab hidden for a minute has let the window pass without reading
+ * anything, and a transaction that began just before the cursor could have committed in
+ * the meantime. What retires the overlap is an overlapping read taken at least a window
+ * after the cursor was learned - by then any such transaction has committed and been seen,
+ * or has outlived the window. Both times are the browser's own, so no clock of ours is
+ * compared against the database's.
  */
-const overlapped = (confirmed: RoomMessageRow | undefined, roomCreatedAt: Date, heldFor: number) => {
+const overlapped = (confirmed: RoomMessageRow | undefined, roomCreatedAt: Date, settled: boolean) => {
   if (!confirmed) return { createdAt: roomCreatedAt, id: FIRST_ID };
-  if (heldFor >= MESSAGE_POLL_OVERLAP_MS) return { createdAt: confirmed.createdAt, id: confirmed.id };
+  if (settled) return { createdAt: confirmed.createdAt, id: confirmed.id };
   return { createdAt: new Date(confirmed.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS), id: FIRST_ID };
 };
 
@@ -570,6 +572,8 @@ function useRoomHistory({
   React.useEffect(() => {
     syncedSeenAt.current = Date.now();
   }, [synced]);
+  /** When a read that carried the overlap last came back, which is what retires it. */
+  const overlapReadAt = React.useRef(0);
 
   /**
    * Fetch the page before the oldest Chat Message on screen. Scrolling is the caller's: it
@@ -632,7 +636,12 @@ function useRoomHistory({
     const ask = viewer.kind === "pm" ? newerMessagesAction : participantNewerMessagesAction;
     try {
       const base = synced;
-      let after = overlapped(base, roomCreatedAt, Date.now() - syncedSeenAt.current);
+      // Retired only by an overlapping read taken a full window after this cursor was
+      // learned. A tab that was hidden through the window has read nothing, and nothing
+      // is what it would have to go on.
+      const settled = overlapReadAt.current - syncedSeenAt.current >= MESSAGE_POLL_OVERLAP_MS;
+      let confirmed = base;
+      let after = overlapped(base, roomCreatedAt, settled);
       // The budget counts batches that delivered something **newer than where this tick
       // started**. Rows at or below that are the overlap being re-read - old history the
       // pane never loaded, in a Room dense enough to fill a batch inside the window - and
@@ -650,11 +659,21 @@ function useRoomHistory({
           return;
         }
         failures.current = 0;
+        // The first read of a tick is the one that carries the overlap, and having come
+        // back is what lets a later tick drop it.
+        if (batch === 0 && !settled) overlapReadAt.current = Date.now();
         const { items, truncated } = res.data;
         const newest = items.at(-1);
         if (newest) {
           if (!base || items.some((m) => newestFirst(m, base) < 0)) budget -= 1;
-          setSynced(newest);
+          // Only ever forwards, and only for a Chat Message the cursor has not already
+          // passed. An overlapping batch ends on a row the pane has confirmed before, and
+          // re-confirming it would both move the cursor backwards and restart the clock
+          // above - which, at one tick every few seconds, would never let it settle.
+          if (!confirmed || newestFirst(newest, confirmed) < 0) {
+            confirmed = newest;
+            setSynced(newest);
+          }
           setMessages((loaded) => merge(loaded, items));
         }
         if (!truncated || !newest) return;
