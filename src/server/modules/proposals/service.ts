@@ -51,10 +51,11 @@ export const proposalsService = {
   /** True when a pass can run at all (a model is configured or the heuristic is selected). */
   enabled: () => pickExtractor() !== null,
 
+  /** `trigger` is required: an unnamed trigger is the mis-attribution this funnel exists to end. */
   runPass: async (
     ctx: Ctx,
     projectId: string,
-    opts: { extract?: Extract; trigger?: PassTrigger } = {},
+    opts: { trigger: PassTrigger; extract?: Extract },
   ): Promise<PassOutcome> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const picked = pickExtractor();
@@ -153,15 +154,22 @@ export const proposalsService = {
         kept.map((k) => ({ ...k, projectId, extractor: extractorName })),
       );
     });
-    await proposalGenerated(ctx, {
-      projectId,
-      trigger: opts.trigger ?? "manual",
+    const outcome = {
       extractor: extractorName,
-      created: inserted.length,
       sourcesPassed: candidates.length,
+      proposed: inserted.length,
       discarded,
+    };
+    await proposalGenerated(ctx, {
+      ...outcome,
+      projectId,
+      trigger: opts.trigger,
+      sourceKinds: {
+        evidence: candidates.filter((c) => c.kind === "evidence").length,
+        comment: candidates.filter((c) => c.kind === "comment").length,
+      },
     });
-    return { extractor: extractorName, sourcesPassed: candidates.length, proposed: inserted.length, discarded };
+    return outcome;
   },
 
   listPending: async (ctx: Ctx, projectId: string) => {

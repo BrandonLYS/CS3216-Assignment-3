@@ -2,6 +2,7 @@ import type { Ctx } from "@/server/core/context";
 import type { CreateDecisionInput } from "@/server/modules/decisions/validation";
 import { capture } from "@/shared/analytics/server";
 import type { ProposalExtractor } from "@/shared/domain";
+import type { CitableKind } from "./extract";
 import type { ProposalRow } from "./schema";
 
 /**
@@ -30,14 +31,15 @@ const assumptionKey = (a: {
     "|",
   );
 
-const same = (a: string[], b: string[]) => a.sort().join("\n") === b.sort().join("\n");
+const sameSet = (a: string[], b: string[]) => a.toSorted().join("\n") === b.toSorted().join("\n");
 
 /**
  * Whether the PM changed the Proposal before accepting it, measured against what was proposed
  * rather than against which path posted it: one-click acceptance submits the Proposal as it
  * stands, and a review form submitted untouched posts the same values.
  * `decidedOn` counts only when the Proposal stated one, because accepting a dateless Proposal
- * has to stamp a date and that substitution is not the PM's edit. The Owner is never proposed.
+ * has to stamp a date and that substitution is not the PM's edit. Content the Proposal never
+ * stated counts once the PM supplies it, the Owner included.
  */
 export function editedBeforeAccept(proposal: ProposalRow, accepted: CreateDecisionInput): boolean {
   const changed =
@@ -46,10 +48,11 @@ export function editedBeforeAccept(proposal: ProposalRow, accepted: CreateDecisi
     text(accepted.context) !== text(proposal.context) ||
     text(accepted.alternatives) !== text(proposal.alternatives) ||
     text(accepted.revisitWhen) !== text(proposal.revisitWhen) ||
+    !!accepted.ownerId ||
     (!!proposal.decidedOn && accepted.decidedOn !== proposal.decidedOn);
   if (changed) return true;
-  if (!same(accepted.sources.map(sourceKey), proposal.sources.map(sourceKey))) return true;
-  return !same((accepted.assumptions ?? []).map(assumptionKey), proposal.assumptions.map(assumptionKey));
+  if (!sameSet(accepted.sources.map(sourceKey), proposal.sources.map(sourceKey))) return true;
+  return !sameSet((accepted.assumptions ?? []).map(assumptionKey), proposal.assumptions.map(assumptionKey));
 }
 
 /**
@@ -64,18 +67,22 @@ export function proposalGenerated(
     projectId: string;
     trigger: PassTrigger;
     extractor: ProposalExtractor;
-    created: number;
+    /** Rows the insert returned, which is what the funnel counts. */
+    proposed: number;
     sourcesPassed: number;
     discarded: number;
+    sourceKinds: Record<CitableKind, number>;
   },
 ) {
-  if (pass.created < 1) return;
+  if (pass.proposed < 1) return;
   return capture(ctx.userId, "proposal_generated", {
     project_id: pass.projectId,
     trigger: pass.trigger,
     extractor: pass.extractor,
-    proposal_count: pass.created,
+    proposal_count: pass.proposed,
     source_count: pass.sourcesPassed,
+    evidence_source_count: pass.sourceKinds.evidence,
+    comment_source_count: pass.sourceKinds.comment,
     discarded_count: pass.discarded,
   });
 }

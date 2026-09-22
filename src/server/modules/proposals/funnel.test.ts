@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { ConflictError } from "@/server/core/errors";
+import { commentsService } from "@/server/modules/comments/service";
 import { decisionsService } from "@/server/modules/decisions/service";
 import { evidenceService } from "@/server/modules/evidence/service";
+import { tasksService } from "@/server/modules/tasks/service";
 import { capture } from "@/shared/analytics/server";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { editedBeforeAccept } from "./analytics";
@@ -52,7 +54,7 @@ const asSubmitted = (p: ProposalRow) => ({
 async function projectWithOneProposal(key: string, body = SENTENCE) {
   const project = await makeProject(ctx, key);
   await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body });
-  await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract });
+  await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" });
   const [proposal] = await proposalsService.listPending(ctx, project.id);
   return { projectId: project.id, proposal: proposal! };
 }
@@ -78,6 +80,8 @@ describe("generation", () => {
         extractor: "heuristic",
         proposal_count: 1,
         source_count: 1,
+        evidence_source_count: 1,
+        comment_source_count: 0,
         discarded_count: 0,
       },
     });
@@ -86,7 +90,7 @@ describe("generation", () => {
   it("names the trigger the pass was started by", async () => {
     const project = await makeProject(ctx, "TRG");
     await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: SENTENCE });
-    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "manual" });
 
     expect(events("proposal_generated")[0]?.properties).toMatchObject({ trigger: "manual" });
   });
@@ -95,9 +99,9 @@ describe("generation", () => {
     const { projectId } = await projectWithOneProposal("NEW");
     vi.mocked(capture).mockClear();
 
-    expect(await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract })).toEqual({
-      skipped: "nothing_new",
-    });
+    expect(await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract, trigger: "automatic" })).toEqual(
+      { skipped: "nothing_new" },
+    );
     expect(events()).toEqual([]);
   });
 
@@ -107,7 +111,9 @@ describe("generation", () => {
     const project = await makeProject(ctx, "CFG");
     await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: SENTENCE });
 
-    expect(await proposalsService.runPass(ctx, project.id)).toEqual({ skipped: "not_configured" });
+    expect(await proposalsService.runPass(ctx, project.id, { trigger: "manual" })).toEqual({
+      skipped: "not_configured",
+    });
     expect(events()).toEqual([]);
     vi.unstubAllEnvs();
   });
@@ -119,8 +125,41 @@ describe("generation", () => {
       throw new Error("extractor unavailable");
     };
 
-    expect(await proposalsService.runPass(ctx, project.id, { extract: failing })).toEqual({ skipped: "failed" });
+    expect(await proposalsService.runPass(ctx, project.id, { extract: failing, trigger: "automatic" })).toEqual({
+      skipped: "failed",
+    });
     expect(events()).toEqual([]);
+
+    // The failed pass wrote no bookkeeping, so the retry reads the same Source and records once.
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" });
+    expect(events("proposal_generated")).toHaveLength(1);
+  });
+
+  it("records the passes that edited Evidence and a new Comment schedule", async () => {
+    const project = await makeProject(ctx, "UPD");
+    const task = await tasksService.create(ctx, { projectId: project.id, title: "Recruit", priority: "none" });
+    const ev = await evidenceService.create(ctx, {
+      projectId: project.id,
+      title: "Minutes",
+      kind: "minutes",
+      body: SENTENCE,
+    });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" });
+
+    vi.mocked(capture).mockClear();
+    await evidenceService.update(ctx, { id: ev.id, body: `${SENTENCE}\n\n${OTHER}` });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" });
+    expect(events("proposal_generated")[0]?.properties).toMatchObject({ trigger: "automatic", proposal_count: 1 });
+
+    vi.mocked(capture).mockClear();
+    await commentsService.create(ctx, {
+      projectId: project.id,
+      entityType: "task",
+      entityId: task.id,
+      body: "We agreed to recruit through the alumni list instead of a public call.",
+    });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" });
+    expect(events("proposal_generated")[0]?.properties).toMatchObject({ trigger: "automatic", proposal_count: 1 });
   });
 
   it("stays silent when nothing the extractor returned was traceable", async () => {
@@ -146,7 +185,7 @@ describe("generation", () => {
       ],
     });
 
-    expect(await proposalsService.runPass(ctx, project.id, { extract: fabricating })).toMatchObject({
+    expect(await proposalsService.runPass(ctx, project.id, { extract: fabricating, trigger: "manual" })).toMatchObject({
       proposed: 0,
       discarded: 1,
     });
@@ -158,8 +197,8 @@ describe("generation", () => {
     await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: SENTENCE });
 
     await Promise.all([
-      proposalsService.runPass(ctx, project.id, { extract: heuristicExtract }),
-      proposalsService.runPass(ctx, project.id, { extract: heuristicExtract }),
+      proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" }),
+      proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "manual" }),
     ]);
 
     const persisted = await proposalsService.stats(ctx, project.id);
@@ -266,10 +305,10 @@ describe("what counts as an edit", () => {
   it("is false for the Proposal as it stands, whatever date a dateless one is stamped with", () => {
     expect(editedBeforeAccept(proposed, baseline)).toBe(false);
     expect(editedBeforeAccept(proposed, { ...baseline, decidedOn: "2026-10-01" })).toBe(false);
-    expect(editedBeforeAccept(proposed, { ...baseline, ownerId: "person-2" })).toBe(false);
   });
 
-  it("is true when the PM changes what was proposed", () => {
+  it("is true when the PM changes or adds what the Proposal did not state", () => {
+    expect(editedBeforeAccept(proposed, { ...baseline, ownerId: "person-2" })).toBe(true);
     const dated = { ...proposed, decidedOn: "2026-09-10" } as ProposalRow;
     expect(editedBeforeAccept(dated, { ...baseline, decidedOn: "2026-09-11" })).toBe(true);
     expect(editedBeforeAccept(proposed, { ...baseline, context: "Response rates fell to 4%" })).toBe(true);
