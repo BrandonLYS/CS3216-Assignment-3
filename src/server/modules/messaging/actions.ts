@@ -4,8 +4,14 @@ import type { z } from "zod";
 import { runAction, runParticipantAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
 import { MESSAGE_PAGE_MORE } from "@/shared/domain";
-import { messagingService, participantMessagingService } from "./service";
-import { addParticipantSchema, createRoomSchema, olderMessagesSchema, postMessageSchema } from "./validation";
+import { MESSAGE_CATCH_UP_MAX, messagingService, participantMessagingService } from "./service";
+import {
+  addParticipantSchema,
+  createRoomSchema,
+  newerMessagesSchema,
+  olderMessagesSchema,
+  postMessageSchema,
+} from "./validation";
 
 export async function createRoomAction(input: z.input<typeof createRoomSchema> | FormData) {
   const res = await runAction(createRoomSchema, input, (ctx, i) => messagingService.createRoom(ctx, i));
@@ -60,5 +66,22 @@ export async function olderMessagesAction(input: z.input<typeof olderMessagesSch
 export async function participantOlderMessagesAction(input: z.input<typeof olderMessagesSchema>) {
   return runParticipantAction(olderMessagesSchema, input, (pctx, { projectId, roomId, before }) =>
     participantMessagingService.listMessages(pctx, { projectId, roomId }, { before, limit: MESSAGE_PAGE_MORE }),
+  );
+}
+
+/**
+ * The other direction, and how an open pane learns what the other side said (issue #59):
+ * read-only, unrevalidating, and asked on a timer rather than by a gesture. Each audience
+ * enters through its own seam, exactly as the paging pair above does.
+ */
+export async function newerMessagesAction(input: z.input<typeof newerMessagesSchema>) {
+  return runAction(newerMessagesSchema, input, (ctx, { projectId, roomId, after }) =>
+    messagingService.messagesSince(ctx, { projectId, roomId }, { after, limit: MESSAGE_CATCH_UP_MAX }),
+  );
+}
+
+export async function participantNewerMessagesAction(input: z.input<typeof newerMessagesSchema>) {
+  return runParticipantAction(newerMessagesSchema, input, (pctx, { projectId, roomId, after }) =>
+    participantMessagingService.messagesSince(pctx, { projectId, roomId }, { after, limit: MESSAGE_CATCH_UP_MAX }),
   );
 }
