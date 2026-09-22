@@ -302,3 +302,137 @@ test("unavailable or unconfigured analytics does not prevent signup or Project c
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/login");
 });
+
+const funnelRoot = "docs/artifacts/74-proposal-funnel";
+
+async function addEvidence(page: Page, title: string, body: string) {
+  await page.getByRole("main").getByRole("link", { name: "Evidence", exact: true }).click();
+  await expect(page).toHaveURL(/\/evidence$/);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Title").fill(title);
+  await dialog.getByLabel("Kind").selectOption("minutes");
+  await dialog.getByLabel("Pasted text").fill(body);
+  await dialog.getByRole("button", { name: "Add evidence" }).click();
+  await expect(dialog).toBeHidden();
+}
+
+/** The pass runs after the response, so the Overview has to be re-read until it shows the new cards. */
+async function overviewWithProposals(page: Page, projectUrl: string, count: number) {
+  await expect
+    .poll(
+      async () => {
+        await page.goto(projectUrl);
+        await expect(page.getByText("Needs attention").first()).toBeVisible();
+        return page.getByTestId("proposal-card").count();
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(count);
+  return page.getByTestId("proposal-card");
+}
+
+async function acceptInDialog(page: Page, newTitle?: string) {
+  const dialog = page.getByRole("dialog", { name: "Confirm proposed decision" });
+  await expect(dialog).toBeVisible();
+  // The Proposal states no date, so the required field has to be filled; that is not an edit of it.
+  await dialog.getByLabel("Decided on").fill("2026-09-15");
+  if (newTitle) await dialog.getByLabel("Title").fill(newTitle);
+  await dialog.getByRole("button", { name: "Accept and create decision" }).click();
+  await expect(dialog).toBeHidden();
+}
+
+test("the Proposal funnel records automatic generation, unchanged and edited acceptance, and rejection", async ({
+  page,
+}) => {
+  test.skip(!!process.env.ANALYTICS_DISABLED);
+  const user = await signup(page);
+  await createProject(page);
+  const projectUrl = new URL(page.url()).pathname;
+  const start = events.length;
+
+  // Nobody asks for a pass: adding Evidence schedules one.
+  await addEvidence(
+    page,
+    "Steering call notes",
+    "After the pilot we decided to switch from weekly surveys to fortnightly interviews because response rates fell to 4%. The team chose Playwright over Cypress for the regression suite.",
+  );
+  const generated = await captured("proposal_generated", user.id, start);
+  expect(generated.properties).toMatchObject({ trigger: "automatic", extractor: "heuristic", source_count: 1 });
+  expect(session(generated)).toBe(session(await captured("project_created", user.id)));
+
+  const cards = await overviewWithProposals(page, projectUrl, Number(generated.properties.proposal_count));
+  await expect(cards).toHaveCount(2);
+
+  // Opening the review form and submitting it untouched is not an edit.
+  await cards.first().getByTestId("edit-accept-proposal").click();
+  await acceptInDialog(page);
+  const unchanged = await captured("proposal_accepted", user.id, start);
+  expect(unchanged.properties).toMatchObject({ edited_before_accept: false });
+
+  // One click, no form at all.
+  const oneClickStart = events.length;
+  const remaining = await overviewWithProposals(page, projectUrl, 1);
+  await remaining.first().getByTestId("accept-proposal").click();
+  await expect(remaining).toHaveCount(0);
+  expect((await captured("proposal_accepted", user.id, oneClickStart)).properties).toMatchObject({
+    edited_before_accept: false,
+  });
+
+  // A second automatic pass, then an acceptance the PM really did edit, and a rejection.
+  const secondStart = events.length;
+  await addEvidence(
+    page,
+    "Sprint review notes",
+    "We agreed to freeze the legacy gateway on 1 October instead of running both in parallel. We decided to keep the vendor sandbox rather than self-hosting it.",
+  );
+  expect((await captured("proposal_generated", user.id, secondStart)).properties).toMatchObject({
+    trigger: "automatic",
+  });
+  const next = await overviewWithProposals(page, projectUrl, 2);
+  await next.first().getByTestId("edit-accept-proposal").click();
+  await acceptInDialog(page, "Freeze the legacy gateway");
+  expect((await captured("proposal_accepted", user.id, secondStart)).properties).toMatchObject({
+    edited_before_accept: true,
+  });
+
+  const rejectStart = events.length;
+  const last = await overviewWithProposals(page, projectUrl, 1);
+  await last.first().getByTestId("reject-proposal").click();
+  await expect(last).toHaveCount(0);
+  await captured("proposal_rejected", user.id, rejectStart);
+
+  // Events reconcile with what the Project persisted.
+  await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
+  await expect(page.getByTestId("acceptance-rate")).toHaveText(/3 of 4/);
+  const funnel = events.slice(start).filter((event) => event.event.startsWith("proposal_") && id(event) === user.id);
+  const accepted = funnel.filter((event) => event.event === "proposal_accepted");
+  const rejected = funnel.filter((event) => event.event === "proposal_rejected");
+  const raised = funnel
+    .filter((event) => event.event === "proposal_generated")
+    .reduce((n, event) => n + Number(event.properties.proposal_count), 0);
+  expect([raised, accepted.length, rejected.length]).toEqual([4, 3, 1]);
+  expect(accepted.filter((event) => event.properties.edited_before_accept === true)).toHaveLength(1);
+  expect(JSON.stringify(funnel)).not.toMatch(/Analytics Test|Analytics Project|@test.local|Steering call|pilot we/);
+  for (const event of funnel) expect(event.properties.browser_context).toBe("browser");
+
+  await writeFile(
+    `${funnelRoot}/verified-events.json`,
+    JSON.stringify(
+      {
+        environment: "local real SDK, synthetic User and Project",
+        checkedAt: new Date().toISOString(),
+        persisted: { proposed: raised, accepted: accepted.length, rejected: rejected.length },
+        events: funnel.map((event) => ({
+          event: event.event,
+          distinct_id: id(event),
+          session_id: session(event),
+          timestamp: event.timestamp,
+          properties: event.properties,
+        })),
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+});
