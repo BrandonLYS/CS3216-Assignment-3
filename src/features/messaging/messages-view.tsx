@@ -328,7 +328,20 @@ function Room({
                   <div className="flex items-baseline gap-2">
                     <span className="text-caption font-medium text-ink">{m.authorName}</span>
                     {mine(m) && <span className="text-caption text-ink-tertiary">You</span>}
-                    <span className="text-caption text-ink-tertiary" title={fmtDateTime(m.createdAt)}>
+                    {/*
+                      `relative` is a function of the current time, so a Chat Message
+                      written moments ago can render "less than a minute ago" on the server
+                      and "1 minute ago" by the time the browser hydrates, which React
+                      reports as a hydration mismatch. The client's answer is the correct
+                      one and replaces it either way. Pre-existing, and worth fixing here
+                      because live delivery is exactly what puts seconds-old Chat Messages
+                      on the page (the other `relative` call sites are unchanged).
+                    */}
+                    <span
+                      className="text-caption text-ink-tertiary"
+                      title={fmtDateTime(m.createdAt)}
+                      suppressHydrationWarning
+                    >
                       {relative(m.createdAt)}
                     </span>
                   </div>
