@@ -267,6 +267,12 @@ function Room({
     const held = anchor.current;
     const el = scroller.current;
     if (!held || !el) return;
+    // Only the prepend this anchor was taken for may consume it. A Chat Message that
+    // arrives from the catch-up is appended at the newest end and leaves the oldest row
+    // alone: restoring a distance from the bottom for that would move a reader who is
+    // scrolled up, and clearing the anchor would leave the older page - still in flight -
+    // with nothing to hold their place when it lands.
+    if (history.messages.at(-1)?.id === held.oldestId) return;
     anchor.current = null;
     const previouslyOldest = el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(held.oldestId)}"]`);
     if (held.keepInView && previouslyOldest) {
@@ -381,6 +387,18 @@ const FIRST_ID = "00000000-0000-0000-0000-000000000000";
 /** Consecutive failures after which the pane stops asking until the tab is shown again. */
 const POLL_GIVE_UP_AFTER = 5;
 
+/** Batches one tick may walk forward before it gives up and reloads the newest page. */
+const POLL_MAX_BATCHES = 5;
+
+/**
+ * Where a catch-up asks from: the confirmed cursor, moved back by the overlap, or the
+ * Room's own creation for a pane with nothing in it - nothing predates its Room.
+ */
+const overlapped = (confirmed: RoomMessageRow | undefined, roomCreatedAt: Date) => ({
+  createdAt: confirmed ? new Date(confirmed.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS) : roomCreatedAt,
+  id: FIRST_ID,
+});
+
 /** How close to the newest Chat Message still counts as reading the end of the Room. */
 const PINNED_WITHIN_PX = 80;
 
@@ -470,6 +488,14 @@ function useRoomHistory({
   const polling = React.useRef(false);
   /** Consecutive failed polls. A deleted Room or Person fails identically forever. */
   const failures = React.useRef(0);
+  /**
+   * The newest Chat Message a **server read** has confirmed, which is what the next
+   * catch-up asks from. Deliberately not `messages[0]`: the reader's own Chat Message goes
+   * into `messages` the moment it is written, and it says nothing about what arrived while
+   * the poll was failing. Treating it as the cursor would skip that whole stretch of the
+   * Room permanently, because paging only ever reaches backwards from the oldest row.
+   */
+  const synced = React.useRef(page[0]);
   // A Room switch unmounts this; never set state on the way out.
   const mounted = React.useRef(true);
   const current = React.useRef(generation);
@@ -484,6 +510,13 @@ function useRoomHistory({
   React.useEffect(() => {
     current.current = generation;
   }, [generation]);
+
+  // The route's page is a server read too, and the newest one there is: whether it arrived
+  // contiguously or replaced the history outright, it is a cursor the catch-up may trust.
+  React.useEffect(() => {
+    const first = page[0];
+    if (first && (!synced.current || newestFirst(first, synced.current) < 0)) synced.current = first;
+  }, [page]);
 
   /**
    * Fetch the page before the oldest Chat Message on screen. Scrolling is the caller's: it
@@ -541,35 +574,46 @@ function useRoomHistory({
    */
   const catchUp = React.useCallback(async () => {
     if (polling.current || failures.current >= POLL_GIVE_UP_AFTER) return;
-    const newest = messages[0];
-    const after = newest
-      ? { createdAt: new Date(newest.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS), id: FIRST_ID }
-      : { createdAt: roomCreatedAt, id: FIRST_ID };
     polling.current = true;
     const asked = generation;
     const ask = viewer.kind === "pm" ? newerMessagesAction : participantNewerMessagesAction;
     try {
-      const res = await ask({ projectId, roomId, after });
-      if (!mounted.current || current.current !== asked) return;
-      if (!res.ok) {
-        // Silent: nobody asked for this read, so there is nothing to interrupt them with.
-        // A Room or a Person deleted under the pane fails this way on every tick, which is
-        // what the counter is for.
-        failures.current += 1;
-        return;
+      let after = overlapped(synced.current, roomCreatedAt);
+      for (let batch = 0; batch < POLL_MAX_BATCHES; batch++) {
+        const res = await ask({ projectId, roomId, after });
+        if (!mounted.current || current.current !== asked) return;
+        if (!res.ok) {
+          // Silent: nobody asked for this read, so there is nothing to interrupt them
+          // with. A Room or a Person deleted under the pane fails this way on every tick,
+          // which is what the counter is for.
+          failures.current += 1;
+          return;
+        }
+        failures.current = 0;
+        const { items, truncated } = res.data;
+        const newest = items.at(-1);
+        if (newest) {
+          synced.current = newest;
+          setMessages((loaded) => merge(loaded, items));
+        }
+        if (!truncated || !newest) return;
+        // More was waiting than one batch carries. Walk forward from the end of this batch
+        // rather than asking from the same place again: consecutive batches are contiguous
+        // by cursor, so there is no hole to repair, and re-asking with the overlap would
+        // return the rows just merged. A Room busy enough to fill a batch inside the
+        // overlap window would otherwise be truncated on every tick forever.
+        after = { createdAt: newest.createdAt, id: newest.id };
       }
-      failures.current = 0;
-      // More was written than one batch carries, so the rows above these are missing and
-      // merging would leave a hole in the history. Start again from the route's newest page:
-      // the non-contiguity branch above discards what is loaded and bumps the generation.
-      if (res.data.truncated) router.refresh();
-      else if (res.data.items.length) setMessages((loaded) => merge(loaded, res.data.items));
+      // Still behind after the whole walk. The pane is far enough out of date that the
+      // route's newest page is cheaper than reading the rest a batch at a time, and the
+      // non-contiguity branch above is what discards the loaded history to make room.
+      router.refresh();
     } catch {
       failures.current += 1;
     } finally {
       polling.current = false;
     }
-  }, [generation, messages, projectId, roomCreatedAt, roomId, router, viewer.kind]);
+  }, [generation, projectId, roomCreatedAt, roomId, router, viewer.kind]);
 
   // The interval must not be rebuilt whenever a Chat Message arrives - that would reset the
   // countdown on every merge - and must not close over the `messages` of the render that
