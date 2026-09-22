@@ -1,10 +1,14 @@
-import { index, jsonb, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { user } from "@/server/auth/schema";
 import { id, timestamps } from "@/server/db/columns";
 import { messageRoleEnum } from "@/server/db/enums";
 import { projects } from "@/server/modules/projects/schema";
 
-/** One thread between a User and the Assistant about one Project (or none, on the dashboard). */
+/**
+ * One thread between a User and the Assistant about one Project (or none, on the dashboard).
+ * A User may keep several per scope and resume any of them; `title` is derived from the first
+ * user Message when it is saved.
+ */
 export const conversations = pgTable(
   "conversations",
   {
@@ -13,9 +17,11 @@ export const conversations = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    title: text("title"),
+    pinned: boolean("pinned").notNull().default(false),
     ...timestamps,
   },
-  (t) => [unique("conversations_user_project_unique").on(t.userId, t.projectId).nullsNotDistinct()],
+  (t) => [index("conversations_scope_idx").on(t.userId, t.projectId, t.updatedAt)],
 );
 
 /**
@@ -39,5 +45,24 @@ export const messages = pgTable(
   ],
 );
 
+/**
+ * A standing approval ("always allow") the User granted for one write tool in one scope:
+ * a Project, or the dashboard when `projectId` is null (ADR 0011).
+ */
+export const toolPermissions = pgTable(
+  "tool_permissions",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    toolName: text("tool_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("tool_permissions_user_project_tool_unique").on(t.userId, t.projectId, t.toolName).nullsNotDistinct()],
+);
+
 export type ConversationRow = typeof conversations.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+export type ToolPermissionRow = typeof toolPermissions.$inferSelect;

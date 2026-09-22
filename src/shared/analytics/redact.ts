@@ -16,3 +16,17 @@ export const carriesSecret = (value: unknown): value is string =>
  * replay would keep the address bar exactly as it was, token included.
  */
 export const isCredentialPath = (pathname: string) => pathname.startsWith("/invite/");
+
+/** SDK envelopes include nested $set_once properties, so sanitize those as well as flat properties. */
+export function redactAnalyticsProperties(value: unknown): unknown {
+  if (typeof value === "string") {
+    // URLs may contain arbitrary search text or encoded credentials in query/hash parameters.
+    if (/^https?:\/\//.test(value) || value.startsWith("/")) return redactUrl(value.split(/[?#]/, 1)[0]);
+    return carriesSecret(value) ? redactUrl(value) : value;
+  }
+  if (Array.isArray(value)) return value.map(redactAnalyticsProperties);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactAnalyticsProperties(item)]));
+  }
+  return value;
+}

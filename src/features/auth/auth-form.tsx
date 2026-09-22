@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import posthog from "posthog-js";
+import { authenticationCompleted } from "@/shared/analytics/browser";
 import { signIn, signUp } from "@/shared/lib/auth-client";
 import { Button, Field, Input } from "@/shared/ui";
 
@@ -31,9 +31,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         : await signUp.email({ email, password, name: String(fd.get("name")) });
     setLoading(false);
     if (res.error) return setError(res.error.message ?? "Something went wrong");
-    if (mode === "signup" && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
-      posthog.capture("signup_completed");
-    }
+    if (res.data?.user.id) authenticationCompleted(res.data.user.id, mode === "signup");
     router.push(safeReturnPath(params.get("next")));
     router.refresh();
   }

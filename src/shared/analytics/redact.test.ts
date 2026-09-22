@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carriesSecret, isCredentialPath, redactUrl } from "./redact";
+import { carriesSecret, isCredentialPath, redactUrl, redactAnalyticsProperties } from "./redact";
 
 const TOKEN = "dhc5Xc8WDAtmBrkJbkXO8FYxRwAJecRG";
 
@@ -34,5 +34,21 @@ describe("keeping an invite token out of analytics", () => {
     expect(carriesSecret(`http://localhost:3000/invite/${TOKEN}`)).toBe(true);
     expect(carriesSecret(undefined)).toBe(false);
     expect(carriesSecret(42)).toBe(false);
+  });
+});
+
+describe("SDK envelope redaction", () => {
+  it("redacts nested initial URLs and removes query/hash content", () => {
+    expect(
+      redactAnalyticsProperties({
+        $set_once: { $initial_referrer: "https://app.example.com/invite/secret?email=person@example.com#secret" },
+        $current_url: "/login?next=%2Finvite%2Fsecret",
+        count: 2,
+      }),
+    ).toEqual({
+      $set_once: { $initial_referrer: "https://app.example.com/invite/[token]" },
+      $current_url: "/login",
+      count: 2,
+    });
   });
 });

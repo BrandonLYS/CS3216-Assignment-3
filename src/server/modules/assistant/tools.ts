@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Ctx } from "@/server/core/context";
-import { NotFoundError } from "@/server/core/errors";
+import { NotFoundError, ValidationError } from "@/server/core/errors";
 import { hexColor } from "@/server/core/validation";
 import { commentsService } from "@/server/modules/comments/service";
 import { createCommentSchema } from "@/server/modules/comments/validation";
@@ -33,7 +33,9 @@ export interface ToolDef<S extends z.ZodObject = z.ZodObject> {
   description: string;
   input: S;
   handler: (ctx: Ctx, input: z.infer<S>) => Promise<unknown>;
-  /** Destructive or Project-level: the User confirms a card first; excluded from MCP (no UI). */
+  /** Writes project state: the chat stops at an approval card unless the User always-allowed it (ADR 0011). */
+  mutates?: true;
+  /** Destructive or Project-level: `describe` renders a named-target card; excluded from MCP (no UI). */
   requiresConfirmation?: true;
   /** Card text naming the concrete target and change, e.g. `Delete Task PM-12 “Write test plan”?`. */
   describe?: (ctx: Ctx, input: z.infer<S>) => Promise<string>;
@@ -106,18 +108,21 @@ export const PROJECT_TOOLS: ToolDef[] = [
     description:
       "Create a Task. statusId, assigneeId, teamId, milestoneId and labelIds must be ids from get_project_summary; omit statusId for the default Status. Dates are YYYY-MM-DD.",
     input: createTaskSchema,
+    mutates: true,
     handler: (ctx, input) => tasksService.create(ctx, input),
   }),
   defineTool({
     name: "update_task",
     description: "Change fields on a Task by id. Only send the fields that change; ids come from get_project_summary.",
     input: updateTaskSchema,
+    mutates: true,
     handler: (ctx, input) => tasksService.update(ctx, input),
   }),
   defineTool({
     name: "delete_task",
     description: "Delete a Task by id. The User confirms first.",
     input: z.object({ id: z.string() }),
+    mutates: true,
     requiresConfirmation: true,
     describe: async (ctx, { id }) => {
       const t = await tasksService.get(ctx, id);
@@ -131,18 +136,21 @@ export const PROJECT_TOOLS: ToolDef[] = [
     name: "create_milestone",
     description: "Create a Milestone with a due date (YYYY-MM-DD). statusId and ownerId are optional ids.",
     input: createMilestoneSchema,
+    mutates: true,
     handler: (ctx, input) => milestonesService.create(ctx, input),
   }),
   defineTool({
     name: "update_milestone",
     description: "Change fields on a Milestone by id. Only send the fields that change.",
     input: updateMilestoneSchema,
+    mutates: true,
     handler: (ctx, input) => milestonesService.update(ctx, input),
   }),
   defineTool({
     name: "delete_milestone",
     description: "Delete a Milestone by id. Tasks keep existing but lose the link. The User confirms first.",
     input: z.object({ id: z.string() }),
+    mutates: true,
     requiresConfirmation: true,
     describe: async (ctx, { id }) => `Delete Milestone ${q((await milestonesService.get(ctx, id)).name)}?`,
     handler: (ctx, { id }) => milestonesService.delete(ctx, id).then(() => ({ deleted: id })),
@@ -152,6 +160,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
     description:
       "Change the Project itself: name, key, description, status, health, startDate or targetDate. The User confirms first.",
     input: updateProjectSchema.omit({ id: true }).extend({ projectId: z.string() }),
+    mutates: true,
     requiresConfirmation: true,
     describe: async (ctx, { projectId, ...patch }) =>
       `Update Project ${(await projectsService.get(ctx, projectId)).key}: ${changeList(patch)}?`,
@@ -162,12 +171,14 @@ export const PROJECT_TOOLS: ToolDef[] = [
     description:
       "Log a Risk. probability and impact are low | medium | high; ownerId and statusId are ids from get_project_summary.",
     input: createRiskSchema,
+    mutates: true,
     handler: (ctx, input) => risksService.create(ctx, input),
   }),
   defineTool({
     name: "update_risk",
     description: "Change fields on a Risk by id, e.g. mitigation, probability, impact, ownerId, statusId.",
     input: updateRiskSchema,
+    mutates: true,
     handler: (ctx, input) => risksService.update(ctx, input),
   }),
   defineTool({
@@ -175,6 +186,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
     description:
       "Add a Comment to a Task, Risk or Milestone. saidById (a Person id) and saidOn (YYYY-MM-DD) record who said it and when, if the User tells you.",
     input: createCommentSchema,
+    mutates: true,
     handler: (ctx, input) => commentsService.create(ctx, input),
   }),
   defineTool({
@@ -182,12 +194,14 @@ export const PROJECT_TOOLS: ToolDef[] = [
     description:
       "Make one Task or Milestone depend on another: the successor cannot finish before the predecessor. Types are task | milestone; ids from get_project_summary.",
     input: createDependencySchema,
+    mutates: true,
     handler: (ctx, input) => dependenciesService.create(ctx, input),
   }),
   defineTool({
     name: "remove_dependency",
     description: "Remove a Dependency by its id (see the Dependencies of a Task from get_task).",
     input: byId,
+    mutates: true,
     handler: (ctx, { id }) => dependenciesService.delete(ctx, id).then(() => ({ deleted: id })),
   }),
   defineTool({
@@ -200,6 +214,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
     name: "create_person",
     description: "Add a Person to the Project. teamId is optional.",
     input: createPersonSchema,
+    mutates: true,
     handler: (ctx, input) => peopleService.createPerson(ctx, input),
   }),
   defineTool({
@@ -218,12 +233,14 @@ export const PROJECT_TOOLS: ToolDef[] = [
     name: "create_label",
     description: "Create a Label. Omit color to get one picked; otherwise a #rrggbb hex.",
     input: createLabelSchema.extend({ color: hexColor.optional() }),
+    mutates: true,
     handler: (ctx, input) => labelsService.create(ctx, { ...input, color: input.color ?? swatchFor(input.name) }),
   }),
   defineTool({
     name: "set_task_labels",
     description: "Replace a Task's Labels with exactly these Label ids (create missing Labels first).",
     input: byId.extend({ labelIds: z.array(z.string()) }),
+    mutates: true,
     handler: (ctx, input) => tasksService.update(ctx, input),
   }),
   defineTool({
@@ -260,6 +277,7 @@ export const PROJECT_TOOLS: ToolDef[] = [
     name: "link_evidence",
     description: "Link an Evidence record to a Task, Risk or Milestone. Idempotent.",
     input: evidenceLinkSchema,
+    mutates: true,
     handler: (ctx, input) => evidenceService.link(ctx, input),
   }),
 ];
@@ -286,11 +304,57 @@ export const WORKSPACE_TOOLS: ToolDef[] = [
     },
   }),
   defineTool({
+    name: "open_project",
+    description:
+      "Open one of the User's Projects by id or (part of) its name. The whole Conversation - history included - moves into that Project and the app navigates there, so following messages act inside the Project. Call this before serving a request about a Project's Tasks, Milestones, Risks, People or Evidence.",
+    input: z.object({
+      // Bound by the chat route, absent under MCP (which has no Conversation to attach).
+      conversationId: z.string().optional(),
+      id: z.string().optional(),
+      name: z.string().optional(),
+    }),
+    handler: async (ctx, input) => {
+      const projects = await projectsService.list(ctx);
+      let project = input.id ? projects.find((p) => p.id === input.id) : undefined;
+      if (!project && input.name) {
+        const q = input.name.toLowerCase();
+        const exact = projects.filter((p) => p.name.toLowerCase() === q);
+        const hits = exact.length ? exact : projects.filter((p) => p.name.toLowerCase().includes(q));
+        if (hits.length === 1) project = hits[0];
+        else if (!hits.length) throw new NotFoundError(`No Project matches "${input.name}"`);
+        else
+          return {
+            error: "More than one Project matches - call open_project again with the right id.",
+            matches: hits.map((p) => ({ id: p.id, key: p.key, name: p.name })),
+          };
+      }
+      if (!project) throw new ValidationError("open_project needs a Project id or name");
+      if (input.conversationId) {
+        const { assistantService } = await import("./service");
+        await assistantService.attachToProject(ctx, input.conversationId, project.id);
+      }
+      return {
+        id: project.id,
+        key: project.key,
+        name: project.name,
+        attachedConversation: Boolean(input.conversationId),
+      };
+    },
+  }),
+  defineTool({
     name: "create_project",
     description:
-      "Create a Project. key is 2 to 6 letters or digits starting with a letter (e.g. WEB); dates are YYYY-MM-DD.",
-    input: createProjectSchema,
-    handler: (ctx, input) => projectsService.create(ctx, input),
+      "Create a Project. key is 2 to 6 letters or digits starting with a letter (e.g. WEB); dates are YYYY-MM-DD. The Conversation moves into the new Project and the app navigates there.",
+    input: createProjectSchema.extend({ conversationId: z.string().optional() }),
+    mutates: true,
+    handler: async (ctx, { conversationId, ...input }) => {
+      const project = await projectsService.create(ctx, input);
+      if (conversationId) {
+        const { assistantService } = await import("./service");
+        await assistantService.attachToProject(ctx, conversationId, project.id);
+      }
+      return project;
+    },
   }),
 ];
 

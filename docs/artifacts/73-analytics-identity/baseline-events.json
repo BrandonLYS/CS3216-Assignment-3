@@ -1,0 +1,56 @@
+{
+  "environment": "local real SDK, synthetic account",
+  "base": "a0cb755",
+  "user_id": "LARMqH2gURtbdRxR4soB4Wx2h52DVBDh",
+  "events": [
+    {
+      "event": "project_created",
+      "distinct_id": "LARMqH2gURtbdRxR4soB4Wx2h52DVBDh",
+      "session_id": null,
+      "url": null,
+      "timestamp": "2026-09-21T22:47:58.309Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c627-922c-7880-b0f5-f50673e43b90",
+      "session_id": "01a0c627-9236-7c4f-b795-5316def76e37",
+      "url": "/",
+      "timestamp": "2026-09-21T22:47:57.231Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c627-922c-7880-b0f5-f50673e43b90",
+      "session_id": "01a0c627-9236-7c4f-b795-5316def76e37",
+      "url": "/",
+      "timestamp": "2026-09-21T22:47:57.240Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c627-922c-7880-b0f5-f50673e43b90",
+      "session_id": "01a0c627-9236-7c4f-b795-5316def76e37",
+      "url": "/signup",
+      "timestamp": "2026-09-21T22:47:57.335Z"
+    },
+    {
+      "event": "signup_completed",
+      "distinct_id": "01a0c627-922c-7880-b0f5-f50673e43b90",
+      "session_id": "01a0c627-9236-7c4f-b795-5316def76e37",
+      "url": "http://localhost:3001/signup",
+      "timestamp": "2026-09-21T22:47:57.839Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c627-922c-7880-b0f5-f50673e43b90",
+      "session_id": "01a0c627-9236-7c4f-b795-5316def76e37",
+      "url": "/dashboard",
+      "timestamp": "2026-09-21T22:47:57.989Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c627-922c-7880-b0f5-f50673e43b90",
+      "session_id": "01a0c627-9236-7c4f-b795-5316def76e37",
+      "url": "/projects/dfa75d52-6276-4f0a-aea0-c78a1293d1f5",
+      "timestamp": "2026-09-21T22:47:58.497Z"
+    }
+  ]
+}

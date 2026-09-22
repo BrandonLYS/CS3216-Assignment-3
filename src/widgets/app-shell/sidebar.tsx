@@ -4,6 +4,7 @@ import { CalendarDays, FolderKanban, LayoutDashboard, LogOut, Plus, Search, Sett
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ProjectRow } from "@/server/modules/projects/schema";
+import { resetAnalyticsIdentity } from "@/shared/analytics/browser";
 import { signOut } from "@/shared/lib/auth-client";
 import { cn } from "@/shared/lib/cn";
 import { Logo } from "@/shared/ui";
@@ -107,7 +108,12 @@ export function Sidebar({
           <p className="truncate text-[11px] text-ink-tertiary">{user.email}</p>
         </div>
         <button
-          onClick={() => signOut().then(() => router.push("/login"))}
+          onClick={async () => {
+            const result = await signOut();
+            if (result.error) return;
+            resetAnalyticsIdentity();
+            router.push("/login");
+          }}
           className="rounded-xs p-1 text-ink-tertiary hover:bg-surface-2 hover:text-ink"
           aria-label="Sign out"
         >

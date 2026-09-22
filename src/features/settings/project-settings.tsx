@@ -9,6 +9,7 @@ import type { memoryService } from "@/server/modules/memory/service";
 import { deleteProjectAction, updateProjectAction } from "@/server/modules/projects/actions";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { HEALTH_LEVELS, PROJECT_STATUSES } from "@/shared/domain";
+import { PROJECT_TOOL_GROUPS } from "@/shared/lib/assistant-tools";
 import {
   ActionForm,
   Button,
@@ -22,14 +23,18 @@ import {
   enumOptions,
 } from "@/shared/ui";
 import { MemoryEditor } from "@/features/memory/memory-editor";
+import { AssistantPermissions } from "./assistant-permissions";
 import { StatusManager } from "./status-manager";
 
 export function ProjectSettings({
   refs,
   memory,
+  permissions,
 }: {
   refs: ProjectRefs;
   memory: Awaited<ReturnType<typeof memoryService.versions>>;
+  /** Assistant tools the User always-allowed in this Project (ADR 0011). */
+  permissions: string[];
 }) {
   const { project } = refs;
   const router = useRouter();
@@ -140,6 +145,17 @@ export function ProjectSettings({
             placeholder="Priya owns vendor risk. UAT slips are the main worry. Weekly sync on Tuesdays."
             hint="Markdown. Roughly 2,000 tokens at most."
           />
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <div>
+            <SectionTitle>Assistant permissions</SectionTitle>
+            <p className="mt-1 text-caption text-ink-subtle">
+              Write tools the Assistant may run in this Project without asking. Switch tools on individually or a whole
+              group at once; granted tools show “auto-approved” in the Assistant panel.
+            </p>
+          </div>
+          <AssistantPermissions projectId={project.id} groups={PROJECT_TOOL_GROUPS} permissions={permissions} />
         </section>
 
         <section className="flex flex-col gap-4">
