@@ -55,7 +55,10 @@ Once the pane has held the same cursor for longer than the window - ten seconds 
 That is measured as elapsed time on the browser's own clock, never by comparing the browser's clock with the database's, which may disagree by more than the window.
 Without it a Room dense enough to hold a batch inside ten seconds would re-read the same rows on every tick for as long as the pane stayed open, long after the conversation stopped.
 
-Two bounds are accepted with this. A write that takes longer than ten seconds to commit is missed until the next navigation, which is the same class of bound a stream would need on its reconnect replay. And the cursor a catch-up asks from is only ever one a **server read** confirmed: a Chat Message the reader wrote themselves is on their screen immediately but never moves the cursor, because it says nothing about what else arrived. The same rule decides whether a refreshed page is continuous with the loaded history - judged against the confirmed cursor, never against the newest row on screen, and a pane with no confirmed cursor adopts the page outright rather than treating its own writing as proof of anything.
+One more bound sits at the far end of that: a Room receiving a thousand Chat Messages inside the window cannot have it re-read faster than it fills, so the pane stops trying and takes the cursor at face value.
+At a hundred Chat Messages a second, a late commit lost inside that window is a better outcome than a thousand rows read every few seconds forever.
+
+Two further bounds are accepted with this. A write that takes longer than ten seconds to commit is missed until the next navigation, which is the same class of bound a stream would need on its reconnect replay. And the cursor a catch-up asks from is only ever one a **server read** confirmed: a Chat Message the reader wrote themselves is on their screen immediately but never moves the cursor, because it says nothing about what else arrived. The same rule decides whether a refreshed page is continuous with the loaded history - judged against the confirmed cursor, never against the newest row on screen, and a pane with no confirmed cursor adopts the page outright rather than treating its own writing as proof of anything.
 
 ## Consequences
 

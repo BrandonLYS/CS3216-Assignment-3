@@ -530,13 +530,18 @@ function useRoomHistory({
       // Anything already in flight belongs to the history that was just thrown away, and
       // merging it back would reinstate the hole this branch exists to avoid.
       setGeneration((n) => n + 1);
+      // The cursor is replaced with the history, even when the page is older than it. A
+      // refresh answered slowly while the poll kept working is exactly that, and keeping
+      // the newer cursor over the older history would leave everything between them
+      // discarded from the pane and below the next catch-up: a hole, again.
+      setSynced(page[0]);
     }
-    // The route's page is a server read, and the newest one there is: whichever branch
-    // ran, its newest row is a cursor the catch-up may trust. Adjusted here rather than in
-    // an effect, like everything else in this block - a `setState` in an effect body is
-    // both a cascading render and what the React Compiler refuses to compile.
+    // The route's page is a server read, and the newest one there is: on the merging
+    // branch it may only move the cursor forward. Adjusted here rather than in an effect,
+    // like everything else in this block - a `setState` in an effect body is both a
+    // cascading render and what the React Compiler refuses to compile.
     const first = page[0];
-    if (first && (!synced || newestFirst(first, synced) < 0)) setSynced(first);
+    if (contiguous && first && (!synced || newestFirst(first, synced) < 0)) setSynced(first);
   }
   // One request at a time: the button and the observer call the same function, and the
   // observer keeps firing while the sentinel is on screen.
@@ -692,6 +697,14 @@ function useRoomHistory({
         // overlap window would otherwise be truncated on every tick forever.
         after = { createdAt: newest.createdAt, id: newest.id };
       }
+      // The walk ran out of reads without reaching the end. In a Room quiet enough to
+      // matter this cannot happen; it takes a thousand Chat Messages inside the overlap
+      // window, and that window would then be re-read on every tick for as long as the
+      // pane stayed open, because nothing here would ever retire it. The overlap is
+      // therefore given up on for this cursor: at that rate the pane cannot re-read the
+      // window faster than the Room fills it, and a late commit lost inside it is the
+      // accepted price of not reading a thousand rows every few seconds (ADR 0011).
+      if (!settled) overlapReadAt.current = Math.max(overlapReadAt.current, askedAt);
       // Still behind after the whole walk. The pane is far enough out of date that the
       // route's newest page is cheaper than reading the rest a batch at a time.
       //
