@@ -1,8 +1,9 @@
 import type { UIMessage } from "ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/server/core/context";
-import { ForbiddenError } from "@/server/core/errors";
+import { ForbiddenError, NotFoundError } from "@/server/core/errors";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
+import { messagesRepo } from "./repository";
 import { assistantService } from "./service";
 
 let ctx: Ctx;
@@ -21,7 +22,7 @@ const msg = (id: string, role: UIMessage["role"], text: string): UIMessage => ({
 });
 
 describe("assistantService conversations", () => {
-  it("creates one Conversation per User per Project and returns the same one again", async () => {
+  it("returns the latest Conversation in a scope, creating one on first open", async () => {
     const a = await assistantService.conversation(ctx, projectId);
     const b = await assistantService.conversation(ctx, projectId);
     expect(a.conversation.id).toBe(b.conversation.id);
@@ -76,5 +77,112 @@ describe("assistantService conversations", () => {
   it("refuses a Project the User does not own", async () => {
     const stranger = await makeCtx();
     await expect(assistantService.conversation(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("creates additional Conversations and lists them newest first", async () => {
+    const before = await assistantService.dock(ctx, projectId);
+    const extra = await assistantService.createConversation(ctx, projectId);
+    const dock = await assistantService.dock(ctx, projectId);
+    expect(dock.conversations.length).toBe(before.conversations.length + 1);
+    expect(dock.conversations[0]?.id).toBe(extra.id);
+    expect(dock.thread.conversation.id).toBe(extra.id);
+    expect(dock.thread.messages).toEqual([]);
+  });
+
+  it("loads a Conversation by id and titles it from the first user message", async () => {
+    const c = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, c.id, [msg("t1", "user", "summarise the risks")]);
+    const thread = await assistantService.thread(ctx, c.id);
+    expect(thread.messages.map((m) => m.id)).toEqual(["t1"]);
+    const listed = (await assistantService.dock(ctx, projectId)).conversations.find((x) => x.id === c.id);
+    expect(listed?.title).toBe("summarise the risks");
+    const stranger = await makeCtx();
+    await expect(assistantService.thread(stranger, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+    // A project Conversation cannot be resumed through the dashboard scope, or vice versa.
+    await expect(assistantService.thread(ctx, c.id, null)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(assistantService.thread(ctx, c.id, projectId)).resolves.toBeDefined();
+  });
+
+  it("pins Conversations to the top and prunes empty ones", async () => {
+    const first = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, first.id, [msg("x1", "user", "thread one")]);
+    const empty = await assistantService.createConversation(ctx, projectId);
+    const pinnedEmpty = await assistantService.createConversation(ctx, projectId);
+    await assistantService.pinConversation(ctx, pinnedEmpty.id, true);
+    const latest = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, latest.id, [msg("x2", "user", "thread two")]);
+
+    const dock = await assistantService.dock(ctx, projectId);
+    expect(dock.conversations[0]?.id).toBe(pinnedEmpty.id); // pinned sorts first
+    expect(dock.conversations[0]?.pinned).toBe(true);
+    expect(dock.thread.conversation.id).toBe(latest.id); // but the latest still opens
+    expect(dock.conversations.map((c) => c.id)).not.toContain(empty.id); // empty pruned
+
+    await assistantService.pinConversation(ctx, pinnedEmpty.id, false);
+    const after = await assistantService.dock(ctx, projectId);
+    expect(after.conversations.map((c) => c.id)).not.toContain(pinnedEmpty.id); // unpinned + empty -> pruned
+
+    const stranger = await makeCtx();
+    await expect(assistantService.pinConversation(stranger, first.id, true)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("re-scopes a Conversation between a Project and overall, for the owner only", async () => {
+    const c = await assistantService.createConversation(ctx, null);
+    const other = (await makeProject(ctx, "SCP")).id;
+
+    await assistantService.setScope(ctx, c.id, projectId);
+    expect((await assistantService.getConversation(ctx, c.id)).projectId).toBe(projectId);
+
+    await assistantService.setScope(ctx, c.id, other);
+    expect((await assistantService.getConversation(ctx, c.id)).projectId).toBe(other);
+
+    await assistantService.setScope(ctx, c.id, null);
+    expect((await assistantService.getConversation(ctx, c.id)).projectId).toBeNull();
+
+    const stranger = await makeCtx();
+    const foreign = (await makeProject(stranger, "FRN")).id;
+    await expect(assistantService.setScope(ctx, c.id, foreign)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(assistantService.setScope(stranger, c.id, projectId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("deletes a Conversation with its Messages, only for the owner", async () => {
+    const c = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, c.id, [msg("d1", "user", "to be deleted")]);
+    const stranger = await makeCtx();
+    await expect(assistantService.deleteConversation(stranger, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+    await assistantService.deleteConversation(ctx, c.id);
+    await expect(assistantService.thread(ctx, c.id)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe("assistantService.library", () => {
+  it("returns Conversations from every scope with their projectId", async () => {
+    const projectConvo = await assistantService.createConversation(ctx, projectId);
+    await assistantService.saveMessages(ctx, projectConvo.id, [msg("l1", "user", "project thread")]);
+    const dashConvo = await assistantService.createConversation(ctx, null);
+    await assistantService.saveMessages(ctx, dashConvo.id, [msg("l2", "user", "dashboard thread")]);
+
+    const byId = new Map((await assistantService.library(ctx)).map((c) => [c.id, c]));
+    expect(byId.get(projectConvo.id)?.projectId).toBe(projectId);
+    expect(byId.get(dashConvo.id)?.projectId).toBeNull();
+  });
+
+  it("prunes empty non-pinned Conversations but keeps keepId", async () => {
+    const empty = await assistantService.createConversation(ctx, projectId);
+    // keepId first: once pruned the row is gone, so it must survive this call.
+    const kept = (await assistantService.library(ctx, empty.id)).map((c) => c.id);
+    expect(kept).toContain(empty.id);
+    const after = (await assistantService.library(ctx)).map((c) => c.id);
+    expect(after).not.toContain(empty.id);
+  });
+
+  it("backfills a title from the first user Message", async () => {
+    const c = await assistantService.createConversation(ctx, null);
+    // Insert directly so saveMessages does not set the title first - this exercises the backfill.
+    await messagesRepo.upsertMany(ctx.db, [
+      { id: "b1", conversationId: c.id, role: "user", parts: [{ type: "text", text: "name me from this" }] },
+    ]);
+    const listed = (await assistantService.library(ctx)).find((x) => x.id === c.id);
+    expect(listed?.title).toBe("name me from this");
   });
 });

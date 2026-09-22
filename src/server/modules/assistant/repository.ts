@@ -1,23 +1,43 @@
-import { and, asc, count, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
-import { conversations, messages, type ConversationRow } from "./schema";
+import { conversations, messages, toolPermissions, type ConversationRow } from "./schema";
+
+const scopeWhere = (userId: string, projectId: string | null) =>
+  and(
+    eq(conversations.userId, userId),
+    projectId ? eq(conversations.projectId, projectId) : isNull(conversations.projectId),
+  );
 
 export const conversationsRepo = {
-  /** Race-safe: two callers creating the same Conversation at once both get the one row (unique key, nulls not distinct). */
-  findOrCreate: async (db: DbOrTx, userId: string, projectId: string | null): Promise<ConversationRow> => {
-    const where = and(
-      eq(conversations.userId, userId),
-      projectId ? eq(conversations.projectId, projectId) : isNull(conversations.projectId),
-    );
-    const [existing] = await db.select().from(conversations).where(where);
-    if (existing) return existing;
-    const [inserted] = await db
-      .insert(conversations)
-      .values({ userId, projectId })
-      .onConflictDoNothing({ target: [conversations.userId, conversations.projectId] })
-      .returning();
-    if (inserted) return inserted;
-    const [row] = await db.select().from(conversations).where(where);
+  /** A User's Conversations in one scope, pinned first then most recently touched. */
+  listByScope: (db: DbOrTx, userId: string, projectId: string | null) =>
+    db
+      .select()
+      .from(conversations)
+      .where(scopeWhere(userId, projectId))
+      .orderBy(desc(conversations.pinned), desc(conversations.updatedAt), desc(conversations.createdAt)),
+
+  /** A User's Conversations across every scope, pinned first then most recently touched. */
+  listAll: (db: DbOrTx, userId: string) =>
+    db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.userId, userId))
+      .orderBy(desc(conversations.pinned), desc(conversations.updatedAt), desc(conversations.createdAt)),
+
+  /** The most recently touched Conversation regardless of pinning. */
+  latest: async (db: DbOrTx, userId: string, projectId: string | null): Promise<ConversationRow | undefined> => {
+    const [row] = await db
+      .select()
+      .from(conversations)
+      .where(scopeWhere(userId, projectId))
+      .orderBy(desc(conversations.updatedAt), desc(conversations.createdAt))
+      .limit(1);
+    return row;
+  },
+
+  create: async (db: DbOrTx, userId: string, projectId: string | null): Promise<ConversationRow> => {
+    const [row] = await db.insert(conversations).values({ userId, projectId }).returning();
     return row!;
   },
 
@@ -25,9 +45,70 @@ export const conversationsRepo = {
     const [row] = await db.select().from(conversations).where(eq(conversations.id, id));
     return row;
   },
+
+  touch: (db: DbOrTx, id: string) =>
+    db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, id)),
+
+  // Metadata writes keep `updatedAt` as-is: it tracks activity, not bookkeeping.
+  setTitle: (db: DbOrTx, id: string, title: string) =>
+    db.update(conversations).set({ title, updatedAt: conversations.updatedAt }).where(eq(conversations.id, id)),
+
+  setPinned: (db: DbOrTx, id: string, pinned: boolean) =>
+    db.update(conversations).set({ pinned, updatedAt: conversations.updatedAt }).where(eq(conversations.id, id)),
+
+  /** Re-scope a Conversation onto a Project (or back to the dashboard with null). Bumps updatedAt so it opens first there. */
+  setProject: (db: DbOrTx, id: string, projectId: string | null) =>
+    db.update(conversations).set({ projectId }).where(eq(conversations.id, id)),
+
+  /** Hard delete; Messages cascade. */
+  remove: (db: DbOrTx, id: string) => db.delete(conversations).where(eq(conversations.id, id)),
+
+  /** Deletes empty Conversations in a scope, keeping `keepId` (the active one) and anything pinned. */
+  pruneEmpty: (db: DbOrTx, userId: string, projectId: string | null, keepId: string) =>
+    db
+      .delete(conversations)
+      .where(
+        and(
+          scopeWhere(userId, projectId),
+          ne(conversations.id, keepId),
+          eq(conversations.pinned, false),
+          sql`not exists (select 1 from ${messages} where ${messages.conversationId} = ${conversations.id})`,
+        ),
+      )
+      .returning({ id: conversations.id }),
+
+  /**
+   * Deletes empty Conversations across every scope, keeping any id in `keepIds` (the ones a
+   * caller currently has open) and anything pinned.
+   */
+  pruneAllEmpty: (db: DbOrTx, userId: string, keepIds: string[]) =>
+    db
+      .delete(conversations)
+      .where(
+        and(
+          eq(conversations.userId, userId),
+          keepIds.length ? notInArray(conversations.id, keepIds) : undefined,
+          eq(conversations.pinned, false),
+          sql`not exists (select 1 from ${messages} where ${messages.conversationId} = ${conversations.id})`,
+        ),
+      )
+      .returning({ id: conversations.id }),
 };
 
 export const messagesRepo = {
+  /** The first user Message's text in a Conversation - the seed for its title. */
+  firstUserText: async (db: DbOrTx, conversationId: string): Promise<string | null> => {
+    const [row] = await db
+      .select({ parts: messages.parts })
+      .from(messages)
+      .where(and(eq(messages.conversationId, conversationId), eq(messages.role, "user")))
+      .orderBy(asc(messages.createdAt))
+      .limit(1);
+    const parts = Array.isArray(row?.parts) ? (row.parts as { type?: string; text?: string }[]) : [];
+    const text = parts.find((p) => p.type === "text")?.text;
+    return text?.trim() || null;
+  },
+
   listByConversation: (db: DbOrTx, conversationId: string) =>
     db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)),
 
@@ -51,4 +132,35 @@ export const messagesRepo = {
       .where(and(eq(conversations.userId, userId), eq(messages.role, "user"), gte(messages.createdAt, since)));
     return row?.n ?? 0;
   },
+};
+
+export const toolPermissionsRepo = {
+  /** Tool names the User always-allowed in this scope (`projectId` null = dashboard). */
+  listToolNames: async (db: DbOrTx, userId: string, projectId: string | null): Promise<string[]> => {
+    const rows = await db
+      .select({ toolName: toolPermissions.toolName })
+      .from(toolPermissions)
+      .where(
+        and(
+          eq(toolPermissions.userId, userId),
+          projectId ? eq(toolPermissions.projectId, projectId) : isNull(toolPermissions.projectId),
+        ),
+      )
+      .orderBy(asc(toolPermissions.toolName));
+    return rows.map((r) => r.toolName);
+  },
+
+  grant: (db: DbOrTx, userId: string, projectId: string | null, toolName: string) =>
+    db.insert(toolPermissions).values({ userId, projectId, toolName }).onConflictDoNothing(),
+
+  revoke: (db: DbOrTx, userId: string, projectId: string | null, toolName: string) =>
+    db
+      .delete(toolPermissions)
+      .where(
+        and(
+          eq(toolPermissions.userId, userId),
+          eq(toolPermissions.toolName, toolName),
+          projectId ? eq(toolPermissions.projectId, projectId) : isNull(toolPermissions.projectId),
+        ),
+      ),
 };
