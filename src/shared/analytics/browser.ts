@@ -1,7 +1,7 @@
 "use client";
 
 import posthog from "posthog-js";
-import { isCredentialPath, redactAnalyticsProperties, redactUrl } from "./redact";
+import { isCredentialPath, redactAnalyticsProperties } from "./redact";
 import { SESSION_HEADER, USER_HEADER } from "./session-context";
 
 let started = false;
@@ -114,7 +114,9 @@ export function syncAnalyticsIdentity(nextUserId: string | null | undefined) {
 export function capturePageview(url: string) {
   safely(() => {
     if (!usable() || lastPage === url) return;
-    posthog.capture("$pageview", { $current_url: redactUrl(url) });
+    // Redaction is central in `before_send`, which drops the query and hash of every captured
+    // address. The full address stays the dedupe key, so a query-only navigation still counts.
+    posthog.capture("$pageview", { $current_url: url });
     lastPage = url;
   });
 }

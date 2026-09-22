@@ -1,10 +1,20 @@
 import { PostHog } from "posthog-node";
 import { headers } from "next/headers";
 import { after } from "next/server";
+import { z } from "zod";
 import { getSession } from "@/server/auth/session";
-import { browserSessionId } from "./session-context";
+import { SESSION_HEADER, USER_HEADER } from "./session-context";
 
 let posthog: PostHog | undefined;
+
+const sessionHint = z.uuid();
+
+/** A hint names the browser session only when its distinct id is the independently authenticated User. */
+function browserSessionId(requestHeaders: Headers, userId: string): string | undefined {
+  if (requestHeaders.get(USER_HEADER) !== userId) return;
+  const value = requestHeaders.get(SESSION_HEADER);
+  if (value && sessionHint.safeParse(value).success) return value;
+}
 
 function client() {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;

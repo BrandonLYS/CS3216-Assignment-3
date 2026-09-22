@@ -88,6 +88,20 @@ describe("browser identity boundary", () => {
     expect(sdk.capture).toHaveBeenCalledExactlyOnceWith("$pageview", { $current_url: "/dashboard" });
   });
 
+  it("counts a query-only navigation but sends no query to PostHog", async () => {
+    const analytics = await import("./browser");
+    analytics.syncAnalyticsIdentity("user-a");
+    analytics.capturePageview("/projects?tab=open");
+    analytics.capturePageview("/projects?tab=done");
+    expect(sdk.capture).toHaveBeenCalledTimes(2);
+    const { before_send } = sdk.init.mock.calls[0][1];
+    const properties = { ...sdk.capture.mock.calls[0][1], distinct_id: "user-a" };
+    expect(before_send({ event: "$pageview", properties }).properties).toEqual({
+      $current_url: "/projects",
+      distinct_id: "user-a",
+    });
+  });
+
   it("suppresses captures immediately after credential navigation and during pending auth", async () => {
     const analytics = await import("./browser");
     analytics.syncAnalyticsIdentity("user-a");
