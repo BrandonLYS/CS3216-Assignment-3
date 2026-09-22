@@ -269,10 +269,16 @@ function Room({
     if (!held || !el) return;
     // Only the prepend this anchor was taken for may consume it. A Chat Message that
     // arrives from the catch-up is appended at the newest end and leaves the oldest row
-    // alone: restoring a distance from the bottom for that would move a reader who is
-    // scrolled up, and clearing the anchor would leave the older page - still in flight -
-    // with nothing to hold their place when it lands.
-    if (history.messages.at(-1)?.id === held.oldestId) return;
+    // alone: clearing the anchor would leave the older page - still in flight - with
+    // nothing to hold the reader's place when it lands.
+    //
+    // The distance is re-measured rather than kept, because the append has already grown
+    // `scrollHeight` without moving `scrollTop`. Restoring the distance taken before it
+    // would push the reader down by exactly the height of what arrived.
+    if (history.messages.at(-1)?.id === held.oldestId) {
+      anchor.current = { ...held, distanceFromBottom: el.scrollHeight - el.scrollTop };
+      return;
+    }
     anchor.current = null;
     const previouslyOldest = el.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(held.oldestId)}"]`);
     if (held.keepInView && previouslyOldest) {
@@ -451,6 +457,13 @@ function useRoomHistory({
   const [seenPage, setSeenPage] = React.useState(page);
   /** Bumped whenever the loaded history is discarded, so a late page cannot rejoin it. */
   const [generation, setGeneration] = React.useState(0);
+  /**
+   * Set when the catch-up gave up on reading its way back to the present, and the next
+   * page must replace the history rather than merge into it. The contiguity check below
+   * cannot work this out for itself: the reader's own Chat Message appears in both the
+   * loaded history and the refreshed page, so a hole between them still looks contiguous.
+   */
+  const [resetOnNextPage, setResetOnNextPage] = React.useState(false);
 
   // Adjusting state while rendering, rather than in an effect: React re-runs this component
   // before touching the DOM, so the merged history is what paints, with no second pass.
@@ -462,7 +475,8 @@ function useRoomHistory({
     // oldest row on screen. Start again from the newest page instead: a visible jump, rather
     // than a hole that looks like history.
     const fresh = !messages.length;
-    const contiguous = fresh || !page.length || page.some((m) => m.id === messages[0]!.id);
+    const contiguous = !resetOnNextPage && (fresh || !page.length || page.some((m) => m.id === messages[0]!.id));
+    if (resetOnNextPage) setResetOnNextPage(false);
     if (contiguous) {
       setMessages((current) => merge(current, page));
       // The prop may narrow this and never widen it: it describes the newest page, so it is
@@ -605,8 +619,13 @@ function useRoomHistory({
         after = { createdAt: newest.createdAt, id: newest.id };
       }
       // Still behind after the whole walk. The pane is far enough out of date that the
-      // route's newest page is cheaper than reading the rest a batch at a time, and the
-      // non-contiguity branch above is what discards the loaded history to make room.
+      // route's newest page is cheaper than reading the rest a batch at a time.
+      //
+      // The reset is demanded rather than left to the contiguity check, because that
+      // check cannot see this hole: a Chat Message the reader sent themselves is in both
+      // the loaded history and the refreshed page, so the two look contiguous and would
+      // be merged either side of the stretch that was never read.
+      setResetOnNextPage(true);
       router.refresh();
     } catch {
       failures.current += 1;
