@@ -5,6 +5,7 @@ import { mutate, type Recorder } from "@/server/core/mutation";
 import { nextNumber } from "@/server/core/sequence";
 import type { DbOrTx, Tx } from "@/server/db/client";
 import { activityRepo } from "@/server/modules/activity/service";
+import { proposalAccepted } from "@/server/modules/proposals/analytics";
 import { proposalsRepo } from "@/server/modules/proposals/repository";
 import { risksRepo } from "@/server/modules/risks/repository";
 import { commentsRepo } from "@/server/modules/comments/repository";
@@ -455,15 +456,16 @@ export const decisionsService = {
    * Create a Decision with its Sources, optionally its typed Assumptions and, when it confirms
    * a Proposal (issue #39), mark that Proposal accepted - all in one transaction.
    */
-  create: (ctx: Ctx, { sources, supersedesId, proposalId, assumptions = [], ...input }: CreateDecisionInput) =>
-    mutate(ctx, async (tx, rec) => {
+  create: async (ctx: Ctx, accepted: CreateDecisionInput) => {
+    const { sources, supersedesId, proposalId, assumptions = [], ...input } = accepted;
+    const { decision, proposal } = await mutate(ctx, async (tx, rec) => {
       await assertOwnsProject(tx, ctx.userId, input.projectId);
       await assertPersonInProject(tx, input.projectId, input.ownerId, "ownerId");
       const resolved = await resolveSources(tx, input.projectId, sources);
+      const proposal = proposalId ? await proposalsRepo.findById(tx, proposalId) : null;
       if (proposalId) {
-        const p = await proposalsRepo.findById(tx, proposalId);
-        if (!p || p.projectId !== input.projectId) throw new NotFoundError("Proposal");
-        if (p.status !== "pending") throw new ConflictError("That proposal was already resolved");
+        if (!proposal || proposal.projectId !== input.projectId) throw new NotFoundError("Proposal");
+        if (proposal.status !== "pending") throw new ConflictError("That proposal was already resolved");
       }
       const number = await nextNumber(tx, input.projectId, decisions, decisions.number, decisions.projectId);
       const decision = await decisionsRepo.insert(tx, { ...input, number });
@@ -480,8 +482,12 @@ export const decisionsService = {
         const marked = await proposalsRepo.markAccepted(tx, proposalId, decision.id);
         if (!marked.length) throw new ConflictError("That proposal was already resolved");
       }
-      return decision;
-    }),
+      return { decision, proposal };
+    });
+    // Both accept paths converge here, so the funnel records the acceptance once, after it committed.
+    if (proposal) await proposalAccepted(ctx, proposal, accepted);
+    return decision;
+  },
 
   update: (ctx: Ctx, { id, sources, ...patch }: UpdateDecisionInput) =>
     mutate(ctx, async (tx, rec) => {

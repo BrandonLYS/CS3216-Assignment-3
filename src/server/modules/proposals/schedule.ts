@@ -8,5 +8,9 @@ import { proposalsService } from "./service";
  */
 export function scheduleProposalPass(ctx: Ctx, projectId: string) {
   if (!proposalsService.enabled()) return;
-  after(() => proposalsService.runPass(ctx, projectId).catch((e) => console.error("Proposal pass failed", e)));
+  after(() =>
+    proposalsService
+      .runPass(ctx, projectId, { trigger: "automatic" })
+      .catch((e) => console.error("Proposal pass failed", e)),
+  );
 }

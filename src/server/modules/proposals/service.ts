@@ -14,6 +14,7 @@ import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import type { ProposalExtractor } from "@/shared/domain";
+import { proposalGenerated, proposalRejected, type PassTrigger } from "./analytics";
 import { pickExtractor, type Extract, type ExtractSource } from "./extract";
 import { passSourcesRepo, proposalsRepo } from "./repository";
 import type { ProposalRow } from "./schema";
@@ -50,7 +51,11 @@ export const proposalsService = {
   /** True when a pass can run at all (a model is configured or the heuristic is selected). */
   enabled: () => pickExtractor() !== null,
 
-  runPass: async (ctx: Ctx, projectId: string, opts: { extract?: Extract } = {}): Promise<PassOutcome> => {
+  runPass: async (
+    ctx: Ctx,
+    projectId: string,
+    opts: { extract?: Extract; trigger?: PassTrigger } = {},
+  ): Promise<PassOutcome> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const picked = pickExtractor();
     const extract = opts.extract ?? picked?.extract;
@@ -148,6 +153,14 @@ export const proposalsService = {
         kept.map((k) => ({ ...k, projectId, extractor: extractorName })),
       );
     });
+    await proposalGenerated(ctx, {
+      projectId,
+      trigger: opts.trigger ?? "manual",
+      extractor: extractorName,
+      created: inserted.length,
+      sourcesPassed: candidates.length,
+      discarded,
+    });
     return { extractor: extractorName, sourcesPassed: candidates.length, proposed: inserted.length, discarded };
   },
 
@@ -196,6 +209,7 @@ export const proposalsService = {
     const p = await proposalsService.get(ctx, id);
     const [row] = await proposalsRepo.markRejected(ctx.db, p.id);
     if (!row) throw new ConflictError("That proposal was already resolved");
+    await proposalRejected(ctx, row);
     return row;
   },
 

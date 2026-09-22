@@ -41,7 +41,12 @@ export async function capture(userId: string, event: string, properties?: Record
     analytics.capture({
       distinctId: userId,
       event,
-      properties: { ...safeProperties, ...(sessionId ? { $session_id: sessionId } : {}) },
+      properties: {
+        ...safeProperties,
+        // Explicit, so an event from background work is distinguishable from a lost correlation.
+        browser_context: sessionId ? "browser" : "none",
+        ...(sessionId ? { $session_id: sessionId } : {}),
+      },
     });
     const flush = async () => {
       try {

@@ -5,6 +5,7 @@ import { decisionsService } from "@/server/modules/decisions/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { capture } from "@/shared/analytics/server";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
+import { editedBeforeAccept } from "./analytics";
 import { heuristicExtract, type Extract } from "./extract";
 import type { ProposalRow } from "./schema";
 import { proposalsService } from "./service";
@@ -66,13 +67,28 @@ describe("generation", () => {
   it("records one event per pass with the Proposals it really created", async () => {
     const project = await makeProject(ctx, "GEN");
     await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: SENTENCE });
-    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "automatic" });
 
     expect(events("proposal_generated")).toHaveLength(1);
     expect(events("proposal_generated")[0]).toMatchObject({
       userId: ctx.userId,
-      properties: { project_id: project.id, extractor: "heuristic", proposal_count: 1, source_count: 1 },
+      properties: {
+        project_id: project.id,
+        trigger: "automatic",
+        extractor: "heuristic",
+        proposal_count: 1,
+        source_count: 1,
+        discarded_count: 0,
+      },
     });
+  });
+
+  it("names the trigger the pass was started by", async () => {
+    const project = await makeProject(ctx, "TRG");
+    await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: SENTENCE });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract });
+
+    expect(events("proposal_generated")[0]?.properties).toMatchObject({ trigger: "manual" });
   });
 
   it("stays silent when a pass finds nothing new", async () => {
@@ -226,5 +242,50 @@ describe("acceptance and rejection", () => {
     for (const secret of [SENTENCE, proposal.title, proposal.chosen, "Minutes"]) {
       expect(payload).not.toContain(secret);
     }
+  });
+});
+
+describe("what counts as an edit", () => {
+  const proposed = {
+    id: "proposal-1",
+    projectId: "project-1",
+    extractor: "heuristic",
+    title: "Switch to interviews",
+    decidedOn: null,
+    context: null,
+    chosen: "Fortnightly interviews",
+    alternatives: "Weekly surveys",
+    revisitWhen: null,
+    sources: [{ kind: "evidence", entityId: "evidence-1", excerpt: SENTENCE }],
+    assumptions: [
+      { statement: "Priya stays on the project", subtype: "person", targetType: "person", targetId: "person-1" },
+    ],
+  } as unknown as ProposalRow;
+  const baseline = { ...asSubmitted(proposed), decidedOn: "2026-09-22" };
+
+  it("is false for the Proposal as it stands, whatever date a dateless one is stamped with", () => {
+    expect(editedBeforeAccept(proposed, baseline)).toBe(false);
+    expect(editedBeforeAccept(proposed, { ...baseline, decidedOn: "2026-10-01" })).toBe(false);
+    expect(editedBeforeAccept(proposed, { ...baseline, ownerId: "person-2" })).toBe(false);
+  });
+
+  it("is true when the PM changes what was proposed", () => {
+    const dated = { ...proposed, decidedOn: "2026-09-10" } as ProposalRow;
+    expect(editedBeforeAccept(dated, { ...baseline, decidedOn: "2026-09-11" })).toBe(true);
+    expect(editedBeforeAccept(proposed, { ...baseline, context: "Response rates fell to 4%" })).toBe(true);
+    expect(editedBeforeAccept(proposed, { ...baseline, alternatives: null })).toBe(true);
+    expect(editedBeforeAccept(proposed, { ...baseline, assumptions: [] })).toBe(true);
+    expect(
+      editedBeforeAccept(proposed, {
+        ...baseline,
+        assumptions: [{ ...baseline.assumptions[0]!, statement: "Priya stays until UAT" }],
+      }),
+    ).toBe(true);
+    expect(
+      editedBeforeAccept(proposed, {
+        ...baseline,
+        sources: [{ kind: "evidence", entityId: "evidence-2", excerpt: SENTENCE }],
+      }),
+    ).toBe(true);
   });
 });

@@ -317,19 +317,27 @@ async function addEvidence(page: Page, title: string, body: string) {
   await expect(dialog).toBeHidden();
 }
 
-/** The pass runs after the response, so the Overview has to be re-read until it shows the new cards. */
-async function overviewWithProposals(page: Page, projectUrl: string, count: number) {
-  await expect
-    .poll(
-      async () => {
-        await page.goto(projectUrl);
-        await expect(page.getByText("Needs attention").first()).toBeVisible();
-        return page.getByTestId("proposal-card").count();
-      },
-      { timeout: 60_000 },
-    )
-    .toBe(count);
-  return page.getByTestId("proposal-card");
+/**
+ * The pass runs after the response, so the Overview has to be re-read until it shows the new
+ * cards. The PM's own navigation does the re-reading, and each read waits for its own pageview,
+ * so the funnel is measured on a live browser session rather than a reloaded page.
+ */
+async function overviewWithProposals(page: Page, projectUrl: string, count: number, userId: string) {
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const since = events.length;
+    if (new URL(page.url()).pathname === projectUrl) {
+      await page.getByRole("main").getByRole("link", { name: "Evidence", exact: true }).click();
+      await expect(page).toHaveURL(/\/evidence$/);
+    }
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page).toHaveURL(projectUrl);
+    await expect(page.getByText("Needs attention").first()).toBeVisible();
+    await captured("$pageview", userId, since);
+    const cards = page.getByTestId("proposal-card");
+    if ((await cards.count()) === count) return cards;
+    await page.waitForTimeout(1_000);
+  }
+  throw new Error(`The Overview never showed ${count} proposal cards`);
 }
 
 async function acceptInDialog(page: Page, newTitle?: string) {
@@ -361,7 +369,7 @@ test("the Proposal funnel records automatic generation, unchanged and edited acc
   expect(generated.properties).toMatchObject({ trigger: "automatic", extractor: "heuristic", source_count: 1 });
   expect(session(generated)).toBe(session(await captured("project_created", user.id)));
 
-  const cards = await overviewWithProposals(page, projectUrl, Number(generated.properties.proposal_count));
+  const cards = await overviewWithProposals(page, projectUrl, Number(generated.properties.proposal_count), user.id);
   await expect(cards).toHaveCount(2);
 
   // Opening the review form and submitting it untouched is not an edit.
@@ -372,7 +380,7 @@ test("the Proposal funnel records automatic generation, unchanged and edited acc
 
   // One click, no form at all.
   const oneClickStart = events.length;
-  const remaining = await overviewWithProposals(page, projectUrl, 1);
+  const remaining = await overviewWithProposals(page, projectUrl, 1, user.id);
   await remaining.first().getByTestId("accept-proposal").click();
   await expect(remaining).toHaveCount(0);
   expect((await captured("proposal_accepted", user.id, oneClickStart)).properties).toMatchObject({
@@ -389,7 +397,7 @@ test("the Proposal funnel records automatic generation, unchanged and edited acc
   expect((await captured("proposal_generated", user.id, secondStart)).properties).toMatchObject({
     trigger: "automatic",
   });
-  const next = await overviewWithProposals(page, projectUrl, 2);
+  const next = await overviewWithProposals(page, projectUrl, 2, user.id);
   await next.first().getByTestId("edit-accept-proposal").click();
   await acceptInDialog(page, "Freeze the legacy gateway");
   expect((await captured("proposal_accepted", user.id, secondStart)).properties).toMatchObject({
@@ -397,7 +405,7 @@ test("the Proposal funnel records automatic generation, unchanged and edited acc
   });
 
   const rejectStart = events.length;
-  const last = await overviewWithProposals(page, projectUrl, 1);
+  const last = await overviewWithProposals(page, projectUrl, 1, user.id);
   await last.first().getByTestId("reject-proposal").click();
   await expect(last).toHaveCount(0);
   await captured("proposal_rejected", user.id, rejectStart);

@@ -33,7 +33,7 @@ describe("server capture contract", () => {
     expect(sdk.capture).toHaveBeenCalledWith({
       distinctId: "user-a",
       event: "project_created",
-      properties: { project_id: "project-a", $session_id: sid },
+      properties: { project_id: "project-a", browser_context: "browser", $session_id: sid },
     });
     const flush = request.after.mock.calls[0][0];
     await flush();
@@ -44,11 +44,15 @@ describe("server capture contract", () => {
     new Headers(),
     new Headers({ "X-PostHog-Session-Id": "not-a-session", "X-PostHog-Distinct-Id": "user-a" }),
     new Headers({ "X-PostHog-Session-Id": sid, "X-PostHog-Distinct-Id": "user-b" }),
-  ])("omits missing, malformed or mismatched browser context", async (headers) => {
+  ])("omits missing, malformed or mismatched browser context and says so", async (headers) => {
     request.headers.mockResolvedValue(headers);
     const { captureCurrent } = await import("./server");
     await captureCurrent("project_created", { $session_id: "fabricated", distinct_id: "forged" });
-    expect(sdk.capture).toHaveBeenCalledWith({ distinctId: "user-a", event: "project_created", properties: {} });
+    expect(sdk.capture).toHaveBeenCalledWith({
+      distinctId: "user-a",
+      event: "project_created",
+      properties: { browser_context: "none" },
+    });
   });
 
   it("captures trusted background work without inventing a browser session", async () => {
@@ -58,7 +62,11 @@ describe("server capture contract", () => {
     });
     const { capture } = await import("./server");
     await capture("user-a", "background_completed");
-    expect(sdk.capture).toHaveBeenCalledWith({ distinctId: "user-a", event: "background_completed", properties: {} });
+    expect(sdk.capture).toHaveBeenCalledWith({
+      distinctId: "user-a",
+      event: "background_completed",
+      properties: { browser_context: "none" },
+    });
     expect(sdk.flush).toHaveBeenCalledOnce();
   });
 
