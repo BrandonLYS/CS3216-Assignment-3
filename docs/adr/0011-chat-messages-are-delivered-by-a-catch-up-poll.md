@@ -22,7 +22,7 @@ Two things would fix that, and both were considered.
 
 **Postgres `LISTEN/NOTIFY`.** The writer notifies a channel, every instance is already connected to the database, and each streaming handler listens. This is the right long-term answer and is the upgrade path below. It was not taken now because it needs a connection that is not the pooled one - Neon's pooler does not support `LISTEN` - so it adds a second database URL to configure, a long-lived connection per instance, and a failure mode (silently pooled URL, silently no delivery) that looks exactly like the one being fixed.
 
-**A catch-up poll.** Correct on any number of instances, no new infrastructure, no new configuration, and nothing to get wrong in an environment variable. It costs one indexed query per open pane per tick and delivers in up to `MESSAGE_POLL_MS` rather than in milliseconds.
+**A catch-up poll.** Correct on any number of instances, no new infrastructure, no new configuration, and nothing to get wrong in an environment variable. It costs one indexed query per open pane per tick and usually delivers within `MESSAGE_POLL_MS` rather than in milliseconds - longer when a tick has to walk several batches, or when one fails and the next tick picks it up.
 
 For a conversation between a handful of people, four seconds of latency and "live" are the same thing to the person watching.
 That is the trade accepted here: a delivery that always works, slowly, over one that is instant when the deployment happens to cooperate.

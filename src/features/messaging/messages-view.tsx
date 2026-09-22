@@ -628,11 +628,15 @@ function useRoomHistory({
    * Ask for everything written after what the pane holds (issue #59). This is what delivers
    * the other side of the conversation; a reader is otherwise told nothing until they reload.
    *
-   * The cursor is the newest Chat Message on screen **moved back by the overlap**, and that
-   * is load-bearing rather than cautious: `room_messages.created_at` is the writing
-   * transaction's start time, so a transaction that began earlier and committed later leaves
-   * a row below a cursor already past it, which a strict cursor would never return again
-   * (ADR 0011). Re-reading a few seconds costs nothing, because `merge` dedupes by id.
+   * It asks from `synced` - the newest Chat Message a server read confirmed - and not from
+   * the newest on screen, which the reader's own writing moves and which proves nothing
+   * about what else arrived.
+   *
+   * That cursor is **moved back by the overlap**, which is load-bearing rather than
+   * cautious: `room_messages.created_at` is the writing transaction's start time, so a
+   * transaction that began earlier and committed later leaves a row below a cursor already
+   * past it, which a strict cursor would never return again (ADR 0011). Re-reading a few
+   * seconds costs nothing, because `merge` dedupes by id.
    */
   const catchUp = React.useCallback(async () => {
     if (polling.current || failures.current >= POLL_GIVE_UP_AFTER) return;
