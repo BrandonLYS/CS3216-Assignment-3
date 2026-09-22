@@ -9,6 +9,9 @@ PostHog (client `posthog-js`, server `posthog-node`).
 - `src/shared/analytics/provider.tsx` wraps the application root in `src/app/layout.tsx` and captures `$pageview` events on pathname changes.
 - `src/shared/analytics/server.ts` exports `capture(userId, event, properties)` for server routes and `captureCurrent(event, properties)` for server actions.
 - The server helper uses `next/server` `after()` to flush events after the response is sent.
+- Browser identification, sign-out reset and real browser session propagation follow the [issue #73 contract](../artifacts/73-analytics-identity/README.md).
+- Signup is captured once after identification; returning and restored sessions do not create signup events.
+- Automatic capture and replay are disabled; credential routes are suppressed and URL query/hash content is removed.
 
 ## Required environment variables
 
@@ -22,7 +25,7 @@ PostHog (client `posthog-js`, server `posthog-node`).
 | Event name                  | When captured                                                          | Properties (no PII)                   |
 | --------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
 | `$pageview`                 | Every client-side route change                                         | `$current_url`                        |
-| `signup_completed`          | After successful email sign-up                                         | `mode`                                |
+| `signup_completed`          | After successful email sign-up                                         | None (SDK User/session context)       |
 | `project_created`           | After `createProjectAction` succeeds                                   | `project_id`                          |
 | `evidence_created`          | After `createEvidenceAction` succeeds                                  | `evidence_id`, `evidence_kind`        |
 | `transcript_created`        | After Evidence of kind `transcript` is created                         | `evidence_id`                         |

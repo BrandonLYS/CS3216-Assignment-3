@@ -112,6 +112,17 @@ export const COMMENTABLE_ENTITY_TYPES = ["task", "risk", "milestone"] as const s
 export type CommentableEntityType = (typeof COMMENTABLE_ENTITY_TYPES)[number];
 export const COMMENT_MAX_LENGTH = 4000;
 
+/**
+ * How much of a Room's history is read at a time (issue #60): the newest page the route
+ * renders, and each older page the pane pulls in as the reader scrolls back.
+ *
+ * Here rather than in the messaging service because the pane needs them too, and a client
+ * component must not import a server module. The ceiling on what any caller may ask for is
+ * `MESSAGE_PAGE_MAX`, which stays on the server - it is a limit, not shared vocabulary.
+ */
+export const MESSAGE_PAGE_FIRST = 50;
+export const MESSAGE_PAGE_MORE = 20;
+
 /** Items an Evidence record can be linked to (same set as Comments). */
 export const LINKABLE_ENTITY_TYPES = COMMENTABLE_ENTITY_TYPES;
 export type LinkableEntityType = CommentableEntityType;

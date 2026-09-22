@@ -16,7 +16,7 @@ export const WHY_RULES = [
 export function projectSystemPrompt(summary: unknown, memory: { profile?: string; workingMemory?: string } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   return [
-    "You are the Assistant inside Vantage, a project management app. You act on behalf of the signed-in User inside one Project.",
+    "You are the Assistant inside PrismPM, a project management app. You act on behalf of the signed-in User inside one Project.",
     `Today is ${today}. Dates are YYYY-MM-DD.`,
     "Use the tools to read and change the Project. Reference Statuses, People, Teams, Milestones and Labels by id from the Project summary, never by name. Omit statusId to use the default Status.",
     "Before creating a Task, Milestone or Risk, check the Project summary for an existing item with the same name to avoid duplicates. If you just created several items, call get_project_summary again to refresh the summary before creating more.",
@@ -38,7 +38,7 @@ export function projectSystemPrompt(summary: unknown, memory: { profile?: string
 export function workspaceSystemPrompt(projects: unknown, memory: { profile?: string } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   return [
-    "You are the Assistant inside Vantage, a project management app, talking to the signed-in User on their dashboard. No Project is open.",
+    "You are the Assistant inside PrismPM, a project management app, talking to the signed-in User on their dashboard. No Project is open.",
     `Today is ${today}. Dates are YYYY-MM-DD.`,
     "You have overall access: every tool, across all of the User's Projects. Project tools take a projectId - get ids from list_projects, and call get_project_summary for a Project's Statuses, People, Milestones and Labels before acting inside it.",
     "When the User wants to work inside one Project going forward, call open_project with the Project's name or id: the Conversation - history included - moves into that Project and the app navigates there, then answer as normal from the next message on. If it returns several matches, call it again with the right id; if none, say so and offer to create a Project.",

@@ -1,10 +1,25 @@
 "use server";
 
 import type { z } from "zod";
-import { runAction } from "@/server/core/action";
+import { runAction, runParticipantAction } from "@/server/core/action";
 import { revalidateProject } from "@/server/core/revalidate";
-import { messagingService } from "./service";
-import { postMessageSchema } from "./validation";
+import { MESSAGE_PAGE_MORE } from "@/shared/domain";
+import { messagingService, participantMessagingService } from "./service";
+import { addParticipantSchema, createRoomSchema, olderMessagesSchema, postMessageSchema } from "./validation";
+
+export async function createRoomAction(input: z.input<typeof createRoomSchema> | FormData) {
+  const res = await runAction(createRoomSchema, input, (ctx, i) => messagingService.createRoom(ctx, i));
+  if (res.ok) revalidateProject(res.data.projectId);
+  return res;
+}
+
+export async function addParticipantAction(input: z.input<typeof addParticipantSchema> | FormData) {
+  const res = await runAction(addParticipantSchema, input, (ctx, i) => messagingService.addParticipant(ctx, i));
+  // `res.data` is null when the Person was already in the Room, so the Project id comes from
+  // the input: the page still needs revalidating either way.
+  if (res.ok) revalidateProject((input instanceof FormData ? String(input.get("projectId")) : input.projectId)!);
+  return res;
+}
 
 export async function postMessageAction(input: z.input<typeof postMessageSchema>) {
   const res = await runAction(postMessageSchema, input, (ctx, i) => messagingService.postMessage(ctx, i));
@@ -12,4 +27,38 @@ export async function postMessageAction(input: z.input<typeof postMessageSchema>
   // replaces this round trip with a live stream.
   if (res.ok) revalidateProject(res.data.projectId);
   return res;
+}
+
+/**
+ * The same Chat Message written by the other audience (ADR 0009), and the first caller of
+ * `runParticipantAction`. The schema is the PM's: what a Chat Message is does not depend on
+ * who writes it, and a second schema is how the two come to disagree.
+ *
+ * The `projectId` in the input is not trusted - `assertParticipates` checks it against the
+ * Person named by the signed cookie, and a mismatch is a `NotFoundError`.
+ */
+export async function participantPostMessageAction(input: z.input<typeof postMessageSchema>) {
+  const res = await runParticipantAction(postMessageSchema, input, (pctx, i) =>
+    participantMessagingService.postMessage(pctx, i),
+  );
+  if (res.ok) revalidateProject(res.data.projectId);
+  return res;
+}
+
+/**
+ * Read-only: the pane's only way to reach further back than the page the route rendered
+ * (issue #60). No revalidation - nothing changed - which is what `searchTasksAction` does too.
+ * Each audience enters through the seam it already uses, so a Room the caller is not entitled
+ * to answers exactly as it would for their first page.
+ */
+export async function olderMessagesAction(input: z.input<typeof olderMessagesSchema>) {
+  return runAction(olderMessagesSchema, input, (ctx, { projectId, roomId, before }) =>
+    messagingService.listMessages(ctx, { projectId, roomId }, { before, limit: MESSAGE_PAGE_MORE }),
+  );
+}
+
+export async function participantOlderMessagesAction(input: z.input<typeof olderMessagesSchema>) {
+  return runParticipantAction(olderMessagesSchema, input, (pctx, { projectId, roomId, before }) =>
+    participantMessagingService.listMessages(pctx, { projectId, roomId }, { before, limit: MESSAGE_PAGE_MORE }),
+  );
 }

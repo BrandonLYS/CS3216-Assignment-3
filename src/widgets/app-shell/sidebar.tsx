@@ -4,13 +4,14 @@ import { CalendarDays, FolderKanban, LayoutDashboard, LogOut, Plus, Search, Sett
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ProjectRow } from "@/server/modules/projects/schema";
+import { resetAnalyticsIdentity } from "@/shared/analytics/browser";
 import { signOut } from "@/shared/lib/auth-client";
 import { cn } from "@/shared/lib/cn";
 import { Logo } from "@/shared/ui";
 import { HealthDot } from "@/entities/project/health";
 
 const nav = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -34,7 +35,7 @@ export function Sidebar({
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-hairline bg-canvas">
       <div className="flex h-14 items-center gap-2 px-4">
         <Logo className="size-5" />
-        <span className="text-body-sm font-medium tracking-[-0.2px]">Vantage</span>
+        <span className="text-body-sm font-medium tracking-[-0.2px]">PrismPM</span>
       </div>
 
       <button
@@ -50,8 +51,7 @@ export function Sidebar({
 
       <nav className="flex flex-col gap-0.5 px-3">
         {nav.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/" ? pathname === "/" : pathname.startsWith(href) && !pathname.startsWith("/projects/");
+          const active = pathname.startsWith(href) && !pathname.startsWith("/projects/");
           return (
             <Link
               key={href}
@@ -108,7 +108,12 @@ export function Sidebar({
           <p className="truncate text-[11px] text-ink-tertiary">{user.email}</p>
         </div>
         <button
-          onClick={() => signOut().then(() => router.push("/login"))}
+          onClick={async () => {
+            const result = await signOut();
+            if (result.error) return;
+            resetAnalyticsIdentity();
+            router.push("/login");
+          }}
           className="rounded-xs p-1 text-ink-tertiary hover:bg-surface-2 hover:text-ink"
           aria-label="Sign out"
         >

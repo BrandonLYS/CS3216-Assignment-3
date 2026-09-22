@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import posthog from "posthog-js";
+import { authenticationCompleted } from "@/shared/analytics/browser";
 import { signIn, signUp } from "@/shared/lib/auth-client";
 import { Button, Field, Input } from "@/shared/ui";
 
 /** Only same-origin absolute paths; rejects `//host`, `javascript:` and anything else attacker-controlled. */
 function safeReturnPath(next: string | null) {
-  return next && /^\/(?!\/)/.test(next) ? next : "/";
+  return next && /^\/(?!\/)/.test(next) ? next : "/dashboard";
 }
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
@@ -31,9 +31,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         : await signUp.email({ email, password, name: String(fd.get("name")) });
     setLoading(false);
     if (res.error) return setError(res.error.message ?? "Something went wrong");
-    if (mode === "signup" && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
-      posthog.capture("signup_completed");
-    }
+    if (res.data?.user.id) authenticationCompleted(res.data.user.id, mode === "signup");
     router.push(safeReturnPath(params.get("next")));
     router.refresh();
   }

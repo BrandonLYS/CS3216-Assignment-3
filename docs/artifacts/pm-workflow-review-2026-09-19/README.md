@@ -1,4 +1,6 @@
-# Vantage from a multi-project PM's perspective
+# PrismPM from a multi-project PM's perspective
+
+Historical screenshots below predate the PrismPM rename and retain the former branding.
 
 Reviewed on 19 September 2026 using Playwright Chromium at 1440 × 1000.
 The evaluated checkout was `main`, commit `912d42d`; the changes in PR #50 were not present.
@@ -7,10 +9,10 @@ No application code was changed during this review.
 
 ## Verdict
 
-Vantage is stronger at recording project context than helping a busy PM close the loop on it.
+PrismPM is stronger at recording project context than helping a busy PM close the loop on it.
 I could create and organise work, discover overdue items, and explain why a Decision needs revisiting.
 I could not reliably get a portfolio briefing, see one person's commitments across projects, or turn a follow-up into a dated action from the attention queue.
-Those gaps would keep a separate personal action list alive alongside Vantage.
+Those gaps would keep a separate personal action list alive alongside PrismPM.
 
 The product should optimise this sequence: capture a commitment, surface the exception, act on it, preserve the reasoning, communicate the result.
 Its most distinctive capability is connecting changed facts to earlier Decisions.
@@ -162,4 +164,4 @@ Use plain-language phrasing such as `Sandbox delay threatens the cutover decisio
 6. Streamline Evidence-to-Decision capture and retain the impact graph as contextual explanation.
 
 My desired morning would take one portfolio visit: scan exceptions, chase two People, move one commitment, record one Decision, and copy a short stakeholder update.
-Vantage already has much of the underlying information, but the workflow still asks the PM to assemble that morning manually.
+PrismPM already has much of the underlying information, but the workflow still asks the PM to assemble that morning manually.

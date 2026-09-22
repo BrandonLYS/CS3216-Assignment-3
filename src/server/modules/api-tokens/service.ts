@@ -1,12 +1,11 @@
-import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError } from "@/server/core/errors";
+import { hashToken, randomToken } from "@/server/core/token";
 import type { DbOrTx } from "@/server/db/client";
 import { apiTokens } from "./schema";
 
-const PREFIX = "vtg_";
-const hash = (token: string) => createHash("sha256").update(token).digest("hex");
+const PREFIX = "prismpm_";
 
 /** Personal access tokens are the User's own credentials, not Project items: no Activity Event, no `mutate`. */
 export const apiTokensService = {
@@ -27,13 +26,13 @@ export const apiTokensService = {
 
   /** The raw token is returned exactly once, here. */
   create: async (ctx: Ctx, label: string) => {
-    const token = PREFIX + randomBytes(24).toString("base64url");
+    const token = PREFIX + randomToken();
     const [row] = await ctx.db
       .insert(apiTokens)
       .values({
         userId: ctx.userId,
         label: label.trim() || "Untitled",
-        tokenHash: hash(token),
+        tokenHash: hashToken(token),
         prefix: token.slice(0, 12),
       })
       .returning();
@@ -54,7 +53,7 @@ export const apiTokensService = {
     const [row] = await db
       .update(apiTokens)
       .set({ lastUsedAt: new Date() })
-      .where(and(eq(apiTokens.tokenHash, hash(token)), isNull(apiTokens.revokedAt)))
+      .where(and(eq(apiTokens.tokenHash, hashToken(token)), isNull(apiTokens.revokedAt)))
       .returning({ userId: apiTokens.userId });
     return row?.userId ?? null;
   },
