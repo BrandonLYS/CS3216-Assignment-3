@@ -340,12 +340,13 @@ async function overviewWithProposals(page: Page, projectUrl: string, count: numb
   throw new Error(`The Overview never showed ${count} proposal cards`);
 }
 
-async function acceptInDialog(page: Page, newTitle?: string) {
+async function acceptInDialog(page: Page, edit?: { title: string; decidedOn: string }) {
   const dialog = page.getByRole("dialog", { name: "Confirm proposed decision" });
   await expect(dialog).toBeVisible();
-  // The Proposal states no date, so the required field has to be filled; that is not an edit of it.
-  await dialog.getByLabel("Decided on").fill("2026-09-15");
-  if (newTitle) await dialog.getByLabel("Title").fill(newTitle);
+  // The Proposal states no date, so the required field has to be filled. Today is what a one-click
+  // accept would have stamped, so filling it is not an edit; any other date is the PM's choice.
+  await dialog.getByLabel("Decided on").fill(edit?.decidedOn ?? new Date().toISOString().slice(0, 10));
+  if (edit) await dialog.getByLabel("Title").fill(edit.title);
   await dialog.getByRole("button", { name: "Accept and create decision" }).click();
   await expect(dialog).toBeHidden();
 }
@@ -399,7 +400,7 @@ test("the Proposal funnel records automatic generation, unchanged and edited acc
   });
   const next = await overviewWithProposals(page, projectUrl, 2, user.id);
   await next.first().getByTestId("edit-accept-proposal").click();
-  await acceptInDialog(page, "Freeze the legacy gateway");
+  await acceptInDialog(page, { title: "Freeze the legacy gateway", decidedOn: "2026-09-15" });
   expect((await captured("proposal_accepted", user.id, secondStart)).properties).toMatchObject({
     edited_before_accept: true,
   });

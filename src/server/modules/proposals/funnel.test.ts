@@ -7,7 +7,7 @@ import { evidenceService } from "@/server/modules/evidence/service";
 import { tasksService } from "@/server/modules/tasks/service";
 import { capture } from "@/shared/analytics/server";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
-import { editedBeforeAccept } from "./analytics";
+import { editedBeforeAccept, proposalAccepted, today } from "./analytics";
 import { heuristicExtract, type Extract } from "./extract";
 import type { ProposalRow } from "./schema";
 import { proposalsService } from "./service";
@@ -34,7 +34,7 @@ const events = (name?: string) =>
 const asSubmitted = (p: ProposalRow) => ({
   projectId: p.projectId,
   title: p.title,
-  decidedOn: p.decidedOn ?? "2026-09-22",
+  decidedOn: p.decidedOn ?? today(),
   context: p.context,
   chosen: p.chosen,
   alternatives: p.alternatives,
@@ -300,17 +300,21 @@ describe("what counts as an edit", () => {
       { statement: "Priya stays on the project", subtype: "person", targetType: "person", targetId: "person-1" },
     ],
   } as unknown as ProposalRow;
-  const baseline = { ...asSubmitted(proposed), decidedOn: "2026-09-22" };
+  const baseline = asSubmitted(proposed);
 
-  it("is false for the Proposal as it stands, whatever date a dateless one is stamped with", () => {
+  it("is false for the Proposal as it stands, stamped with the date a one-click accept would use", () => {
     expect(editedBeforeAccept(proposed, baseline)).toBe(false);
-    expect(editedBeforeAccept(proposed, { ...baseline, decidedOn: "2026-10-01" })).toBe(false);
+    expect(editedBeforeAccept(proposed, { ...baseline, decidedOn: "2026-09-22" }, "2026-09-22")).toBe(false);
   });
 
   it("is true when the PM changes or adds what the Proposal did not state", () => {
     expect(editedBeforeAccept(proposed, { ...baseline, ownerId: "person-2" })).toBe(true);
+    expect(editedBeforeAccept(proposed, { ...baseline, supersedesId: "decision-1" })).toBe(true);
+    // A date the PM chose, rather than the one the accept path would have stamped.
+    expect(editedBeforeAccept(proposed, { ...baseline, decidedOn: "2025-01-05" }, "2026-09-22")).toBe(true);
     const dated = { ...proposed, decidedOn: "2026-09-10" } as ProposalRow;
     expect(editedBeforeAccept(dated, { ...baseline, decidedOn: "2026-09-11" })).toBe(true);
+    expect(editedBeforeAccept(dated, { ...baseline, decidedOn: "2026-09-10" })).toBe(false);
     expect(editedBeforeAccept(proposed, { ...baseline, context: "Response rates fell to 4%" })).toBe(true);
     expect(editedBeforeAccept(proposed, { ...baseline, alternatives: null })).toBe(true);
     expect(editedBeforeAccept(proposed, { ...baseline, assumptions: [] })).toBe(true);
@@ -326,5 +330,18 @@ describe("what counts as an edit", () => {
         sources: [{ kind: "evidence", entityId: "evidence-2", excerpt: SENTENCE }],
       }),
     ).toBe(true);
+    // One Source whose excerpt spells out another entry must not read as two Sources.
+    expect(
+      editedBeforeAccept({ ...proposed, sources: [...proposed.sources, { ...proposed.sources[0]!, excerpt: OTHER }] }, {
+        ...baseline,
+        sources: [{ ...proposed.sources[0]!, excerpt: `${SENTENCE}\nevidence|evidence-1||${OTHER}` }],
+      } as never),
+    ).toBe(true);
+  });
+
+  it("does not fail a committed acceptance when the stored Proposal is malformed", async () => {
+    const broken = { ...proposed, sources: null } as unknown as ProposalRow;
+    await expect(proposalAccepted(ctx, broken, baseline)).resolves.toBeUndefined();
+    expect(() => editedBeforeAccept(broken, baseline)).toThrow();
   });
 });

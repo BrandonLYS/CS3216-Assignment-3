@@ -14,6 +14,9 @@ import type { ProposalRow } from "./schema";
 
 export type PassTrigger = "manual" | "automatic";
 
+/** The date a Decision gets when the Proposal states none, as `proposalsService.accept` stamps it. */
+export const today = () => new Date().toISOString().slice(0, 10);
+
 const text = (v: string | null | undefined) => (v ?? "").trim();
 
 const sourceKey = (s: { kind: string; entityId: string; passageId?: string | null; excerpt?: string | null }) =>
@@ -31,17 +34,33 @@ const assumptionKey = (a: {
     "|",
   );
 
-const sameSet = (a: string[], b: string[]) => a.toSorted().join("\n") === b.toSorted().join("\n");
+const sameSet = (a: string[], b: string[]) => JSON.stringify(a.toSorted()) === JSON.stringify(b.toSorted());
+
+/**
+ * Telemetry never fails a write that already happened, and building a payload is as fallible as
+ * sending it: a malformed stored Proposal must not turn a committed acceptance into an error.
+ */
+async function record(userId: string, event: string, properties: () => Record<string, unknown>) {
+  try {
+    await capture(userId, event, properties());
+  } catch {
+    // Includes payload construction; `capture` isolates delivery itself.
+  }
+}
 
 /**
  * Whether the PM changed the Proposal before accepting it, measured against what was proposed
  * rather than against which path posted it: one-click acceptance submits the Proposal as it
  * stands, and a review form submitted untouched posts the same values.
- * `decidedOn` counts only when the Proposal stated one, because accepting a dateless Proposal
- * has to stamp a date and that substitution is not the PM's edit. Content the Proposal never
- * stated counts once the PM supplies it, the Owner included.
+ * Content the Proposal never stated counts once the PM supplies it: an Owner, a supersede link,
+ * and a date other than the one a one-click accept would have stamped on a dateless Proposal.
  */
-export function editedBeforeAccept(proposal: ProposalRow, accepted: CreateDecisionInput): boolean {
+export function editedBeforeAccept(
+  proposal: ProposalRow,
+  accepted: CreateDecisionInput,
+  /** The date `proposalsService.accept` stamps when the Proposal states none; that is not an edit. */
+  stamped = today(),
+): boolean {
   const changed =
     text(accepted.title) !== text(proposal.title) ||
     text(accepted.chosen) !== text(proposal.chosen) ||
@@ -49,7 +68,8 @@ export function editedBeforeAccept(proposal: ProposalRow, accepted: CreateDecisi
     text(accepted.alternatives) !== text(proposal.alternatives) ||
     text(accepted.revisitWhen) !== text(proposal.revisitWhen) ||
     !!accepted.ownerId ||
-    (!!proposal.decidedOn && accepted.decidedOn !== proposal.decidedOn);
+    !!accepted.supersedesId ||
+    accepted.decidedOn !== (proposal.decidedOn ?? stamped);
   if (changed) return true;
   if (!sameSet(accepted.sources.map(sourceKey), proposal.sources.map(sourceKey))) return true;
   return !sameSet((accepted.assumptions ?? []).map(assumptionKey), proposal.assumptions.map(assumptionKey));
@@ -75,7 +95,7 @@ export function proposalGenerated(
   },
 ) {
   if (pass.proposed < 1) return;
-  return capture(ctx.userId, "proposal_generated", {
+  return record(ctx.userId, "proposal_generated", () => ({
     project_id: pass.projectId,
     trigger: pass.trigger,
     extractor: pass.extractor,
@@ -84,24 +104,24 @@ export function proposalGenerated(
     evidence_source_count: pass.sourceKinds.evidence,
     comment_source_count: pass.sourceKinds.comment,
     discarded_count: pass.discarded,
-  });
+  }));
 }
 
 /** Called after the transaction that made the Proposal a Decision committed, from either path. */
 export function proposalAccepted(ctx: Ctx, proposal: ProposalRow, accepted: CreateDecisionInput) {
-  return capture(ctx.userId, "proposal_accepted", {
+  return record(ctx.userId, "proposal_accepted", () => ({
     project_id: proposal.projectId,
     proposal_id: proposal.id,
     extractor: proposal.extractor,
     edited_before_accept: editedBeforeAccept(proposal, accepted),
-  });
+  }));
 }
 
 /** Called after the conditional update that rejected a still-pending Proposal returned a row. */
 export function proposalRejected(ctx: Ctx, proposal: ProposalRow) {
-  return capture(ctx.userId, "proposal_rejected", {
+  return record(ctx.userId, "proposal_rejected", () => ({
     project_id: proposal.projectId,
     proposal_id: proposal.id,
     extractor: proposal.extractor,
-  });
+  }));
 }

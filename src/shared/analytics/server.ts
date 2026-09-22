@@ -43,7 +43,8 @@ export async function capture(userId: string, event: string, properties?: Record
       event,
       properties: {
         ...safeProperties,
-        // Explicit, so an event from background work is distinguishable from a lost correlation.
+        // Explicit: a missing property cannot say whether a browser session was absent or lost.
+        // Work scheduled with `after()` still reads its originating request, so it says "browser".
         browser_context: sessionId ? "browser" : "none",
         ...(sessionId ? { $session_id: sessionId } : {}),
       },

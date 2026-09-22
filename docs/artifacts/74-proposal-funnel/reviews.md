@@ -54,3 +54,21 @@ Production Live Events evidence cannot be captured from this branch; the reconci
 
 The reviewer also noted that the browser regression asserts `browser_context: "browser"` and so does not cover the case where it is `none`.
 That case is the issue #73 transport gap described in the README: the funnel records it honestly rather than hiding it, and closing it means changing when that transport is installed, which belongs to its own issue.
+
+## Correctness review of the pull request
+
+A third reviewer read the whole branch for correctness only, with a concrete failure scenario required for each finding.
+It found no way to emit an event without its write, no way to miss one, and no behaviour change in the restructured `decisionsService.create`.
+
+Three real defects were fixed.
+Exempting `decidedOn` whenever the Proposal stated none was too broad: a PM who back-dated an otherwise untouched Decision was recorded as not having edited it.
+The comparison now uses the date a one-click accept would have stamped, so filling the required field with today is data entry and any other date is the PM's own change.
+`supersedesId` was not compared at all, although the review form posts it, so linking a Decision the Proposal never suggested read as unedited.
+The payloads were built as call arguments, outside the analytics helper's isolation, so a malformed stored Proposal could throw after the acceptance had already committed and show the PM an error for a write that had succeeded; each emit now isolates payload construction as well as delivery.
+
+Two smaller ones were fixed too.
+The set comparison joined fields and entries with unescaped delimiters, so an excerpt containing them could make two Sources compare equal to one.
+The comment on `browser_context` claimed it marks background work, which is wrong: a pass scheduled with `after()` still reads its originating request and correctly reports a browser session, and only `trigger` says how the pass started.
+
+The reviewer also noted that `asSubmitted` in the integration tests is the suite's own model of what the review form posts, so a future change to the dialog or the source picker would not be caught there.
+The browser regression is what covers that, by driving the real form.

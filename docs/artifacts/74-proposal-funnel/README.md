@@ -42,10 +42,10 @@ Any caller that confirms a Proposal through the service is recorded, including a
 
 `edited_before_accept` compares what was accepted with what was proposed, not which form posted it.
 `title`, `chosen`, `context`, `alternatives` and `revisitWhen` differ when their trimmed values differ, with null and empty string treated as the same absence, so adding Context the Proposal never stated is an edit.
-`decidedOn` counts only when the Proposal stated a date, because accepting a dateless Proposal has to stamp one and that substitution is not the PM's edit; the review form requires the field, so this is the ordinary case.
+`decidedOn` is compared against the date the Proposal stated, or, when it stated none, against the date a one-click accept would have stamped; the review form requires the field, so filling in that date is data entry rather than an edit, while any other date the PM picks is their own choice and counts.
 Sources differ when the set of kind, entity, Passage and excerpt tuples differs.
 Assumptions differ when the kept count differs or any statement, subtype, target type, target id, target field or assumed-until value differs, which is how the review form's per-Assumption keep checkbox is caught.
-The Owner is never proposed, so a Decision that has one was edited before it was accepted; the review form leaves the field empty for a Proposal, so an untouched form still computes `false`.
+An Owner and a supersede link are never proposed, so supplying either is an edit; the review form leaves both empty for a Proposal, so an untouched form still computes `false`.
 One-click acceptance and a review form submitted untouched both compute `false` from the data rather than by assumption.
 
 ## Identity, session and payload safety
@@ -53,6 +53,7 @@ One-click acceptance and a review form submitted untouched both compute `false` 
 Captures use the trusted `Ctx.userId` and the shared server helper, so the identity and session rules from issue #73 are unchanged.
 An automatic pass runs in `after()` scheduled from a Server Function, where request context is still readable, so a background pass keeps the originating browser session when there is one.
 Every server event now carries `browser_context`: `browser` when the originating browser session correlates, `none` when there is none, so absent context is a value rather than a missing property.
+Building a payload is treated as fallibly as sending one: a malformed stored Proposal cannot turn a committed acceptance into an error the PM sees, because the whole emit is isolated, not just the delivery.
 Payloads carry internal ids and bounded metadata only.
 No Sources, excerpts, Evidence text, titles or Assumption statements are sent, and the regression suites assert that.
 
