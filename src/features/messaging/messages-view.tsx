@@ -642,6 +642,10 @@ function useRoomHistory({
       const settled = overlapReadAt.current - syncedSeenAt.current >= MESSAGE_POLL_OVERLAP_MS;
       let confirmed = base;
       let after = overlapped(base, roomCreatedAt, settled);
+      // Taken before the request goes out, not when it comes back: the answer describes
+      // the database as it was at the start, so a slow response that arrives after the
+      // window must not be credited with having read up to its arrival.
+      const askedAt = Date.now();
       // The budget counts batches that delivered something **newer than where this tick
       // started**. Rows at or below that are the overlap being re-read - old history the
       // pane never loaded, in a Room dense enough to fill a batch inside the window - and
@@ -659,9 +663,6 @@ function useRoomHistory({
           return;
         }
         failures.current = 0;
-        // The first read of a tick is the one that carries the overlap, and having come
-        // back is what lets a later tick drop it.
-        if (batch === 0 && !settled) overlapReadAt.current = Date.now();
         const { items, truncated } = res.data;
         const newest = items.at(-1);
         if (newest) {
@@ -676,7 +677,14 @@ function useRoomHistory({
           }
           setMessages((loaded) => merge(loaded, items));
         }
-        if (!truncated || !newest) return;
+        if (!truncated || !newest) {
+          // The walk reached the end of the Room, so everything from the overlapping
+          // cursor forward has now been read. Only here: a walk that stopped early, on a
+          // failed batch or an exhausted budget, has left part of the window unread, and
+          // retiring the overlap on that would skip a late commit sitting in it.
+          if (!settled) overlapReadAt.current = Math.max(overlapReadAt.current, askedAt);
+          return;
+        }
         // More was waiting than one batch carries. Walk forward from the end of this batch
         // rather than asking from the same place again: consecutive batches are contiguous
         // by cursor, so there is no hole to repair, and re-asking with the overlap would
