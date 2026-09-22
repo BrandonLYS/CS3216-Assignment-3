@@ -256,6 +256,7 @@ Board position-only moves deliberately do not create a Status history change.
 After commit, `mutate` awaits domain-event subscriber attempts before returning.
 
 Successful UI actions call `revalidateProject`, which invalidates the Project layout subtree and root layout.
+Posting a Chat Message is the exception: it returns the written row for the pane to merge, because a revalidation reaches only the person who posted and the other readers are served by their own catch-up ([ADR 0011](adr/0011-chat-messages-are-delivered-by-a-catch-up-poll.md)).
 Client code handles navigation after successful actions rather than depending on a redirect thrown inside a form action.
 Assistant tools instead return service results through the stream, and the dock refreshes the displayed data after a turn.
 
@@ -584,8 +585,11 @@ Follow [developer onboarding](developer-onboarding.md) for commands and prerequi
 
 These are properties of the audited implementation, not capabilities implied by the diagrams:
 
-- Participant messaging currently reads admitted Rooms; Participant posting, attachment workflows, live delivery, and loading older pages remain separate work.
-  The Messages page loads the newest fifty records, while the repository already supports bounded keyset pagination.
+- Attachment workflows remain separate work.
+  The Messages page loads the newest fifty Chat Messages and the pane pages back through them twenty at a time.
+- New Chat Messages reach an open pane through a catch-up poll, not a push: every few seconds a visible pane asks for what was written after the newest Chat Message it holds ([ADR 0011](adr/0011-chat-messages-are-delivered-by-a-catch-up-poll.md)).
+  Delivery therefore lags by up to the poll interval, a hidden tab receives nothing until it is shown, and the cost is one indexed query per open pane per tick regardless of how busy the Room is.
+  The in-process event bus cannot fan out across deployment instances, which is why the Server-Sent Events endpoint issue #59 describes was not built.
 - Participant login/invite acceptance has no application-specific rate limiter or per-session revocation mechanism.
   Reissuing an invite replaces the old invitation but does not revoke an existing signed cookie; deleting the Person removes access through service checks.
 - Domain events and `after()` work have no persistent delivery queue, so process failure can leave derived work incomplete after a successful domain commit.
