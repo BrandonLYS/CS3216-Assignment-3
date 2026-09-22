@@ -400,13 +400,20 @@ const POLL_MAX_BATCHES = 5;
 const POLL_MAX_READS = 20;
 
 /**
- * Where a catch-up asks from: the confirmed cursor, moved back by the overlap, or the
- * Room's own creation for a pane with nothing in it - nothing predates its Room.
+ * Where a catch-up asks from: the confirmed cursor, or the Room's own creation for a pane
+ * with nothing in it - nothing predates its Room.
+ *
+ * The cursor is moved back by the overlap only while the region behind it could still be
+ * moving. `heldFor` is how long the pane has held this cursor, measured on one clock - no
+ * comparison between the browser's time and the database's, which may disagree. Once that
+ * exceeds the window, every transaction that could have landed a row below the cursor has
+ * finished, so the cursor is exact and a dense Room stops being re-read on every tick.
  */
-const overlapped = (confirmed: RoomMessageRow | undefined, roomCreatedAt: Date) => ({
-  createdAt: confirmed ? new Date(confirmed.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS) : roomCreatedAt,
-  id: FIRST_ID,
-});
+const overlapped = (confirmed: RoomMessageRow | undefined, roomCreatedAt: Date, heldFor: number) => {
+  if (!confirmed) return { createdAt: roomCreatedAt, id: FIRST_ID };
+  if (heldFor >= MESSAGE_POLL_OVERLAP_MS) return { createdAt: confirmed.createdAt, id: confirmed.id };
+  return { createdAt: new Date(confirmed.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS), id: FIRST_ID };
+};
 
 /** How close to the newest Chat Message still counts as reading the end of the Room. */
 const PINNED_WITHIN_PX = 80;
@@ -498,11 +505,14 @@ function useRoomHistory({
     // exactly when the reader has written something the poll has not caught up past, and
     // that is the case where a gap would otherwise pass for continuous history.
     //
-    // `known` can be undefined on both counts - a Room that opened empty, before its
-    // first catch-up - and there is nothing for a page to be discontinuous with then.
+    // With no confirmed cursor at all - a Room that opened empty, whose catch-up has not
+    // succeeded yet - the page is adopted rather than merged. Everything the pane can be
+    // holding in that state is the reader's own writing, which the page contains anyway,
+    // and taking that for continuity would keep the empty Room's `hasMore: false` over a
+    // page with history behind it: "Start of the room" above fifty unreachable ones.
     const fresh = !messages.length;
-    const known = synced ?? messages[0];
-    const contiguous = !resetOnNextPage && (fresh || !page.length || !known || page.some((m) => m.id === known.id));
+    const contiguous =
+      !resetOnNextPage && (fresh || !page.length || (!!synced && page.some((m) => m.id === synced.id)));
     if (resetOnNextPage) setResetOnNextPage(false);
     if (contiguous) {
       setMessages((current) => merge(current, page));
@@ -550,6 +560,16 @@ function useRoomHistory({
   React.useEffect(() => {
     current.current = generation;
   }, [generation]);
+
+  // When the pane learned of its confirmed cursor, on the browser's own clock. The overlap
+  // is needed only while a write that started before that cursor could still be committing,
+  // and this is how long it has been - no clock of ours compared against the database's.
+  // Stamped by the effect rather than at construction: reading a clock during render is
+  // impure, and the effect runs on mount, long before the first tick asks for the time.
+  const syncedSeenAt = React.useRef(0);
+  React.useEffect(() => {
+    syncedSeenAt.current = Date.now();
+  }, [synced]);
 
   /**
    * Fetch the page before the oldest Chat Message on screen. Scrolling is the caller's: it
@@ -611,13 +631,13 @@ function useRoomHistory({
     const asked = generation;
     const ask = viewer.kind === "pm" ? newerMessagesAction : participantNewerMessagesAction;
     try {
-      let after = overlapped(synced, roomCreatedAt);
-      const held = new Set(messages.map((m) => m.id));
-      // The budget counts batches that actually delivered something. A Room busy enough
-      // to fill one inside the overlap window answers `truncated` with rows the pane
-      // already has, every tick, forever: spending the budget on those would refresh the
-      // route every few seconds on a Room that has gone quiet. Walking past them costs
-      // one read each and ends, because the cursor advances every time.
+      const base = synced;
+      let after = overlapped(base, roomCreatedAt, Date.now() - syncedSeenAt.current);
+      // The budget counts batches that delivered something **newer than where this tick
+      // started**. Rows at or below that are the overlap being re-read - old history the
+      // pane never loaded, in a Room dense enough to fill a batch inside the window - and
+      // spending the budget on them would refresh the route every few seconds forever.
+      // Walking past them costs one read each and terminates, because the cursor advances.
       let budget = POLL_MAX_BATCHES;
       for (let batch = 0; batch < POLL_MAX_READS && budget > 0; batch++) {
         const res = await ask({ projectId, roomId, after });
@@ -633,7 +653,7 @@ function useRoomHistory({
         const { items, truncated } = res.data;
         const newest = items.at(-1);
         if (newest) {
-          if (items.some((m) => !held.has(m.id))) budget -= 1;
+          if (!base || items.some((m) => newestFirst(m, base) < 0)) budget -= 1;
           setSynced(newest);
           setMessages((loaded) => merge(loaded, items));
         }
@@ -659,7 +679,7 @@ function useRoomHistory({
     } finally {
       polling.current = false;
     }
-  }, [generation, messages, projectId, roomCreatedAt, roomId, router, synced, viewer.kind]);
+  }, [generation, projectId, roomCreatedAt, roomId, router, synced, viewer.kind]);
 
   // The interval must not be rebuilt whenever a Chat Message arrives - that would reset the
   // countdown on every merge - and must not close over the `messages` of the render that

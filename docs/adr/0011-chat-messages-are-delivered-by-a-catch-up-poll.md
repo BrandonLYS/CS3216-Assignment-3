@@ -46,12 +46,16 @@ Commit order and `created_at` order therefore disagree: a transaction that began
 A strict `(created_at, id) > newest` cursor never returns that Chat Message again.
 It is in the table, it is in nobody's pane, and only a reload shows it - and two people posting at the same moment is the ordinary case, not a rare one.
 
-So the pane asks from `newest.createdAt - MESSAGE_POLL_OVERLAP_MS`, with the nil UUID as the tiebreak id, and re-reads the last ten seconds of the Room on every tick.
+So the pane asks from `confirmed.createdAt - MESSAGE_POLL_OVERLAP_MS`, with the nil UUID as the tiebreak id, and re-reads the last ten seconds of the Room.
 That costs nothing: the merge is a union by id, so a row already held is dropped on arrival.
 `repository.test.ts` pins the timestamps to prove both halves - the strict cursor misses the late committer, the overlapped one finds it.
 
-An overlap is a window, not a proof: a write that takes longer than ten seconds to commit would still be missed until the next navigation.
-That is accepted, and it is the same class of bound a stream would need on its reconnect replay.
+The overlap applies only while the region behind the cursor could still be moving.
+Once the pane has held the same cursor for longer than the window - ten seconds of nothing arriving - every transaction that could have landed a row beneath it has finished, and the cursor becomes exact.
+That is measured as elapsed time on the browser's own clock, never by comparing the browser's clock with the database's, which may disagree by more than the window.
+Without it a Room dense enough to hold a batch inside ten seconds would re-read the same rows on every tick for as long as the pane stayed open, long after the conversation stopped.
+
+Two bounds are accepted with this. A write that takes longer than ten seconds to commit is missed until the next navigation, which is the same class of bound a stream would need on its reconnect replay. And the cursor a catch-up asks from is only ever one a **server read** confirmed: a Chat Message the reader wrote themselves is on their screen immediately but never moves the cursor, because it says nothing about what else arrived. The same rule decides whether a refreshed page is continuous with the loaded history - judged against the confirmed cursor, never against the newest row on screen, and a pane with no confirmed cursor adopts the page outright rather than treating its own writing as proof of anything.
 
 ## Consequences
 
