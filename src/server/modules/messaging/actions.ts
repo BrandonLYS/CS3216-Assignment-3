@@ -27,12 +27,16 @@ export async function addParticipantAction(input: z.input<typeof addParticipantS
   return res;
 }
 
+/**
+ * No revalidation, unlike every other write here (issue #59). Re-rendering the Project
+ * subtree was how the writer's own Chat Message reached their page, and the pane now merges
+ * the row this action already returns - so the revalidation would be a second, far more
+ * expensive delivery of something already on screen. Everyone else in the Room is served by
+ * their own catch-up (ADR 0011), which is the only way they were ever going to be served:
+ * a revalidation reaches the person who posted and nobody else.
+ */
 export async function postMessageAction(input: z.input<typeof postMessageSchema>) {
-  const res = await runAction(postMessageSchema, input, (ctx, i) => messagingService.postMessage(ctx, i));
-  // Revalidating the Project subtree is what puts the new Chat Message on the page; issue #59
-  // replaces this round trip with a live stream.
-  if (res.ok) revalidateProject(res.data.projectId);
-  return res;
+  return runAction(postMessageSchema, input, (ctx, i) => messagingService.postMessage(ctx, i));
 }
 
 /**
@@ -44,11 +48,7 @@ export async function postMessageAction(input: z.input<typeof postMessageSchema>
  * Person named by the signed cookie, and a mismatch is a `NotFoundError`.
  */
 export async function participantPostMessageAction(input: z.input<typeof postMessageSchema>) {
-  const res = await runParticipantAction(postMessageSchema, input, (pctx, i) =>
-    participantMessagingService.postMessage(pctx, i),
-  );
-  if (res.ok) revalidateProject(res.data.projectId);
-  return res;
+  return runParticipantAction(postMessageSchema, input, (pctx, i) => participantMessagingService.postMessage(pctx, i));
 }
 
 /**

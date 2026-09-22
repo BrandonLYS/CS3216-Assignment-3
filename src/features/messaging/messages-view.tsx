@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowUp, MessagesSquare, Plus, Send, Users } from "lucide-react";
 import * as React from "react";
 import {
+  newerMessagesAction,
   olderMessagesAction,
+  participantNewerMessagesAction,
   participantOlderMessagesAction,
   participantPostMessageAction,
   postMessageAction,
 } from "@/server/modules/messaging/actions";
 import type { ActionResult } from "@/server/core/action";
 import type { RoomMessageRow, RoomRow } from "@/server/modules/messaging/schema";
+import { MESSAGE_POLL_MS, MESSAGE_POLL_OVERLAP_MS } from "@/shared/domain";
 import { fmtDateTime, relative } from "@/shared/lib/dates";
 import { cn } from "@/shared/lib/cn";
 import { Button, Field, Textarea } from "@/shared/ui";
@@ -163,7 +167,21 @@ function Room({
 }) {
   const scroller = React.useRef<HTMLDivElement>(null);
   const [people, setPeople] = React.useState(false);
-  const history = useRoomHistory({ projectId, roomId: item.room.id, page: messages, hasMoreOnServer, viewer });
+  const history = useRoomHistory({
+    projectId,
+    roomId: item.room.id,
+    roomCreatedAt: item.room.createdAt,
+    page: messages,
+    hasMoreOnServer,
+    viewer,
+  });
+  /**
+   * Whether the reader is at the newest Chat Message, and so whether an arriving one should
+   * scroll into view. Once a Chat Message can arrive from someone else (issue #59), snapping
+   * to the bottom unconditionally would tear a reader out of the history they scrolled back
+   * into. Starts true because a Room opens at its newest Chat Message.
+   */
+  const pinned = React.useRef(true);
   // Newest last is the reading order of a chat; the copy keeps the state array untouched.
   const ordered = React.useMemo(() => [...history.messages].reverse(), [history.messages]);
 
@@ -176,10 +194,14 @@ function Room({
   // finished laying the history out, and a single assignment leaves the pane at the top. That
   // was survivable when the pane only ever held one page; now it means the sentinel below is
   // on screen at once and the reader is handed the entire Room without asking.
+  //
+  // Only while the reader is at the bottom, or has just sent something themselves: a Chat
+  // Message that arrives from the other side of the Room while they are reading older
+  // history must not move them (issue #59).
   const newestId = ordered.at(-1)?.id;
   React.useLayoutEffect(() => {
     const el = scroller.current;
-    if (!el) return;
+    if (!el || !pinned.current) return;
     const toNewest = () => {
       el.scrollTop = el.scrollHeight;
     };
@@ -221,18 +243,21 @@ function Room({
    */
   React.useEffect(() => {
     const el = scroller.current;
-    if (!el || !history.hasMore) return;
+    if (!el) return;
     // Fires a little before the very top, so the next page is on its way by the time the
     // reader gets there. The button above stays for the keyboard, and for retrying a page
     // that failed - which is also when it is on screen long enough to be read.
     const onScroll = () => {
+      // Installed whatever `hasMore` says, because it also tracks whether an arriving Chat
+      // Message may scroll the pane; the paging trigger below keeps its own check.
+      pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED_WITHIN_PX;
       // A page already asked for arrives whenever the network says so, and the reader may
       // have moved on by then. Keep the anchor on where they are now, and stop treating a
       // request they started at the top as one to scroll back to it.
       if (anchor.current) {
         anchor.current = { ...anchor.current, distanceFromBottom: el.scrollHeight - el.scrollTop, keepInView: false };
       }
-      if (el.scrollTop <= 200) void loadOlder();
+      if (history.hasMore && el.scrollTop <= 200) void loadOlder();
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
@@ -250,6 +275,26 @@ function Room({
     }
     el.scrollTop = el.scrollHeight - held.distanceFromBottom;
   }, [history.messages]);
+
+  /**
+   * The writer's own Chat Message goes straight into the history the pane holds, which is
+   * what replaces the Project revalidation these actions used to trigger (issue #59): the
+   * one round trip they needed already returned the row.
+   *
+   * Sending also re-pins the pane. Writing from halfway up the history and not being shown
+   * your own line is the one arrival that should always move the reader.
+   */
+  const send = async (text: string) => {
+    const res =
+      viewer.kind === "pm"
+        ? await postMessageAction({ projectId, roomId: item.room.id, text })
+        : await participantPostMessageAction({ projectId, roomId: item.room.id, text });
+    if (res.ok) {
+      pinned.current = true;
+      history.receive(res.data);
+    }
+    return res;
+  };
 
   const mine = (m: RoomMessageRow) =>
     viewer.kind === "pm" ? m.authorUserId === viewer.userId : m.authorPersonId === viewer.personId;
@@ -296,13 +341,7 @@ function Room({
       </div>
 
       {/* Both audiences write the same Chat Message; only the action behind it differs (#55). */}
-      <Composer
-        send={(text) =>
-          viewer.kind === "pm"
-            ? postMessageAction({ projectId, roomId: item.room.id, text })
-            : participantPostMessageAction({ projectId, roomId: item.room.id, text })
-        }
-      />
+      <Composer send={send} />
 
       {viewer.kind === "pm" && (
         <RoomPeopleDialog
@@ -318,6 +357,19 @@ function Room({
 }
 
 type RoomHistory = ReturnType<typeof useRoomHistory>;
+
+/**
+ * The tiebreak id of a catch-up cursor. The nil UUID sorts below every generated id, so a
+ * Chat Message written in the cursor's own millisecond is included rather than skipped -
+ * the cursor asks "from this instant", not "after this row".
+ */
+const FIRST_ID = "00000000-0000-0000-0000-000000000000";
+
+/** Consecutive failures after which the pane stops asking until the tab is shown again. */
+const POLL_GIVE_UP_AFTER = 5;
+
+/** How close to the newest Chat Message still counts as reading the end of the Room. */
+const PINNED_WITHIN_PX = 80;
 
 /** Newest first, `(createdAt, id)` descending - the order the keyset read returns and pages by. */
 const newestFirst = (a: RoomMessageRow, b: RoomMessageRow) =>
@@ -346,16 +398,20 @@ function merge(current: RoomMessageRow[], incoming: RoomMessageRow[]) {
 function useRoomHistory({
   projectId,
   roomId,
+  roomCreatedAt,
   page,
   hasMoreOnServer,
   viewer,
 }: {
   projectId: string;
   roomId: string;
+  /** Where a pane with nothing in it starts asking from: nothing predates its Room. */
+  roomCreatedAt: Date;
   page: RoomMessageRow[];
   hasMoreOnServer: boolean;
   viewer: MessagesViewer;
 }) {
+  const router = useRouter();
   const [messages, setMessages] = React.useState(page);
   const [hasMore, setHasMore] = React.useState(hasMoreOnServer);
   const [loadedOlder, setLoadedOlder] = React.useState(false);
@@ -395,6 +451,12 @@ function useRoomHistory({
   // One request at a time: the button and the observer call the same function, and the
   // observer keeps firing while the sentinel is on screen.
   const inFlight = React.useRef(false);
+  // The poll's own guard, deliberately not `inFlight`: sharing one would let a slow
+  // background read swallow a click on "Load older messages" with no error and no retry.
+  // The two may overlap safely - both end in the same union by id.
+  const polling = React.useRef(false);
+  /** Consecutive failed polls. A deleted Room or Person fails identically forever. */
+  const failures = React.useRef(0);
   // A Room switch unmounts this; never set state on the way out.
   const mounted = React.useRef(true);
   const current = React.useRef(generation);
@@ -445,7 +507,95 @@ function useRoomHistory({
     }
   }, [generation, hasMore, messages, projectId, roomId, viewer.kind]);
 
-  return { messages, hasMore, loadedOlder, loading, error, loadOlder };
+  /**
+   * One Chat Message from outside the history the pane fetched: the reader's own, the moment
+   * the action returns. `merge` is a union by id, so receiving one twice is a no-op, and
+   * `hasMore` is untouched - a newer Chat Message says nothing about older history.
+   */
+  const receive = React.useCallback((message: RoomMessageRow) => {
+    setMessages((loaded) => merge(loaded, [message]));
+  }, []);
+
+  /**
+   * Ask for everything written after what the pane holds (issue #59). This is what delivers
+   * the other side of the conversation; a reader is otherwise told nothing until they reload.
+   *
+   * The cursor is the newest Chat Message on screen **moved back by the overlap**, and that
+   * is load-bearing rather than cautious: `room_messages.created_at` is the writing
+   * transaction's start time, so a transaction that began earlier and committed later leaves
+   * a row below a cursor already past it, which a strict cursor would never return again
+   * (ADR 0011). Re-reading a few seconds costs nothing, because `merge` dedupes by id.
+   */
+  const catchUp = React.useCallback(async () => {
+    if (polling.current || failures.current >= POLL_GIVE_UP_AFTER) return;
+    const newest = messages[0];
+    const after = newest
+      ? { createdAt: new Date(newest.createdAt.getTime() - MESSAGE_POLL_OVERLAP_MS), id: FIRST_ID }
+      : { createdAt: roomCreatedAt, id: FIRST_ID };
+    polling.current = true;
+    const asked = generation;
+    const ask = viewer.kind === "pm" ? newerMessagesAction : participantNewerMessagesAction;
+    try {
+      const res = await ask({ projectId, roomId, after });
+      if (!mounted.current || current.current !== asked) return;
+      if (!res.ok) {
+        // Silent: nobody asked for this read, so there is nothing to interrupt them with.
+        // A Room or a Person deleted under the pane fails this way on every tick, which is
+        // what the counter is for.
+        failures.current += 1;
+        return;
+      }
+      failures.current = 0;
+      // More was written than one batch carries, so the rows above these are missing and
+      // merging would leave a hole in the history. Start again from the route's newest page:
+      // the non-contiguity branch above discards what is loaded and bumps the generation.
+      if (res.data.truncated) router.refresh();
+      else if (res.data.items.length) setMessages((loaded) => merge(loaded, res.data.items));
+    } catch {
+      failures.current += 1;
+    } finally {
+      polling.current = false;
+    }
+  }, [generation, messages, projectId, roomCreatedAt, roomId, router, viewer.kind]);
+
+  // The interval must not be rebuilt whenever a Chat Message arrives - that would reset the
+  // countdown on every merge - and must not close over the `messages` of the render that
+  // installed it, which would freeze the cursor at mount. So the timer is installed once and
+  // calls through a ref, the same shape this hook already uses for the generation.
+  const latest = React.useRef(catchUp);
+  React.useEffect(() => {
+    latest.current = catchUp;
+  }, [catchUp]);
+
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const tick = () => void latest.current();
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = undefined;
+    };
+    const start = () => {
+      stop();
+      timer = setInterval(tick, MESSAGE_POLL_MS);
+    };
+    // A hidden tab has no reader to deliver to, and polls until the laptop's battery says
+    // otherwise. Coming back asks once immediately, so a returning reader is up to date
+    // before they have read a line, and forgives whatever failed while they were away.
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return stop();
+      failures.current = 0;
+      tick();
+      start();
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  return { messages, hasMore, loadedOlder, loading, error, loadOlder, receive };
 }
 
 /**
