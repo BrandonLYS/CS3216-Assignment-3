@@ -1,0 +1,126 @@
+{
+  "environment": "local real SDK, synthetic User and Project",
+  "checkedAt": "2026-09-22T17:12:27.473Z",
+  "persisted": {
+    "proposed": 4,
+    "accepted": 3,
+    "rejected": 1
+  },
+  "events": [
+    {
+      "event": "proposal_generated",
+      "distinct_id": "6XifJbbaYiciXLpXEAZZObadUlqlld6L",
+      "session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+      "timestamp": "2026-09-22T17:12:12.466Z",
+      "properties": {
+        "project_id": "c51442de-72fc-4b97-a2fb-b03363382bc5",
+        "trigger": "automatic",
+        "extractor": "heuristic",
+        "proposal_count": 2,
+        "source_count": 1,
+        "evidence_source_count": 1,
+        "comment_source_count": 0,
+        "discarded_count": 0,
+        "browser_context": "browser",
+        "$session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+        "$lib": "posthog-node",
+        "$lib_version": "5.52.4",
+        "$is_server": true,
+        "$geoip_disable": true
+      }
+    },
+    {
+      "event": "proposal_accepted",
+      "distinct_id": "6XifJbbaYiciXLpXEAZZObadUlqlld6L",
+      "session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+      "timestamp": "2026-09-22T17:12:14.945Z",
+      "properties": {
+        "project_id": "c51442de-72fc-4b97-a2fb-b03363382bc5",
+        "proposal_id": "2defe408-f164-45e2-b842-7991f1d68c2f",
+        "extractor": "heuristic",
+        "edited_before_accept": false,
+        "browser_context": "browser",
+        "$session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+        "$lib": "posthog-node",
+        "$lib_version": "5.52.4",
+        "$is_server": true,
+        "$geoip_disable": true
+      }
+    },
+    {
+      "event": "proposal_accepted",
+      "distinct_id": "6XifJbbaYiciXLpXEAZZObadUlqlld6L",
+      "session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+      "timestamp": "2026-09-22T17:12:18.062Z",
+      "properties": {
+        "project_id": "c51442de-72fc-4b97-a2fb-b03363382bc5",
+        "proposal_id": "0a984493-0b03-4164-9952-2d36916d16da",
+        "extractor": "heuristic",
+        "edited_before_accept": false,
+        "browser_context": "browser",
+        "$session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+        "$lib": "posthog-node",
+        "$lib_version": "5.52.4",
+        "$is_server": true,
+        "$geoip_disable": true
+      }
+    },
+    {
+      "event": "proposal_generated",
+      "distinct_id": "6XifJbbaYiciXLpXEAZZObadUlqlld6L",
+      "session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+      "timestamp": "2026-09-22T17:12:19.480Z",
+      "properties": {
+        "project_id": "c51442de-72fc-4b97-a2fb-b03363382bc5",
+        "trigger": "automatic",
+        "extractor": "heuristic",
+        "proposal_count": 2,
+        "source_count": 1,
+        "evidence_source_count": 1,
+        "comment_source_count": 0,
+        "discarded_count": 0,
+        "browser_context": "browser",
+        "$session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+        "$lib": "posthog-node",
+        "$lib_version": "5.52.4",
+        "$is_server": true,
+        "$geoip_disable": true
+      }
+    },
+    {
+      "event": "proposal_accepted",
+      "distinct_id": "6XifJbbaYiciXLpXEAZZObadUlqlld6L",
+      "session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+      "timestamp": "2026-09-22T17:12:23.334Z",
+      "properties": {
+        "project_id": "c51442de-72fc-4b97-a2fb-b03363382bc5",
+        "proposal_id": "3ad0a486-3f2a-42f1-b5a7-e352a2687800",
+        "extractor": "heuristic",
+        "edited_before_accept": true,
+        "browser_context": "browser",
+        "$session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+        "$lib": "posthog-node",
+        "$lib_version": "5.52.4",
+        "$is_server": true,
+        "$geoip_disable": true
+      }
+    },
+    {
+      "event": "proposal_rejected",
+      "distinct_id": "6XifJbbaYiciXLpXEAZZObadUlqlld6L",
+      "session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+      "timestamp": "2026-09-22T17:12:26.319Z",
+      "properties": {
+        "project_id": "c51442de-72fc-4b97-a2fb-b03363382bc5",
+        "proposal_id": "3afec8dc-ef9e-4186-ad05-5454954697c5",
+        "extractor": "heuristic",
+        "browser_context": "browser",
+        "$session_id": "01a0ca1a-758c-7325-89a9-fec247415d46",
+        "$lib": "posthog-node",
+        "$lib_version": "5.52.4",
+        "$is_server": true,
+        "$geoip_disable": true
+      }
+    }
+  ]
+}

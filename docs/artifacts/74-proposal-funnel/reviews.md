@@ -18,3 +18,39 @@ A pass losing the fingerprint race returns no inserted rows and therefore emits 
 
 Round 3 verdict: the plan converged with no remaining blockers.
 The reviewer recorded one accepted consequence: a pass that creates nothing is silent, so these events measure created Proposals and never pass volume.
+
+## Implementation review
+
+Fixed point: `b512770`.
+The code-review skill ran its Standards and Spec agents in parallel against the implementation.
+
+### Standards
+
+No documented-standard breach.
+Moving the captures out of the actions brought both action files closer to the "thin actions" rule, and ADR 0005, 0007 and 0008 are unaffected.
+
+Two findings were fixed.
+`proposalGenerated` restated the pass outcome with `created` where the outcome says `proposed`, so the same number had three names; the pass now hands its own outcome to the event.
+`same` hid an order-insensitive comparison and sorted in place, so it is now `sameSet` over copies.
+
+Three were recorded and left.
+`PassTrigger` lives in the proposals module rather than `src/shared/domain`, because that file holds the fixed vocabularies backed by Drizzle enums and this one is never persisted.
+`editedBeforeAccept` reads two other objects and little of its own, which is inherent to a comparison, and it sits next to the event that is its only caller.
+The browser regression polls with a delay because a pass finishes after the response and offers no assertable signal until the Overview shows its cards; the poll re-reads through the PM's own navigation and fails loudly rather than hanging.
+
+### Spec
+
+Three findings were fixed.
+`trigger` defaulted to `manual`, so a caller that forgot it would be recorded as a manual pass, which is the mis-attribution the issue exists to end; it is now a required argument and every call site states it.
+`proposal_generated` could not tell Evidence from Comments although the issue's funnel starts at both, so the pass now splits its candidate count into `evidence_source_count` and `comment_source_count`.
+The Owner was excluded from the edit decision on the grounds that it is never proposed, which contradicted counting other content the PM adds; supplying an Owner is now an edit, and the review form's empty default keeps an untouched form unedited.
+
+Two were about work the reviewer could not see, because it was still in the working tree when the review ran: the coverage of an Evidence update, a Comment-triggered pass and a retry after a failed extractor, and the artifact and event-definition documents.
+Both are in this branch.
+
+Two were recorded and left.
+`discarded_count` is bounded extraction-quality metadata rather than scope creep, and it is what makes a low `proposal_count` readable.
+Production Live Events evidence cannot be captured from this branch; the reconciliation was run against the local collector with the real SDKs, and the M19 guide says plainly that a production run with its release SHA and timestamp is still owed.
+
+The reviewer also noted that the browser regression asserts `browser_context: "browser"` and so does not cover the case where it is `none`.
+That case is the issue #73 transport gap described in the README: the funnel records it honestly rather than hiding it, and closing it means changing when that transport is installed, which belongs to its own issue.

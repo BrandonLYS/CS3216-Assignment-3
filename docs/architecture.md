@@ -520,8 +520,10 @@ The signup form captures `signup_completed`.
 The server adapter uses `posthog-node`, identifies events by User id, and schedules a flush with `after()`.
 
 Explicit server events include `project_created`, `evidence_created`, `transcript_created`, `assistant_question_sent`, `proposal_generated`, `proposal_accepted`, and `proposal_rejected`.
-These events are emitted by selected actions and the chat route, not by every service mutation or domain event.
-For example, background Proposal passes do not automatically emit the manual action's `proposal_generated` event, and MCP tool calls do not universally produce equivalent UI analytics.
+Most are emitted by selected actions and the chat route, not by every service mutation or domain event, so MCP tool calls do not universally produce equivalent UI analytics.
+The three Proposal funnel events are the exception (issue #74): the pass, the accept and the reject emit them themselves, after the write, so an automatic pass scheduled by an Evidence or Comment action counts like a requested one and any caller that confirms a Proposal is recorded.
+A pass that created no Proposal emits nothing, so these events count created Proposals rather than how often a pass ran.
+Every server event states its browser context; `browser_context: "none"` marks work with no correlated browser session rather than a missing property.
 PostHog counts should therefore not be treated as a complete audit trail or a count of all writes.
 
 Invite URLs are credentials.
@@ -530,7 +532,7 @@ The code specifically distinguishes ordinary property sanitization from session 
 This protection is targeted to invite paths; it is not a general guarantee that all captured UI content or URLs are free of sensitive data.
 Telemetry is not stored in the Project database, and disabling its key leaves the domain features available.
 
-Sources: [browser provider](../src/shared/analytics/provider.tsx), [server adapter](../src/shared/analytics/server.ts), [redaction](../src/shared/analytics/redact.ts), [root layout](../src/app/layout.tsx), and [analytics submission guide](submission/m19-analytics.md).
+Sources: [browser provider](../src/shared/analytics/provider.tsx), [server adapter](../src/shared/analytics/server.ts), [redaction](../src/shared/analytics/redact.ts), [funnel events](../src/server/modules/proposals/analytics.ts), [root layout](../src/app/layout.tsx), and [analytics submission guide](submission/m19-analytics.md).
 
 ## Deployment and configuration
 
