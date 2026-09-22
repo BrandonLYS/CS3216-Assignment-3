@@ -464,6 +464,23 @@ function useRoomHistory({
    * loaded history and the refreshed page, so a hole between them still looks contiguous.
    */
   const [resetOnNextPage, setResetOnNextPage] = React.useState(false);
+  /**
+   * The newest Chat Message a **server read** has confirmed: the newest page the route
+   * rendered, or the last batch a catch-up returned. It is both where the next catch-up
+   * asks from and what continuity is judged against, and it is deliberately not
+   * `messages[0]`.
+   *
+   * A Chat Message the reader wrote themselves is in `messages` the instant it is written
+   * and proves nothing about what arrived while the poll was behind. Used as the cursor it
+   * would skip that stretch; used as the continuity check it would make a refreshed page
+   * look contiguous across the same gap. Either way the Room keeps a hole that no later
+   * poll can see and that paging, which only reaches backwards from the oldest row on
+   * screen, can never reach either.
+   *
+   * State rather than a ref because the render-time continuity check below reads it, and
+   * reading a ref during render is what the React Compiler forbids.
+   */
+  const [synced, setSynced] = React.useState(page[0]);
 
   // Adjusting state while rendering, rather than in an effect: React re-runs this component
   // before touching the DOM, so the merged history is what paints, with no second pass.
@@ -474,8 +491,12 @@ function useRoomHistory({
     // Room between them that no cursor can ever ask for, because paging continues from the
     // oldest row on screen. Start again from the newest page instead: a visible jump, rather
     // than a hole that looks like history.
+    // Judged against the confirmed cursor, not the newest row on screen: those differ
+    // exactly when the reader has written something the poll has not caught up past, and
+    // that is the case where a gap would otherwise pass for continuous history.
     const fresh = !messages.length;
-    const contiguous = !resetOnNextPage && (fresh || !page.length || page.some((m) => m.id === messages[0]!.id));
+    const reachesBack = synced ? page.some((m) => m.id === synced.id) : page.some((m) => m.id === messages[0]!.id);
+    const contiguous = !resetOnNextPage && (fresh || !page.length || reachesBack);
     if (resetOnNextPage) setResetOnNextPage(false);
     if (contiguous) {
       setMessages((current) => merge(current, page));
@@ -492,6 +513,12 @@ function useRoomHistory({
       // merging it back would reinstate the hole this branch exists to avoid.
       setGeneration((n) => n + 1);
     }
+    // The route's page is a server read, and the newest one there is: whichever branch
+    // ran, its newest row is a cursor the catch-up may trust. Adjusted here rather than in
+    // an effect, like everything else in this block - a `setState` in an effect body is
+    // both a cascading render and what the React Compiler refuses to compile.
+    const first = page[0];
+    if (first && (!synced || newestFirst(first, synced) < 0)) setSynced(first);
   }
   // One request at a time: the button and the observer call the same function, and the
   // observer keeps firing while the sentinel is on screen.
@@ -502,14 +529,7 @@ function useRoomHistory({
   const polling = React.useRef(false);
   /** Consecutive failed polls. A deleted Room or Person fails identically forever. */
   const failures = React.useRef(0);
-  /**
-   * The newest Chat Message a **server read** has confirmed, which is what the next
-   * catch-up asks from. Deliberately not `messages[0]`: the reader's own Chat Message goes
-   * into `messages` the moment it is written, and it says nothing about what arrived while
-   * the poll was failing. Treating it as the cursor would skip that whole stretch of the
-   * Room permanently, because paging only ever reaches backwards from the oldest row.
-   */
-  const synced = React.useRef(page[0]);
+
   // A Room switch unmounts this; never set state on the way out.
   const mounted = React.useRef(true);
   const current = React.useRef(generation);
@@ -524,13 +544,6 @@ function useRoomHistory({
   React.useEffect(() => {
     current.current = generation;
   }, [generation]);
-
-  // The route's page is a server read too, and the newest one there is: whether it arrived
-  // contiguously or replaced the history outright, it is a cursor the catch-up may trust.
-  React.useEffect(() => {
-    const first = page[0];
-    if (first && (!synced.current || newestFirst(first, synced.current) < 0)) synced.current = first;
-  }, [page]);
 
   /**
    * Fetch the page before the oldest Chat Message on screen. Scrolling is the caller's: it
@@ -592,7 +605,7 @@ function useRoomHistory({
     const asked = generation;
     const ask = viewer.kind === "pm" ? newerMessagesAction : participantNewerMessagesAction;
     try {
-      let after = overlapped(synced.current, roomCreatedAt);
+      let after = overlapped(synced, roomCreatedAt);
       for (let batch = 0; batch < POLL_MAX_BATCHES; batch++) {
         const res = await ask({ projectId, roomId, after });
         if (!mounted.current || current.current !== asked) return;
@@ -607,7 +620,7 @@ function useRoomHistory({
         const { items, truncated } = res.data;
         const newest = items.at(-1);
         if (newest) {
-          synced.current = newest;
+          setSynced(newest);
           setMessages((loaded) => merge(loaded, items));
         }
         if (!truncated || !newest) return;
@@ -632,7 +645,7 @@ function useRoomHistory({
     } finally {
       polling.current = false;
     }
-  }, [generation, projectId, roomCreatedAt, roomId, router, viewer.kind]);
+  }, [generation, projectId, roomCreatedAt, roomId, router, synced, viewer.kind]);
 
   // The interval must not be rebuilt whenever a Chat Message arrives - that would reset the
   // countdown on every merge - and must not close over the `messages` of the render that
