@@ -251,7 +251,12 @@ export function ScrollVideo() {
       if (planLayer) {
         planLayer.style.opacity = String(prologueShare > 0 ? handoff : 1);
         // The plan view slides in from the right, the side the spectrum leaves the prism on.
-        planLayer.style.transform = `translateX(${(1 - (prologueShare > 0 ? handoff : 1)) * 100}%)`;
+        const travel = 1 - (prologueShare > 0 ? handoff : 1);
+        planLayer.style.transform = `translateX(${travel * 100}%)`;
+        // Feather the leading edge while it travels, so it never cuts a hard line across the glass.
+        const mask = travel > 0 ? `linear-gradient(to right, transparent, black ${travel * 40}%)` : "none";
+        planLayer.style.maskImage = mask;
+        planLayer.style.webkitMaskImage = mask;
       }
       const copy = copyRef.current;
       if (copy) copy.style.opacity = String(prologueShare > 0 ? handoff : 1);
@@ -402,18 +407,23 @@ export function ScrollVideo() {
           />
 
           {prologueCount > 0 && (
-            <div
-              ref={prologueCopyRef}
-              className="absolute inset-0 flex items-end pb-28 lg:items-center lg:pb-0"
-            >
-              {/* The right of the frame stays dark until the spectrum arrives, so the quotes live there. */}
-              <div className="mx-auto grid w-full max-w-[1280px] px-6 lg:pr-24">
+            <div ref={prologueCopyRef} className="absolute inset-0 flex items-end pb-20">
+              {/* The strategist fills the middle of the frame, so the quotes take the dark left edge and a scrim behind them. */}
+              <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to right, color-mix(in srgb, var(--color-canvas) 82%, transparent) 0%, color-mix(in srgb, var(--color-canvas) 45%, transparent) 30%, transparent 55%)",
+                }}
+              />
+              <div className="relative mx-auto grid w-full max-w-[1280px] px-6 pb-10">
                 {prologueBeats.map((beat, i) => (
                   <figure
                     key={beat.id}
                     aria-hidden={i !== active}
                     className={cn(
-                      "max-w-md transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [grid-area:1/1] lg:ml-auto",
+                      "max-w-lg transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [grid-area:1/1]",
                       i === active ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
                     )}
                   >
@@ -422,14 +432,14 @@ export function ScrollVideo() {
                       <span className="h-px w-8 bg-hairline-tertiary" />
                       <span className="text-ink-subtle">{beat.eyebrow}</span>
                     </span>
-                    <blockquote className="relative mt-6">
+                    <blockquote className="mt-5">
                       <span
                         aria-hidden
-                        className="absolute -top-6 -left-1 font-serif text-[88px] leading-none text-primary/40 select-none"
+                        className="-ml-1 block h-9 font-serif text-[72px] leading-none text-primary select-none"
                       >
                         &ldquo;
                       </span>
-                      <p className="relative text-display-md text-balance text-ink">{beat.quote}</p>
+                      <p className="text-display-md text-balance text-ink">{beat.quote}</p>
                     </blockquote>
                     <figcaption className="mt-5 border-l border-primary pl-4 text-body-lg text-ink-muted">
                       {beat.note}
