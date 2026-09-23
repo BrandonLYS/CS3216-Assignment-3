@@ -136,3 +136,20 @@
     scroll-behavior: smooth;
   }
 }
+
+/* The hero's colour wash drifts slowly, so the opening screen reads as light rather than a flat fill. */
+@keyframes landing-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, -4%, 0) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-drift {
+    animation: landing-drift 18s ease-in-out infinite;
+  }
+}

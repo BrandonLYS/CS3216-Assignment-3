@@ -28,7 +28,9 @@ export function LandingNav({ signedIn }: { signedIn: boolean }) {
     <header
       className={cn(
         "sticky top-0 z-50 transition-colors duration-200",
-        lifted ? "border-b border-hairline bg-canvas/85 backdrop-blur-md" : "border-b border-transparent bg-canvas",
+        lifted
+          ? "border-b border-hairline bg-canvas/85 backdrop-blur-md"
+          : "border-b border-transparent bg-transparent",
       )}
     >
       <a
