@@ -78,6 +78,37 @@ const chapters = [
   },
 ];
 
+/**
+ * The prologue over the prism shot: why the view from above is the strategist's advantage,
+ * ending on the prism the camera then pushes into.
+ */
+const prologueBeats = [
+  {
+    id: "vantage",
+    index: "I",
+    eyebrow: "The vantage",
+    quote: "Strategy is decided by where you stand, long before the first move.",
+    note: "On the ground every problem looks urgent. From above you can see which ones actually matter.",
+  },
+  {
+    id: "overview",
+    index: "II",
+    eyebrow: "Bird's-eye view",
+    quote: "You cannot steer what you cannot see whole.",
+    note: "Deadlines, Risks and Dependencies only make sense side by side. Read the whole Project at a glance, not one Task at a time.",
+  },
+  {
+    id: "refraction",
+    index: "III",
+    eyebrow: "Refraction",
+    quote: "Hold the plan up to the light and every part of it shows.",
+    note: "A prism splits one beam into everything it carries. PrismPM splits one view into the Decisions, Assumptions and changes inside it.",
+  },
+];
+
+/** Where in the prologue each beat takes over, as a share of the prologue's scroll. */
+const PROLOGUE_CUES = [0, 0.3, 0.58];
+
 type VideoState = "pending" | "ready" | "missing";
 
 export function ScrollVideo() {
@@ -88,9 +119,11 @@ export function ScrollVideo() {
   const flareRef = useRef<HTMLDivElement>(null);
   const planLayerRef = useRef<HTMLDivElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
+  const prologueCopyRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLSpanElement>(null);
   /** Written every scroll frame, read by the scrub loop - deliberately not state. */
   const progress = useRef(0);
+  /** The beat on screen, counting the prologue's beats first and then the chapters. */
   const [active, setActive] = useState(0);
   const [video, setVideo] = useState<VideoState>("pending");
   const [prism, setPrism] = useState<VideoState>("pending");
@@ -134,6 +167,8 @@ export function ScrollVideo() {
   const prologue = prism === "missing" ? 0 : PRISM_SCREENS;
   /** The part of the stage's scroll the prologue owns; the descent gets the rest. */
   const prologueShare = prologue / (prologue + chapters.length);
+  const prologueCount = prologue > 0 ? prologueBeats.length : 0;
+  const beats = [...prologueBeats.slice(0, prologueCount), ...chapters];
 
   useEffect(() => {
     const el = videoRef.current;
@@ -148,10 +183,16 @@ export function ScrollVideo() {
     return scroll(
       (p: number) => {
         progress.current = p;
-        const descent = prologueShare < 1 ? clamp01((p - prologueShare) / (1 - prologueShare)) : 0;
         const rail = railRef.current;
-        if (rail) rail.style.transform = `scaleX(${Math.max(descent, 0.004)})`;
-        const next = Math.min(chapters.length - 1, Math.floor(descent * chapters.length));
+        if (rail) rail.style.transform = `scaleX(${Math.max(p, 0.004)})`;
+        let next: number;
+        if (p < prologueShare) {
+          const intro = p / prologueShare;
+          next = PROLOGUE_CUES.findLastIndex((cue) => intro >= cue);
+        } else {
+          const descent = prologueShare < 1 ? (p - prologueShare) / (1 - prologueShare) : 0;
+          next = prologueCount + Math.min(chapters.length - 1, Math.floor(descent * chapters.length));
+        }
         if (next !== shown) {
           shown = next;
           setActive(next);
@@ -159,7 +200,7 @@ export function ScrollVideo() {
       },
       { target: section, offset: ["start start", "end end"] },
     );
-  }, [cinema, prologueShare]);
+  }, [cinema, prologueShare, prologueCount]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -214,6 +255,9 @@ export function ScrollVideo() {
       }
       const copy = copyRef.current;
       if (copy) copy.style.opacity = String(prologueShare > 0 ? handoff : 1);
+      // The last quote clears as the push begins, so nothing stands between the eye and the glass.
+      const prologueCopy = prologueCopyRef.current;
+      if (prologueCopy) prologueCopy.style.opacity = String(1 - clamp01(push * 4));
 
       frame = requestAnimationFrame(tick);
     };
@@ -272,6 +316,17 @@ export function ScrollVideo() {
           ) : (
             film
           )}
+        </div>
+        <div className="mt-10 grid gap-6 sm:grid-cols-3">
+          {prologueBeats.map((beat) => (
+            <figure key={beat.id} className="border-l border-primary pl-5">
+              <span className="text-eyebrow font-medium text-ink-tertiary">
+                {beat.index} &middot; {beat.eyebrow}
+              </span>
+              <blockquote className="mt-2 text-card-title text-ink">&ldquo;{beat.quote}&rdquo;</blockquote>
+              <figcaption className="mt-2 text-body-sm text-ink-subtle">{beat.note}</figcaption>
+            </figure>
+          ))}
         </div>
         <ol className="mt-10 grid gap-6 sm:grid-cols-2">
           {chapters.map((chapter) => (
@@ -346,22 +401,58 @@ export function ScrollVideo() {
             }}
           />
 
-          <div
-            ref={copyRef}
-            className="relative flex h-full flex-col justify-end"
-            style={{ opacity: prologue > 0 ? 0 : 1 }}
-          >
-            {/* A floor indicator down the right edge: where in the descent you are. */}
+          {prologueCount > 0 && (
+            <div
+              ref={prologueCopyRef}
+              className="absolute inset-0 flex items-end pb-28 lg:items-center lg:pb-0"
+            >
+              {/* The right of the frame stays dark until the spectrum arrives, so the quotes live there. */}
+              <div className="mx-auto grid w-full max-w-[1280px] px-6 lg:pr-24">
+                {prologueBeats.map((beat, i) => (
+                  <figure
+                    key={beat.id}
+                    aria-hidden={i !== active}
+                    className={cn(
+                      "max-w-md transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [grid-area:1/1] lg:ml-auto",
+                      i === active ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
+                    )}
+                  >
+                    <span className="flex items-center gap-3 text-eyebrow font-medium tracking-[0.4px] uppercase">
+                      <span className="text-primary">{beat.index}</span>
+                      <span className="h-px w-8 bg-hairline-tertiary" />
+                      <span className="text-ink-subtle">{beat.eyebrow}</span>
+                    </span>
+                    <blockquote className="relative mt-6">
+                      <span
+                        aria-hidden
+                        className="absolute -top-6 -left-1 font-serif text-[88px] leading-none text-primary/40 select-none"
+                      >
+                        &ldquo;
+                      </span>
+                      <p className="relative text-display-md text-balance text-ink">{beat.quote}</p>
+                    </blockquote>
+                    <figcaption className="mt-5 border-l border-primary pl-4 text-body-lg text-ink-muted">
+                      {beat.note}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="relative flex h-full flex-col justify-end">
+            {/* A floor indicator down the right edge: where in the whole sequence you are. */}
             <ol
               aria-hidden
               className="absolute top-1/2 right-6 hidden -translate-y-1/2 flex-col items-end gap-4 lg:flex"
             >
-              {chapters.map((chapter, i) => (
+              {beats.map((beat, i) => (
                 <li
-                  key={chapter.id}
+                  key={beat.id}
                   className={cn(
                     "flex items-center gap-3 text-eyebrow font-medium tracking-[0.4px] transition-colors duration-500",
                     i === active ? "text-ink" : "text-ink-tertiary",
+                    i === prologueCount && prologueCount > 0 && "mt-4",
                   )}
                 >
                   <span
@@ -370,20 +461,26 @@ export function ScrollVideo() {
                       i === active ? "w-8 bg-primary" : "w-4 bg-hairline-tertiary",
                     )}
                   />
-                  {chapter.index}
+                  {beat.index}
                 </li>
               ))}
             </ol>
 
-            <div className="mx-auto w-full max-w-[1280px] px-6 pb-10">
+            <div
+              ref={copyRef}
+              className="mx-auto w-full max-w-[1280px] px-6 pb-10"
+              style={{ opacity: prologue > 0 ? 0 : 1 }}
+            >
               <div className="grid max-w-2xl">
                 {chapters.map((chapter, i) => (
                   <div
                     key={chapter.id}
-                    aria-hidden={i !== active}
+                    aria-hidden={i + prologueCount !== active}
                     className={cn(
                       "transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [grid-area:1/1]",
-                      i === active ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
+                      i + prologueCount === active
+                        ? "translate-y-0 opacity-100"
+                        : "pointer-events-none translate-y-4 opacity-0",
                     )}
                   >
                     <span className="flex items-center gap-3 text-eyebrow font-medium tracking-[0.4px] uppercase">

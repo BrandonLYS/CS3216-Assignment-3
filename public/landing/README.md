@@ -27,7 +27,8 @@ Thin bright lines on black compress well, so crf 26 holds up where a photographi
 ## Prism prologue
 
 Before the descent, the same pinned stage scrubs `prismpm-prism.mp4`, a 10 second shot of a strategist raising a glass prism into a beam of light, showing `prismpm-prism-poster.jpg` until it decodes.
-From the 7 second mark the camera pushes into the prism, and as it fills the screen the plan view slides in from the right.
+Three quotes on strategy and the view from above (`prologueBeats`) sit over the dark right of the frame, one per stretch of scroll.
+From the 7 second mark the last quote clears, the camera pushes into the prism, and as it fills the screen the plan view slides in from the right.
 The prism's position in the frame is `PRISM_FOCUS` in `src/widgets/landing/scroll-video.tsx`; re-measure it if the clip is replaced.
 It is encoded like the descent, without audio and at crf 24 since it is photographic:
 
