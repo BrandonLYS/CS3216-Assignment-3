@@ -10,6 +10,7 @@ import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/
 import { cn } from "@/shared/lib/cn";
 import { Button, Panel, SectionTitle, Textarea } from "@/shared/ui";
 import { LinkedText } from "./linked-text";
+import { MarkdownText } from "./markdown-text";
 import { ToolCall } from "./tool-call";
 
 const FRIENDLY: Record<string, string> = {
@@ -171,6 +172,7 @@ export function ChatPanel({
                   <Part
                     key={i}
                     part={part}
+                    isAssistant={m.role === "assistant"}
                     onAnswer={(id, approved) => void addToolApprovalResponse({ id, approved })}
                     onAlwaysAllow={alwaysAllow}
                   />
@@ -238,14 +240,16 @@ function friendly(error: Error) {
 
 function Part({
   part,
+  isAssistant,
   onAnswer,
   onAlwaysAllow,
 }: {
   part: UIMessage["parts"][number];
+  isAssistant: boolean;
   onAnswer: (approvalId: string, approved: boolean) => void;
   onAlwaysAllow: (approvalId: string, toolName: string) => Promise<void>;
 }) {
-  if (part.type === "text") return <LinkedText text={part.text} />;
+  if (part.type === "text") return isAssistant ? <MarkdownText text={part.text} /> : <LinkedText text={part.text} />;
   if (!isToolUIPart(part)) return null;
   return <ToolCall part={part} onAnswer={onAnswer} onAlwaysAllow={onAlwaysAllow} />;
 }

@@ -15,6 +15,7 @@ import { DomainError } from "@/server/core/errors";
 import { toAiTools, toolApprovalFor } from "@/server/modules/assistant/ai-tools";
 import { assistantConfig, getModel } from "@/server/modules/assistant/model";
 import { projectSystemPrompt, workspaceSystemPrompt } from "@/server/modules/assistant/prompt";
+import { repairInterruptedToolCalls } from "@/server/modules/assistant/repair";
 import { assistantService } from "@/server/modules/assistant/service";
 import { ASSISTANT_TOOLS, PROJECT_TOOLS, findTool } from "@/server/modules/assistant/tools";
 import { memoryService } from "@/server/modules/memory/service";
@@ -49,7 +50,9 @@ export async function POST(req: Request) {
       tools: tools as ValidateTools,
     });
     if (!valid.success) return new Response("Bad request", { status: 400 });
-    const messages = valid.data;
+    // A turn that died mid-flight leaves tool calls with no result, which the model API rejects.
+    // Mark them interrupted instead so the thread stays usable and the model can redo them.
+    const messages = repairInterruptedToolCalls(valid.data);
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
     capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
