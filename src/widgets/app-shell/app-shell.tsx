@@ -3,9 +3,10 @@
 import * as React from "react";
 import type { ProjectRow } from "@/server/modules/projects/schema";
 import { ShellContext, type ShellCtx } from "@/shared/lib/shell-context";
+import { startTour } from "@/shared/lib/tour";
 import { CreateProjectDialog } from "@/features/project/create-project-dialog";
 import { CommandPalette } from "@/widgets/command-palette/command-palette";
-import { ProductTour, startTour } from "@/widgets/tour/product-tour";
+import { ProductTour } from "@/widgets/tour/product-tour";
 import { Sidebar } from "./sidebar";
 
 export { useShell } from "@/shared/lib/shell-context";

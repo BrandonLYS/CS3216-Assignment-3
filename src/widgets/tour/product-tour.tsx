@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
-import { TOUR_SEEN_KEY, type TourStep, tourHref, tourSteps } from "@/shared/lib/tour";
+import { endTour, type TourStep, tourHref, tourIsRunning, tourStore, tourSteps } from "@/shared/lib/tour";
 import { Button } from "@/shared/ui";
 
 /** Gap between the spotlighted element and the card, and the card's fixed width. */
@@ -16,36 +16,17 @@ const CARD_W = 340;
 const MEASURE_MS = 120;
 
 /**
- * "Has this browser seen the tour" is the whole of the tour's state, so the flag in
- * localStorage is also what decides whether the tour is on screen: unseen means running.
- * Replaying is therefore clearing the flag, and finishing or skipping is setting it.
- */
-const listeners = new Set<() => void>();
-const tourStore = {
-  running: () => localStorage.getItem(TOUR_SEEN_KEY) === null,
-  setSeen: (seen: boolean) => {
-    if (seen) localStorage.setItem(TOUR_SEEN_KEY, "1");
-    else localStorage.removeItem(TOUR_SEEN_KEY);
-    listeners.forEach((l) => l());
-  },
-  subscribe: (l: () => void) => {
-    listeners.add(l);
-    return () => listeners.delete(l);
-  },
-};
-
-/** Replay the tour from step one. Offered in the command palette. */
-export const startTour = () => tourStore.setSeen(false);
-const endTour = () => tourStore.setSeen(true);
-
-/**
- * The body really unmounts when the tour is not running, so replaying always starts at step
- * one without an effect that resets the index. Same shape as `CommandPalette`.
+ * The body really unmounts when the tour is not running, so running it again always starts at
+ * step one without an effect that resets the index. Same shape as `CommandPalette`.
  */
 export function ProductTour({ projectId }: { projectId: string | null }) {
-  // False during SSR and the first paint: localStorage cannot be read on the server, and a
-  // tour that flashes before hydration would spotlight elements that have not been laid out.
-  const running = React.useSyncExternalStore(tourStore.subscribe, tourStore.running, () => false);
+  // Off during SSR and the first paint: localStorage cannot be read on the server, and a tour
+  // that flashed before hydration would spotlight elements that have not been laid out.
+  const running = React.useSyncExternalStore(
+    tourStore.subscribe,
+    () => tourIsRunning(tourStore.read()),
+    () => false,
+  );
   if (!running) return null;
   return <ProductTourBody projectId={projectId} onClose={endTour} />;
 }

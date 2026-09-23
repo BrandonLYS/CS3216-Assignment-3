@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { TOUR_STEPS, tourHref, tourSteps } from "./tour";
+import { TOUR_STEPS, tourHref, tourIsRunning, tourSteps } from "./tour";
+
+describe("tourIsRunning", () => {
+  it("runs only while the stored state says so", () => {
+    expect(tourIsRunning("run")).toBe(true);
+    expect(tourIsRunning("done")).toBe(false);
+  });
+
+  it("stays off for a browser that never stored anything, which is every existing User", () => {
+    expect(tourIsRunning(null)).toBe(false);
+  });
+});
 
 describe("tour steps", () => {
   it("keeps every step when there is a Project to show them on", () => {

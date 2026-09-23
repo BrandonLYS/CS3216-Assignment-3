@@ -1,18 +1,28 @@
 /**
- * The guided tour a new User sees once, and can replay from the command palette.
+ * The guided tour a newly signed up User sees once, and anyone can run again from Settings or
+ * the command palette.
  *
  * Every new account is seeded the sample Project (ADR 0013), so the tour explains a workspace
  * that already has something in it rather than walking the User through filling one in. The
  * steps are data, not JSX, so the ordering and the "which step can I show?" rule can be tested
  * without a DOM.
  *
- * Progress is a single localStorage flag: "has this browser seen the tour". Nothing about the
- * tour belongs in the database - it teaches the UI, not the domain, and a User who has seen it
- * on one machine losing that fact on another costs them one dismissal.
+ * Nothing about the tour belongs in the database - it teaches the UI, not the domain, and a
+ * User who ran it on one machine losing that fact on another costs them one dismissal.
  */
 
-/** Set to "1" once the User finishes or skips. Unset means a first visit, which starts the tour. */
-export const TOUR_SEEN_KEY = "prismpm.tour-seen";
+/**
+ * The whole state of the tour: "run" while it is on screen, "done" once it has been finished,
+ * skipped or switched off, and absent for anyone who never asked for it.
+ *
+ * Absent is the important value. Signing up writes "run", and nothing else does, so the tour
+ * only ever starts itself for an account created in this browser. An existing User signing in
+ * has no key and is left alone.
+ */
+export const TOUR_KEY = "prismpm.tour";
+
+/** True while the tour should be on screen. Anything other than "run", including null, is off. */
+export const tourIsRunning = (stored: string | null) => stored === "run";
 
 export interface TourStep {
   id: string;
@@ -56,10 +66,34 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "your-own",
     title: "Start your own Project",
-    body: "Create a Project whenever you are ready. You can replay this tour any time from the command palette with Cmd K.",
+    body: "Create a Project whenever you are ready. You can run this tour again from Settings, or from the command palette with Cmd K.",
     anchor: "new-project",
   },
 ];
+
+/**
+ * The stored flag is also what the overlay renders from, rather than being copied into React
+ * state on mount: one source of truth, so the Settings switch, the command palette and the
+ * tour's own buttons cannot disagree about whether it is running.
+ */
+const listeners = new Set<() => void>();
+const write = (state: "run" | "done") => {
+  localStorage.setItem(TOUR_KEY, state);
+  listeners.forEach((l) => l());
+};
+
+export const tourStore = {
+  read: () => localStorage.getItem(TOUR_KEY),
+  subscribe: (l: () => void) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  },
+};
+
+/** Run the tour from step one. Called on signup, from Settings and from the command palette. */
+export const startTour = () => write("run");
+/** Finished, skipped, or switched off in Settings: all the same thing. */
+export const endTour = () => write("done");
 
 /**
  * The steps that can actually be shown. A step pinned to a Project section is dropped when the
