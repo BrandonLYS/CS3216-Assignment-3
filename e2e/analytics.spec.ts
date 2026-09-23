@@ -76,6 +76,8 @@ async function signup(page: Page) {
   await page.getByRole("button", { name: "Create account" }).click();
   const { user } = await (await response).json();
   await expect(page).toHaveURL("/dashboard");
+  // Signup starts the product tour, whose overlay takes every click until it is dismissed.
+  await page.getByRole("button", { name: "Skip tour" }).click();
   return { id: user.id as string, email };
 }
 
@@ -178,6 +180,8 @@ test("landing, signup, Project creation, restoration, logout and returning/switc
   const returning = await captured("$identify", user.id, signInStart);
   expect(returning.properties.$anon_distinct_id).toBe(id(loginPageview));
   expect(session(returning)).toBe(session(loginPageview));
+  const login = await captured("login_completed", user.id, signInStart);
+  expect(session(login)).toBe(session(returning));
   await expect
     .poll(() =>
       events

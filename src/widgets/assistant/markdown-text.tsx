@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { captureEvent } from "@/shared/analytics/browser";
 import { internalHref } from "./linked-text";
 
 /**
@@ -56,8 +57,18 @@ function SafeLink({ href, children }: ComponentPropsWithoutRef<"a">) {
   const safeHref = href ? internalHref(href) : null;
   if (!safeHref) return <span>{children}</span>;
   return (
-    <Link href={safeHref} className="text-primary underline decoration-primary/40 hover:decoration-primary">
+    <Link
+      href={safeHref}
+      onClick={() => captureEvent("assistant_citation_opened", { citation_kind: citationKind(safeHref) })}
+      className="text-primary underline decoration-primary/40 hover:decoration-primary"
+    >
       {children}
     </Link>
   );
+}
+
+/** What a citation points at: the dialog it opens (`?decision=`), else the Project section it links. */
+function citationKind(href: string) {
+  const url = new URL(href, "http://app.local");
+  return url.searchParams.keys().next().value ?? url.pathname.split("/")[3] ?? "overview";
 }

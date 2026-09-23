@@ -2,6 +2,8 @@ import {
   convertToModelMessages,
   createUIMessageStreamResponse,
   generateId,
+  getToolName,
+  isToolUIPart,
   stepCountIs,
   streamText,
   toUIMessageStream,
@@ -13,13 +15,14 @@ import { z } from "zod";
 import { ctxForCurrentUser } from "@/server/core/action";
 import { DomainError } from "@/server/core/errors";
 import { toAiTools, toolApprovalFor } from "@/server/modules/assistant/ai-tools";
-import { assistantConfig, getModel } from "@/server/modules/assistant/model";
+import { assistantConfig, getModel, modelInfo } from "@/server/modules/assistant/model";
 import { projectSystemPrompt, workspaceSystemPrompt } from "@/server/modules/assistant/prompt";
 import { repairInterruptedToolCalls } from "@/server/modules/assistant/repair";
 import { assistantService } from "@/server/modules/assistant/service";
 import { ASSISTANT_TOOLS, PROJECT_TOOLS, findTool } from "@/server/modules/assistant/tools";
 import { memoryService } from "@/server/modules/memory/service";
 import { reflect } from "@/server/modules/reflection/service";
+import { captureGeneration } from "@/shared/analytics/ai";
 import { capture } from "@/shared/analytics/server";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 
@@ -53,9 +56,22 @@ export async function POST(req: Request) {
     // A turn that died mid-flight leaves tool calls with no result, which the model API rejects.
     // Mark them interrupted instead so the thread stays usable and the model can redo them.
     const messages = repairInterruptedToolCalls(valid.data);
-    if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
+    const workflow = projectId ? "project" : "workspace";
+    if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap) {
+      await capture(ctx.userId, "assistant_limit_reached", { workflow, daily_turn_cap: dailyTurnCap });
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
-    capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
+    }
+    const last = messages.at(-1);
+    // A resubmit after an approval card ends on the Assistant's message: that is a decision, not a question.
+    if (last?.role === "user") await capture(ctx.userId, "assistant_question_sent", { workflow });
+    for (const part of last?.role === "assistant" ? last.parts : []) {
+      if (isToolUIPart(part) && part.state === "approval-responded" && !part.approval.isAutomatic)
+        await capture(ctx.userId, "assistant_tool_approval", {
+          workflow,
+          tool: getToolName(part),
+          approved: part.approval.approved,
+        });
+    }
     const [profile, workingMemory] = await Promise.all([
       memoryService.current(ctx, null),
       projectId ? memoryService.current(ctx, projectId) : null,
@@ -65,6 +81,15 @@ export async function POST(req: Request) {
       ? projectSystemPrompt(await findTool("get_project_summary").handler(ctx, { projectId }), memory)
       : workspaceSystemPrompt(await findTool("list_projects").handler(ctx, {}), memory);
 
+    // One trace per request: each model step is an `$ai_generation`, the turn is `assistant_turn_completed`.
+    const traceId = crypto.randomUUID();
+    const started = performance.now();
+    const generation = {
+      span: "assistant_turn" as const,
+      traceId,
+      properties: { workflow, conversation_id: conversationId },
+    };
+    let step = 0;
     const result = streamText({
       model,
       system,
@@ -74,6 +99,40 @@ export async function POST(req: Request) {
       // Signs approval requests so a client cannot forge an "approved" response.
       experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
+      onLanguageModelCallEnd: (call) =>
+        captureGeneration(ctx.userId, {
+          ...generation,
+          provider: call.provider,
+          model: call.modelId,
+          latencyMs: call.performance.responseTimeMs,
+          usage: call.usage,
+          finishReason: call.finishReason,
+          properties: { ...generation.properties, step: step++ },
+        }),
+      onError: async ({ error }) => {
+        console.error(error);
+        await captureGeneration(ctx.userId, {
+          ...generation,
+          ...modelInfo(),
+          latencyMs: performance.now() - started,
+          error,
+        });
+      },
+      onFinish: ({ steps, totalUsage, finishReason }) => {
+        const toolNames = steps.flatMap((s) => s.toolCalls.map((c) => c.toolName));
+        return capture(ctx.userId, "assistant_turn_completed", {
+          ...generation.properties,
+          $ai_trace_id: traceId,
+          step_count: steps.length,
+          tool_call_count: toolNames.length,
+          tool_names: [...new Set(toolNames)],
+          finish_reason: finishReason,
+          hit_step_cap: steps.length >= maxSteps,
+          latency_ms: Math.round(performance.now() - started),
+          input_tokens: totalUsage.inputTokens,
+          output_tokens: totalUsage.outputTokens,
+        });
+      },
     });
     // Reflection runs once the response is out and the thread is saved; its failures never reach the User (ADR 0007).
     const { promise: saved, resolve: markSaved } = Promise.withResolvers<boolean>();

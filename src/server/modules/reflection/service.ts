@@ -1,12 +1,13 @@
-import { generateObject, getToolName, isToolUIPart, type UIMessage } from "ai";
+import { generateObject, getToolName, isToolUIPart, type LanguageModelUsage, type UIMessage } from "ai";
 import { z } from "zod";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError, ValidationError } from "@/server/core/errors";
-import { getModel } from "@/server/modules/assistant/model";
+import { getModel, modelInfo } from "@/server/modules/assistant/model";
 import { conversationsRepo, messagesRepo } from "@/server/modules/assistant/repository";
 import { memoryRepo } from "@/server/modules/memory/repository";
 import { memoryService } from "@/server/modules/memory/service";
 import type { MemoryVersionRow } from "@/server/modules/memory/schema";
+import { traceGeneration } from "@/shared/analytics/ai";
 
 export const reflectionConfig = () => ({
   minMinutes: Number(process.env.REFLECTION_MIN_MINUTES ?? 5),
@@ -21,7 +22,10 @@ export interface RewriteInput {
   transcript: string;
   hasProject: boolean;
 }
-export type Rewrite = (input: RewriteInput) => Promise<{ profile: string; workingMemory: string | null }>;
+/** `usage` is set only by a rewrite that called a model, for LLM telemetry. */
+export type Rewrite = (
+  input: RewriteInput,
+) => Promise<{ profile: string; workingMemory: string | null; usage?: LanguageModelUsage }>;
 
 type DocOutcome = "written" | "unchanged" | "rejected";
 export type ReflectOutcome =
@@ -40,7 +44,7 @@ const outputSchema = z.object({
 const modelRewrite: Rewrite = async (input) => {
   const model = getModel();
   if (!model) throw new Error("Assistant not configured");
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model,
     schema: outputSchema,
     system: [
@@ -60,7 +64,7 @@ const modelRewrite: Rewrite = async (input) => {
       .filter(Boolean)
       .join("\n\n"),
   });
-  return { profile: object.profile, workingMemory: input.hasProject ? object.workingMemory : null };
+  return { profile: object.profile, workingMemory: input.hasProject ? object.workingMemory : null, usage };
 };
 
 const lines = (body: string | undefined) =>
@@ -114,13 +118,27 @@ export async function reflect(
 
   let out: Awaited<ReturnType<Rewrite>>;
   try {
-    out = await rewrite({
-      profile: profile?.body ?? "",
-      workingMemory: workingMemory?.body ?? null,
-      userLines,
-      transcript: transcriptOf(messages.slice(-12)),
-      hasProject: Boolean(projectId),
-    });
+    const run = () =>
+      rewrite({
+        profile: profile?.body ?? "",
+        workingMemory: workingMemory?.body ?? null,
+        userLines,
+        transcript: transcriptOf(messages.slice(-12)),
+        hasProject: Boolean(projectId),
+      });
+    out =
+      rewrite === modelRewrite
+        ? await traceGeneration(
+            ctx.userId,
+            {
+              span: "reflection",
+              traceId: crypto.randomUUID(),
+              ...modelInfo(),
+              properties: { conversation_id: conversationId, project_id: projectId },
+            },
+            run,
+          )
+        : await run();
   } catch (e) {
     console.error("Reflection failed", e);
     return { skipped: "failed" };

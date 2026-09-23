@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, type LanguageModelUsage } from "ai";
 import { z } from "zod";
 import { getModel } from "@/server/modules/assistant/model";
 import { ASSUMPTION_SUBTYPES, DATE_TARGET_FIELDS, type EvidenceKind, type ProposalExtractor } from "@/shared/domain";
@@ -54,7 +54,8 @@ export interface ExtractInput {
   sources: ExtractSource[];
   context: ExtractContext;
 }
-export type Extract = (input: ExtractInput) => Promise<{ proposals: RawProposal[] }>;
+/** `usage` is set only by an extractor that called a model, for LLM telemetry. */
+export type Extract = (input: ExtractInput) => Promise<{ proposals: RawProposal[]; usage?: LanguageModelUsage }>;
 
 const DECISION_VERB =
   /\b(decided|agreed|chose|chosen|opted|settled on|going with|will switch|switched|switching|instead of|rather than|resolved to)\b/i;
@@ -106,7 +107,7 @@ const outputSchema = z.object({ proposals: z.array(rawProposalSchema) });
 export const modelExtract: Extract = async ({ sources, context }) => {
   const model = getModel();
   if (!model) throw new Error("Assistant not configured");
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model,
     schema: outputSchema,
     system: [
@@ -130,7 +131,7 @@ export const modelExtract: Extract = async ({ sources, context }) => {
       .filter(Boolean)
       .join("\n\n"),
   });
-  return { proposals: object.proposals };
+  return { proposals: object.proposals, usage };
 };
 
 /** Which extractor the pass should use, or null when none can run. */

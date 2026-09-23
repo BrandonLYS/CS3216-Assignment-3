@@ -11,6 +11,12 @@ export const assistantConfig = () => ({
   dailyTurnCap: int(process.env.ASSISTANT_DAILY_TURN_CAP, 50),
 });
 
+/** Provider and model id as analytics reports them; matches what `getModel` builds. */
+export const modelInfo = () => ({
+  provider: process.env.AI_PROVIDER ?? "openai",
+  model: process.env.AI_MODEL || DEFAULT_MODEL,
+});
+
 /** The configured chat model, or null so the app boots and the dock can say "not configured". */
 export function getModel(): LanguageModel | null {
   const provider = process.env.AI_PROVIDER ?? "openai";
