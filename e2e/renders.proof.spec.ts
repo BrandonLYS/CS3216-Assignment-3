@@ -7,6 +7,8 @@ import { expect, test, type Page } from "@playwright/test";
 const email = process.env.DEMO_EMAIL ?? "demo@example.com";
 const password = process.env.DEMO_PASSWORD ?? "demo-password-123";
 const shot = (name: string) => ({ path: `artifacts/${name}.png`, fullPage: false });
+/** Renders the seed imports for the community centre: two of the scheme, two scenarios. */
+const SEEDED = 4;
 
 /** Screenshots race image decoding, so wait for every <img> to have painted. */
 async function imagesLoaded(page: Page) {
@@ -34,7 +36,7 @@ test.describe.configure({ mode: "serial" });
 test("seeded renders display with provenance", async ({ page }) => {
   await openRenders(page);
   await expect(page.getByText("Concept renders illustrate intent")).toBeVisible();
-  await expect(page.locator("img")).toHaveCount(2);
+  await expect(page.locator("img")).toHaveCount(SEEDED);
   await imagesLoaded(page);
   await page.screenshot(shot("after-renders-tab"));
 
@@ -46,11 +48,13 @@ test("seeded renders display with provenance", async ({ page }) => {
   await page.screenshot(shot("after-renders-provenance"));
 });
 
-// Generation is a live third-party call, so this one is skipped without a key.
+// Generation is a live third-party call. The key belongs to the server, not to this process,
+// so the skip reads the app's own "not configured" notice rather than our own env.
 test("generating a render shows pending, then the image", async ({ page }) => {
-  test.skip(!process.env.POLLINATIONS_API_KEY, "POLLINATIONS_API_KEY is not set");
   test.setTimeout(180_000);
   await openRenders(page);
+  const unconfigured = await page.getByText("Image previews are not configured").isVisible();
+  test.skip(unconfigured, "the server has no POLLINATIONS_API_KEY");
   await page.getByRole("button", { name: "New render" }).click();
   await page
     .getByLabel("Description")
@@ -61,7 +65,7 @@ test("generating a render shows pending, then the image", async ({ page }) => {
   await page.screenshot(shot("after-renders-pending"));
 
   // The catch-up poll refreshes the page once the image lands.
-  await expect(page.locator("img")).toHaveCount(3, { timeout: 150_000 });
+  await expect(page.locator("img")).toHaveCount(SEEDED + 1, { timeout: 150_000 });
   await expect(page.getByText("Generating")).toHaveCount(0);
   await imagesLoaded(page);
   await page.screenshot(shot("after-renders-generated"));

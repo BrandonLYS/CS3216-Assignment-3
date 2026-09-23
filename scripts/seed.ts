@@ -44,6 +44,22 @@ const SAMPLE_RENDERS = [
     prompt:
       "Interior of a double height community hall with clerestory windows, exposed timber ceiling beams, a small mezzanine gallery and rows of stacking chairs",
   },
+  // Two scenario Renders: what an option under discussion looks like, not a prediction. The
+  // first is the state the site would be handed over in if fit-out slips past the Structural
+  // handover Milestone; the second is the descope the Design team costed. Both are things a
+  // PM is choosing between, which is why a picture helps and why neither claims a date.
+  {
+    file: "community-centre-slip.jpg",
+    seed: 303,
+    prompt:
+      "The site at structural handover if fit-out slips: the main hall enclosed and roofed, the activity room wing still a bare structural frame, site hoarding and a tower crane in place",
+  },
+  {
+    file: "community-centre-descoped.jpg",
+    seed: 404,
+    prompt:
+      "The descoped scheme with the glazed entrance atrium replaced by a plain recessed doorway in the brick facade and a smaller paved forecourt",
+  },
 ];
 
 const today = new Date();
