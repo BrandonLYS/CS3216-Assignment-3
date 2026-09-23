@@ -1,0 +1,78 @@
+/**
+ * The guided tour a new User sees once, and can replay from the command palette.
+ *
+ * Every new account is seeded the sample Project (ADR 0013), so the tour explains a workspace
+ * that already has something in it rather than walking the User through filling one in. The
+ * steps are data, not JSX, so the ordering and the "which step can I show?" rule can be tested
+ * without a DOM.
+ *
+ * Progress is a single localStorage flag: "has this browser seen the tour". Nothing about the
+ * tour belongs in the database - it teaches the UI, not the domain, and a User who has seen it
+ * on one machine losing that fact on another costs them one dismissal.
+ */
+
+/** Set to "1" once the User finishes or skips. Unset means a first visit, which starts the tour. */
+export const TOUR_SEEN_KEY = "prismpm.tour-seen";
+
+export interface TourStep {
+  id: string;
+  title: string;
+  body: string;
+  /** `data-tour` value of the element to spotlight. Absent means a centred card. */
+  anchor?: string;
+  /**
+   * Section of the tour Project this step must be viewed on, as a `PROJECT_SECTIONS` slug
+   * ("" is the Project overview). Absent means the step works on any page.
+   */
+  section?: string;
+}
+
+export const TOUR_STEPS: readonly TourStep[] = [
+  {
+    id: "welcome",
+    title: "Welcome to PrismPM",
+    body: "Your workspace already has a sample Project in it - Bedok Community Centre - so you can see how everything fits together before you add anything of your own.",
+  },
+  {
+    id: "projects",
+    title: "Your Projects",
+    body: "Every Project you own is listed here. The sample is an ordinary Project: edit it, rename it, or delete it once you have your own.",
+    anchor: "sidebar-projects",
+  },
+  {
+    id: "sections",
+    title: "One Project, several views",
+    body: "Tasks, Timeline, Risks, Decisions, Evidence and Renders are all views of the same Project. Start in Tasks and follow what interests you.",
+    anchor: "project-tabs",
+    section: "",
+  },
+  {
+    id: "assistant",
+    title: "The Assistant",
+    body: "Ask the Assistant about a Project and it reads the same data you see. It asks before it writes anything.",
+    anchor: "assistant-toggle",
+    section: "",
+  },
+  {
+    id: "your-own",
+    title: "Start your own Project",
+    body: "Create a Project whenever you are ready. You can replay this tour any time from the command palette with Cmd K.",
+    anchor: "new-project",
+  },
+];
+
+/**
+ * The steps that can actually be shown. A step pinned to a Project section is dropped when the
+ * User has no Project to show it on - a User who deleted the sample, or whose seeding failed.
+ * Dropping is deliberate: a tour that points at an element that will never render is worse than
+ * a shorter tour.
+ */
+export function tourSteps(projectId: string | null): TourStep[] {
+  return TOUR_STEPS.filter((s) => s.section === undefined || projectId !== null);
+}
+
+/** Where the tour must navigate for `step`, or null if the step is happy on the current page. */
+export function tourHref(step: TourStep, projectId: string | null): string | null {
+  if (step.section === undefined || projectId === null) return null;
+  return step.section ? `/projects/${projectId}/${step.section}` : `/projects/${projectId}`;
+}

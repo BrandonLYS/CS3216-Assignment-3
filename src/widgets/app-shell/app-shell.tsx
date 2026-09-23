@@ -5,6 +5,7 @@ import type { ProjectRow } from "@/server/modules/projects/schema";
 import { ShellContext, type ShellCtx } from "@/shared/lib/shell-context";
 import { CreateProjectDialog } from "@/features/project/create-project-dialog";
 import { CommandPalette } from "@/widgets/command-palette/command-palette";
+import { ProductTour, startTour } from "@/widgets/tour/product-tour";
 import { Sidebar } from "./sidebar";
 
 export { useShell } from "@/shared/lib/shell-context";
@@ -83,8 +84,12 @@ export function AppShell({
         projects={projects}
         onNewProject={ctx.openNewProject}
         onToggleAssistant={ctx.toggleAssistant}
+        onStartTour={startTour}
       />
       <CreateProjectDialog open={newProject} onClose={() => setNewProject(false)} />
+      {/* The tour runs over the whole shell, so it is mounted here rather than on a page: its
+          steps walk from the sidebar into a Project and must survive the navigation between. */}
+      <ProductTour projectId={projects[0]?.id ?? null} />
     </ShellContext.Provider>
   );
 }
