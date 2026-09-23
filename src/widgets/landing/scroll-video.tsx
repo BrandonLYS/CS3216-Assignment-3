@@ -8,9 +8,33 @@ import { ProductFrame } from "./product-frame";
 
 const VIDEO_SRC = "/landing/prismpm-scroll.mp4";
 const POSTER_SRC = "/landing/prismpm-scroll-poster.jpg";
+const PRISM_SRC = "/landing/prismpm-prism.mp4";
+const PRISM_POSTER_SRC = "/landing/prismpm-prism-poster.jpg";
 
 /** How hard the playhead chases the scroll position, in anime.js `damp` terms: 1 snaps, 0 never moves. */
 const SCRUB_FACTOR = 0.14;
+
+/** Screens of scroll the prism prologue takes before the descent begins. */
+const PRISM_SCREENS = 3;
+/** Where the camera starts pushing into the prism, in seconds of the prologue clip. */
+const PRISM_ZOOM_START = 7;
+/** Where the prism sits in the 16:9 frame, as a fraction of its width and height. */
+const PRISM_FOCUS = { x: 0.5375, y: 0.303 };
+/** How far the push goes: far enough that the prism fills the screen before it dissolves. */
+const PRISM_ZOOM = 9;
+/** The share of the prologue, at its end, over which the prism dissolves into the plan view. */
+const PRISM_HANDOFF = 0.18;
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const easeInQuad = (n: number) => n * n;
+const smoothstep = (n: number) => n * n * (3 - 2 * n);
+
+/** Sizes a 16:9 box to cover the stage, so a point in the frame is a fixed percentage of the box. */
+const coverStyle = {
+  width: "max(100%, calc(100vh * 16 / 9))",
+  aspectRatio: "16 / 9",
+  transformOrigin: `${PRISM_FOCUS.x * 100}% ${PRISM_FOCUS.y * 100}%`,
+} as const;
 
 /**
  * One beat of the descent, from the plan view above the tower down into a single room.
@@ -59,11 +83,17 @@ type VideoState = "pending" | "ready" | "missing";
 export function ScrollVideo() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const prismRef = useRef<HTMLVideoElement>(null);
+  const prismLayerRef = useRef<HTMLDivElement>(null);
+  const flareRef = useRef<HTMLDivElement>(null);
+  const planLayerRef = useRef<HTMLDivElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLSpanElement>(null);
   /** Written every scroll frame, read by the scrub loop - deliberately not state. */
   const progress = useRef(0);
   const [active, setActive] = useState(0);
   const [video, setVideo] = useState<VideoState>("pending");
+  const [prism, setPrism] = useState<VideoState>("pending");
   const [loadVideo, setLoadVideo] = useState(false);
   // Keep every chapter readable without JavaScript; enhance after the media-query check.
   const [narrow, setNarrow] = useState(true);
@@ -82,6 +112,13 @@ export function ScrollVideo() {
   }, [markReady]);
 
   useEffect(() => {
+    const el = prismRef.current;
+    if (!el) return;
+    if (el.error) setPrism("missing");
+    else if (el.readyState >= el.HAVE_METADATA) setPrism("ready");
+  }, [loadVideo]);
+
+  useEffect(() => {
     // The pinned descent needs a viewport tall enough to hold a full shot, and it is
     // the wrong idea entirely for someone who asked for less motion.
     const query = window.matchMedia("(prefers-reduced-motion: reduce), (height < 34rem)");
@@ -93,6 +130,10 @@ export function ScrollVideo() {
 
   /** The pinned shot only earns the screen when there is a shot to pin. */
   const cinema = !narrow && video !== "missing";
+  /** Without its clip the prologue would be screens of a still frame, so it steps aside. */
+  const prologue = prism === "missing" ? 0 : PRISM_SCREENS;
+  /** The part of the stage's scroll the prologue owns; the descent gets the rest. */
+  const prologueShare = prologue / (prologue + chapters.length);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -107,9 +148,10 @@ export function ScrollVideo() {
     return scroll(
       (p: number) => {
         progress.current = p;
+        const descent = prologueShare < 1 ? clamp01((p - prologueShare) / (1 - prologueShare)) : 0;
         const rail = railRef.current;
-        if (rail) rail.style.transform = `scaleX(${Math.max(p, 0.004)})`;
-        const next = Math.min(chapters.length - 1, Math.floor(p * chapters.length));
+        if (rail) rail.style.transform = `scaleX(${Math.max(descent, 0.004)})`;
+        const next = Math.min(chapters.length - 1, Math.floor(descent * chapters.length));
         if (next !== shown) {
           shown = next;
           setActive(next);
@@ -117,24 +159,62 @@ export function ScrollVideo() {
       },
       { target: section, offset: ["start start", "end end"] },
     );
-  }, [cinema]);
+  }, [cinema, prologueShare]);
 
   useEffect(() => {
     const section = sectionRef.current;
     const el = videoRef.current;
-    if (!cinema || video !== "ready" || !section || !el) return;
+    const prismEl = prismRef.current;
+    if (!cinema || video !== "ready" || !section || !el || !prismEl) return;
 
     let frame = 0;
     let last = 0;
-    let playhead = el.currentTime;
+    /** The scroll position the picture is showing, easing after the real one. */
+    let shown = progress.current;
+
+    const seek = (target: HTMLVideoElement, time: number) => {
+      if (target.readyState < target.HAVE_METADATA) return;
+      if (Math.abs(target.currentTime - time) > 0.005) target.currentTime = time;
+    };
 
     const tick = (now: number) => {
       const delta = last ? Math.min(now - last, 50) : 16;
       last = now;
-      if (el.duration > 0) {
-        playhead = utils.damp(playhead, progress.current * el.duration, delta, SCRUB_FACTOR);
-        if (Math.abs(el.currentTime - playhead) > 0.005) el.currentTime = playhead;
+      shown = utils.damp(shown, progress.current, delta, SCRUB_FACTOR);
+
+      // The prologue plays through, then from PRISM_ZOOM_START the camera pushes into the
+      // prism and, as the glass fills the screen, the plan view slides in over it.
+      const intro = prologueShare > 0 ? clamp01(shown / prologueShare) : 1;
+      const descent = prologueShare < 1 ? clamp01((shown - prologueShare) / (1 - prologueShare)) : 0;
+      const length = prismEl.duration > 0 ? prismEl.duration : 10;
+      const zoomFrom = Math.min(PRISM_ZOOM_START / length, 0.95);
+      const push = easeInQuad(clamp01((intro - zoomFrom) / (1 - zoomFrom)));
+      const handoff = smoothstep(clamp01((intro - (1 - PRISM_HANDOFF)) / PRISM_HANDOFF));
+
+      if (prologueShare > 0) seek(prismEl, intro * length * 0.999);
+      if (el.duration > 0) seek(el, descent * el.duration);
+
+      const prismLayer = prismLayerRef.current;
+      if (prismLayer) {
+        const scale = 1 + (PRISM_ZOOM - 1) * push;
+        // Scaling about the prism keeps it still; the translate walks it to the centre as it grows.
+        const dx = (0.5 - PRISM_FOCUS.x) * 100 * push;
+        const dy = (0.5 - PRISM_FOCUS.y) * 100 * push;
+        prismLayer.style.transform = `translate(-50%, -50%) translate(${dx}%, ${dy}%) scale(${scale})`;
+        prismLayer.style.opacity = String(1 - handoff);
+        prismLayer.style.visibility = handoff >= 1 ? "hidden" : "visible";
       }
+      const flare = flareRef.current;
+      if (flare) flare.style.opacity = String(Math.sin(Math.PI * handoff) * 0.85);
+      const planLayer = planLayerRef.current;
+      if (planLayer) {
+        planLayer.style.opacity = String(prologueShare > 0 ? handoff : 1);
+        // The plan view slides in from the right, the side the spectrum leaves the prism on.
+        planLayer.style.transform = `translateX(${(1 - (prologueShare > 0 ? handoff : 1)) * 100}%)`;
+      }
+      const copy = copyRef.current;
+      if (copy) copy.style.opacity = String(prologueShare > 0 ? handoff : 1);
+
       frame = requestAnimationFrame(tick);
     };
 
@@ -147,10 +227,12 @@ export function ScrollVideo() {
     // Only scrub while the stage is on screen; decoding frames off-screen is pure cost.
     const unwatch = inView(section, () => {
       // Prime Safari only when the film is on screen, never during hero loading.
-      void el
-        .play()
-        .then(() => el.pause())
-        .catch(() => {});
+      for (const target of [prismEl, el]) {
+        void target
+          .play()
+          .then(() => target.pause())
+          .catch(() => {});
+      }
       if (!frame) frame = requestAnimationFrame(tick);
       return stop;
     });
@@ -159,7 +241,7 @@ export function ScrollVideo() {
       unwatch();
       stop();
     };
-  }, [cinema, video]);
+  }, [cinema, video, prologueShare]);
 
   const film = (
     <video
@@ -209,10 +291,50 @@ export function ScrollVideo() {
   return (
     <section id="how">
       <h2 className="sr-only">From the plan view down to the single room</h2>
-      {/* One screen of scroll per beat. The shot inside stays pinned for all of them. */}
-      <div ref={sectionRef} className="relative" style={{ height: `${chapters.length * 100}vh` }}>
+      {/* One screen of scroll per beat, after the prologue. The shots inside stay pinned for all of them. */}
+      <div ref={sectionRef} className="relative" style={{ height: `${(prologue + chapters.length) * 100}vh` }}>
         <div className="sticky top-0 h-screen w-full overflow-hidden bg-canvas">
-          {film}
+          {prologue > 0 && (
+            <div
+              ref={prismLayerRef}
+              aria-hidden
+              className="absolute top-1/2 left-1/2 will-change-[opacity,transform]"
+              style={{ ...coverStyle, transform: "translate(-50%, -50%)" }}
+            >
+              <video
+                ref={prismRef}
+                src={loadVideo ? PRISM_SRC : undefined}
+                poster={PRISM_POSTER_SRC}
+                muted
+                playsInline
+                disablePictureInPicture
+                preload={loadVideo ? "auto" : "none"}
+                className="block h-full w-full"
+                onLoadedMetadata={() => setPrism("ready")}
+                onError={() => setPrism("missing")}
+              />
+            </div>
+          )}
+
+          {/* Above the prism, so it slides in over the glass rather than being uncovered. */}
+          <div
+            ref={planLayerRef}
+            className="absolute inset-0 will-change-[opacity,transform]"
+            style={{ opacity: prologue > 0 ? 0 : 1 }}
+          >
+            {film}
+          </div>
+
+          {/* Light through the glass: blooms as the camera enters the prism and hides the seam. */}
+          <div
+            ref={flareRef}
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-0 mix-blend-screen"
+            style={{
+              background:
+                "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9) 0%, rgba(190,215,255,0.45) 18%, rgba(140,120,255,0.18) 38%, transparent 62%)",
+            }}
+          />
 
           {/* Legibility, and edges that dissolve into the canvas rather than stopping at a line. */}
           <div
@@ -224,7 +346,11 @@ export function ScrollVideo() {
             }}
           />
 
-          <div className="relative flex h-full flex-col justify-end">
+          <div
+            ref={copyRef}
+            className="relative flex h-full flex-col justify-end"
+            style={{ opacity: prologue > 0 ? 0 : 1 }}
+          >
             {/* A floor indicator down the right edge: where in the descent you are. */}
             <ol
               aria-hidden
