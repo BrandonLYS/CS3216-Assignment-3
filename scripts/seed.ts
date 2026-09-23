@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { readFile } from "node:fs/promises";
 import { addDays, formatISO } from "date-fns";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
@@ -14,9 +13,9 @@ import { messagingService, participantMessagingService } from "@/server/modules/
 import { milestonesService } from "@/server/modules/milestones/service";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { peopleService } from "@/server/modules/people/service";
+import { seedSampleProject } from "@/server/modules/onboarding/sample-project";
 import { projects } from "@/server/modules/projects/schema";
 import { projectsService } from "@/server/modules/projects/service";
-import { rendersService } from "@/server/modules/renders/service";
 import { risksService } from "@/server/modules/risks/service";
 import { statusesService } from "@/server/modules/statuses/service";
 import { tasksService } from "@/server/modules/tasks/service";
@@ -26,41 +25,6 @@ const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo-password-123";
 /** The seeded Participant, so the messaging member surface can be opened without an invite. */
 const DEMO_MEMBER_EMAIL = process.env.DEMO_MEMBER_EMAIL ?? "jason@example.com";
 const DEMO_MEMBER_PASSWORD = process.env.DEMO_MEMBER_PASSWORD ?? "member-password-123";
-
-/**
- * Committed images with the description and seed that actually produced them, imported as
- * ready Renders. The seed is real so the displayed provenance reproduces the image.
- */
-const SAMPLE_RENDERS = [
-  {
-    file: "community-centre-exterior.jpg",
-    seed: 101,
-    prompt:
-      "A two storey community centre with a pitched roof, red brick facade, large glazed entrance atrium and a paved forecourt",
-  },
-  {
-    file: "community-centre-hall.jpg",
-    seed: 202,
-    prompt:
-      "Interior of a double height community hall with clerestory windows, exposed timber ceiling beams, a small mezzanine gallery and rows of stacking chairs",
-  },
-  // Two scenario Renders: what an option under discussion looks like, not a prediction. The
-  // first is the state the site would be handed over in if fit-out slips past the Structural
-  // handover Milestone; the second is the descope the Design team costed. Both are things a
-  // PM is choosing between, which is why a picture helps and why neither claims a date.
-  {
-    file: "community-centre-slip.jpg",
-    seed: 303,
-    prompt:
-      "The site at structural handover if fit-out slips: the main hall enclosed and roofed, the activity room wing still a bare structural frame, site hoarding and a tower crane in place",
-  },
-  {
-    file: "community-centre-descoped.jpg",
-    seed: 404,
-    prompt:
-      "The descoped scheme with the glazed entrance atrium replaced by a plain recessed doorway in the brick facade and a smaller paved forecourt",
-  },
-];
 
 const today = new Date();
 const d = (offset: number) => formatISO(addDays(today, offset), { representation: "date" });
@@ -75,6 +39,9 @@ async function ensureDemoUser(): Promise<string> {
   const res = await auth.api.signUpEmail({
     body: { email: DEMO_EMAIL, password: DEMO_PASSWORD, name: "Demo PM" },
   });
+  // Signing up fires the onboarding hook, which gives every new User the sample Project.
+  // The demo account is seeded explicitly below, so clear it and start from nothing.
+  await db.delete(projects).where(eq(projects.ownerId, res.user.id));
   console.log(`Created ${DEMO_EMAIL}`);
   return res.user.id;
 }
@@ -546,114 +513,13 @@ async function seedWarehouse(ctx: Ctx) {
   console.log(`Seeded ${project.name}`);
 }
 
-/**
- * A construction project, because a concept render is easiest to judge when the deliverable
- * is a building. Its Renders are imported from images committed under `public/samples`, so
- * `npm run db:seed` stays offline and deterministic and a fresh clone shows the Renders tab
- * working with no POLLINATIONS_API_KEY set.
- */
-async function seedCommunityCentre(ctx: Ctx) {
-  const project = await projectsService.create(ctx, {
-    name: "Bedok Community Centre",
-    key: "BCC",
-    description:
-      "Design and build a two storey community centre with a main hall, four activity rooms and a public forecourt.",
-    startDate: d(-90),
-    targetDate: d(120),
-  });
-  const pid = project.id;
-  const s = Object.fromEntries((await statusesService.list(ctx, pid)).map((x) => [`${x.scope}:${x.name}`, x.id]));
-
-  const design = await peopleService.createTeam(ctx, { projectId: pid, name: "Design" });
-  const build = await peopleService.createTeam(ctx, { projectId: pid, name: "Main contractor" });
-  const mei = await peopleService.createPerson(ctx, {
-    projectId: pid,
-    name: "Mei Ling Tan",
-    role: "Architect",
-    teamId: design.id,
-  });
-  const rajesh = await peopleService.createPerson(ctx, {
-    projectId: pid,
-    name: "Rajesh Kumar",
-    role: "Site manager",
-    teamId: build.id,
-  });
-
-  const handover = await milestonesService.create(ctx, {
-    projectId: pid,
-    name: "Structural handover",
-    dueDate: d(60),
-    ownerId: rajesh.id,
-  });
-  await milestonesService.create(ctx, {
-    projectId: pid,
-    name: "Design freeze",
-    dueDate: d(-5),
-    ownerId: mei.id,
-  });
-
-  const scheme = await tasksService.create(ctx, {
-    projectId: pid,
-    title: "Agree scheme design with the town council",
-    statusId: s["task:Done"],
-    priority: "high",
-    assigneeId: mei.id,
-    startDate: d(-85),
-    dueDate: d(-40),
-  });
-  const frame = await tasksService.create(ctx, {
-    projectId: pid,
-    title: "Erect structural frame",
-    statusId: s["task:In Progress"],
-    priority: "high",
-    assigneeId: rajesh.id,
-    milestoneId: handover.id,
-    startDate: d(-20),
-    dueDate: d(55),
-  });
-  await tasksService.create(ctx, {
-    projectId: pid,
-    title: "Fit out the main hall",
-    statusId: s["task:Todo"],
-    priority: "medium",
-    assigneeId: rajesh.id,
-    startDate: d(60),
-    dueDate: d(100),
-  });
-  await dependenciesService.create(ctx, {
-    projectId: pid,
-    predecessorType: "task",
-    predecessorId: scheme.id,
-    successorType: "task",
-    successorId: frame.id,
-  });
-  await risksService.create(ctx, {
-    projectId: pid,
-    title: "Council reads the concept render as a construction drawing",
-    probability: "medium",
-    impact: "high",
-    ownerId: mei.id,
-    mitigation: "Renders are captioned as indicative; issue dimensioned drawings separately",
-  });
-
-  for (const r of SAMPLE_RENDERS) {
-    await rendersService.importReady(ctx, {
-      projectId: pid,
-      prompt: r.prompt,
-      seed: r.seed,
-      bytes: await readFile(new URL(`../public/samples/renders/${r.file}`, import.meta.url)),
-      mimeType: "image/jpeg",
-    });
-  }
-  console.log(`Seeded ${project.name}`);
-}
-
 async function main() {
   const userId = await ensureDemoUser();
   const ctx: Ctx = { db, userId };
   await seedPayments(ctx);
   await seedWarehouse(ctx);
-  await seedCommunityCentre(ctx);
+  const sample = await seedSampleProject(ctx);
+  console.log(`Seeded ${sample.name}`);
   console.log(`\nDemo login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
   process.exit(0);
 }
