@@ -44,6 +44,9 @@ export function DotGrid({ className }: { className?: string }) {
     let blinks: Blink[] = [];
     let frame = 0;
     let last = 0;
+    /** The resting grid, painted once per size so a frame only draws the dots that are blinking. */
+    const base = document.createElement("canvas");
+    const baseCtx = base.getContext("2d");
 
     const size = () => {
       const { width, height } = canvas.getBoundingClientRect();
@@ -57,28 +60,37 @@ export function DotGrid({ className }: { className?: string }) {
       offsetX = (width - (cols - 1) * GAP) / 2;
       offsetY = (height - (rows - 1) * GAP) / 2;
       blinks = [];
+      paintBase(dpr);
     };
 
-    const dot = (index: number, radius: number, color: string, alpha: number) => {
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(offsetX + (index % cols) * GAP, offsetY + Math.floor(index / cols) * GAP, radius, 0, Math.PI * 2);
-      ctx.fill();
+    const dot = (target: CanvasRenderingContext2D, index: number, radius: number, color: string, alpha: number) => {
+      target.globalAlpha = alpha;
+      target.fillStyle = color;
+      target.beginPath();
+      target.arc(offsetX + (index % cols) * GAP, offsetY + Math.floor(index / cols) * GAP, radius, 0, Math.PI * 2);
+      target.fill();
+    };
+
+    const paintBase = (dpr: number) => {
+      if (!baseCtx) return;
+      base.width = canvas.width;
+      base.height = canvas.height;
+      baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (let i = 0; i < cols * rows; i++) dot(baseCtx, i, RADIUS, ink, REST);
+      baseCtx.globalAlpha = 1;
     };
 
     const draw = (now: number) => {
       const { width, height } = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, width, height);
-      const total = cols * rows;
-      for (let i = 0; i < total; i++) dot(i, RADIUS, ink, REST);
+      ctx.drawImage(base, 0, 0, width, height);
 
       blinks = blinks.filter((b) => now - b.start < BLINK_MS);
       for (const b of blinks) {
         // Rise quickly over the first quarter, then fade slowly.
         const t = (now - b.start) / BLINK_MS;
         const glow = t < 0.25 ? Math.sin((t / 0.25) * (Math.PI / 2)) : (1 - (t - 0.25) / 0.75) ** 2;
-        dot(b.index, RADIUS + (PEAK_RADIUS - RADIUS) * glow, b.accent ? accent : ink, REST + (0.95 - REST) * glow);
+        dot(ctx, b.index, RADIUS + (PEAK_RADIUS - RADIUS) * glow, b.accent ? accent : ink, REST + (0.95 - REST) * glow);
       }
       ctx.globalAlpha = 1;
     };
