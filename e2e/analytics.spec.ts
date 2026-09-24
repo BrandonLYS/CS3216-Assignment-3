@@ -92,8 +92,12 @@ async function createProject(page: Page) {
 }
 
 async function captured(name: string, userId?: string, since = 0) {
+  // posthog-js flushes its batch every 3s after hydration, which on the dev-served landing page
+  // lands just past the default 5s poll.
   await expect
-    .poll(() => events.slice(since).some((event) => event.event === name && (!userId || id(event) === userId)))
+    .poll(() => events.slice(since).some((event) => event.event === name && (!userId || id(event) === userId)), {
+      timeout: 15_000,
+    })
     .toBe(true);
   return events.slice(since).findLast((event) => event.event === name && (!userId || id(event) === userId))!;
 }

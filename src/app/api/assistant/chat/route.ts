@@ -1,4 +1,6 @@
 import {
+  APICallError,
+  RetryError,
   convertToModelMessages,
   createUIMessageStreamResponse,
   generateId,
@@ -64,14 +66,13 @@ export async function POST(req: Request) {
     const last = messages.at(-1);
     // A resubmit after an approval card ends on the Assistant's message: that is a decision, not a question.
     if (last?.role === "user") await capture(ctx.userId, "assistant_question_sent", { workflow });
-    for (const part of last?.role === "assistant" ? last.parts : []) {
-      if (isToolUIPart(part) && part.state === "approval-responded" && !part.approval.isAutomatic)
-        await capture(ctx.userId, "assistant_tool_approval", {
-          workflow,
-          tool: getToolName(part),
-          approved: part.approval.approved,
-        });
-    }
+    // The User's answers to approval cards. Recorded only once the turn completes: the SDK verifies
+    // each signed approval while streaming, so a forged or stale one never reaches `onEnd`.
+    const approvals = (last?.role === "assistant" ? last.parts : []).flatMap((part) =>
+      isToolUIPart(part) && part.state === "approval-responded" && !part.approval.isAutomatic
+        ? [{ tool: getToolName(part), approved: part.approval.approved }]
+        : [],
+    );
     const [profile, workingMemory] = await Promise.all([
       memoryService.current(ctx, null),
       projectId ? memoryService.current(ctx, projectId) : null,
@@ -81,15 +82,12 @@ export async function POST(req: Request) {
       ? projectSystemPrompt(await findTool("get_project_summary").handler(ctx, { projectId }), memory)
       : workspaceSystemPrompt(await findTool("list_projects").handler(ctx, {}), memory);
 
-    // One trace per request: each model step is an `$ai_generation`, the turn is `assistant_turn_completed`.
+    // One trace per request: each model call is an `$ai_generation`, the turn is `assistant_turn_completed`.
     const traceId = crypto.randomUUID();
     const started = performance.now();
-    const generation = {
-      span: "assistant_turn" as const,
-      traceId,
-      properties: { workflow, conversation_id: conversationId },
-    };
+    const properties = { workflow, conversation_id: conversationId };
     let step = 0;
+    let callStarted = started;
     const result = streamText({
       model,
       system,
@@ -99,39 +97,51 @@ export async function POST(req: Request) {
       // Signs approval requests so a client cannot forge an "approved" response.
       experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
+      onLanguageModelCallStart: () => {
+        callStarted = performance.now();
+      },
       onLanguageModelCallEnd: (call) =>
         captureGeneration(ctx.userId, {
-          ...generation,
+          span: "assistant_turn",
+          traceId,
           provider: call.provider,
           model: call.modelId,
           latencyMs: call.performance.responseTimeMs,
           usage: call.usage,
           finishReason: call.finishReason,
-          properties: { ...generation.properties, step: step++ },
+          properties: { ...properties, step: step++ },
         }),
       onError: async ({ error }) => {
         console.error(error);
+        // Only a failed provider call is a failed generation; a tool or approval error is not.
+        if (!APICallError.isInstance(error) && !RetryError.isInstance(error)) return;
         await captureGeneration(ctx.userId, {
-          ...generation,
+          span: "assistant_turn",
+          traceId,
           ...modelInfo(),
-          latencyMs: performance.now() - started,
+          latencyMs: performance.now() - callStarted,
           error,
+          properties: { ...properties, step },
         });
       },
-      onFinish: ({ steps, totalUsage, finishReason }) => {
+      onEnd: async ({ steps, totalUsage, finishReason }) => {
         const toolNames = steps.flatMap((s) => s.toolCalls.map((c) => c.toolName));
-        return capture(ctx.userId, "assistant_turn_completed", {
-          ...generation.properties,
-          $ai_trace_id: traceId,
-          step_count: steps.length,
-          tool_call_count: toolNames.length,
-          tool_names: [...new Set(toolNames)],
-          finish_reason: finishReason,
-          hit_step_cap: steps.length >= maxSteps,
-          latency_ms: Math.round(performance.now() - started),
-          input_tokens: totalUsage.inputTokens,
-          output_tokens: totalUsage.outputTokens,
-        });
+        await Promise.all([
+          ...approvals.map((a) => capture(ctx.userId, "assistant_tool_approval", { workflow, ...a })),
+          capture(ctx.userId, "assistant_turn_completed", {
+            ...properties,
+            $ai_trace_id: traceId,
+            step_count: steps.length,
+            tool_call_count: toolNames.length,
+            tool_names: [...new Set(toolNames)],
+            finish_reason: finishReason,
+            // Cut off: the last allowed step still asked for tools. A model answering on that step was not.
+            hit_step_cap: steps.length >= maxSteps && finishReason === "tool-calls",
+            latency_ms: Math.round(performance.now() - started),
+            input_tokens: totalUsage.inputTokens,
+            output_tokens: totalUsage.outputTokens,
+          }),
+        ]);
       },
     });
     // Reflection runs once the response is out and the thread is saved; its failures never reach the User (ADR 0007).

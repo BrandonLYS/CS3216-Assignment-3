@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import type { Ctx } from "@/server/core/context";
 import { ConflictError, NotFoundError } from "@/server/core/errors";
-import { modelInfo } from "@/server/modules/assistant/model";
 import { conversationsRepo, messagesRepo } from "@/server/modules/assistant/repository";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { decisionsService } from "@/server/modules/decisions/service";
@@ -14,7 +13,6 @@ import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
-import { traceGeneration } from "@/shared/analytics/ai";
 import type { ProposalExtractor } from "@/shared/domain";
 import { proposalGenerated, proposalRejected, today, type PassTrigger } from "./analytics";
 import { pickExtractor, type Extract, type ExtractSource } from "./extract";
@@ -121,35 +119,25 @@ export const proposalsService = {
 
     let raw: Awaited<ReturnType<Extract>>;
     try {
-      const run = () =>
-        extract({
-          sources: candidates.map(({ kind, entityId, title, evidenceKind, text }) => ({
-            kind,
-            entityId,
-            title,
-            evidenceKind,
-            text,
-          })),
-          context: {
-            people: refs.people.map((p) => p.name),
-            milestones: refs.milestones.map((m) => m.name),
-            tasks: refs.tasks.map((t) => t.title),
-            conversation: transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage)),
-          },
-        });
-      raw =
-        extractorName === "model"
-          ? await traceGeneration(
-              ctx.userId,
-              {
-                span: "proposal_extraction",
-                traceId: crypto.randomUUID(),
-                ...modelInfo(),
-                properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
-              },
-              run,
-            )
-          : await run();
+      raw = await extract({
+        sources: candidates.map(({ kind, entityId, title, evidenceKind, text }) => ({
+          kind,
+          entityId,
+          title,
+          evidenceKind,
+          text,
+        })),
+        context: {
+          people: refs.people.map((p) => p.name),
+          milestones: refs.milestones.map((m) => m.name),
+          tasks: refs.tasks.map((t) => t.title),
+          conversation: transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage)),
+        },
+        telemetry: {
+          userId: ctx.userId,
+          properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
+        },
+      });
     } catch (e) {
       console.error("Proposal pass failed", e);
       return { skipped: "failed" };

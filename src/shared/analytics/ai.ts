@@ -1,4 +1,4 @@
-import type { LanguageModelUsage } from "ai";
+import { NoObjectGeneratedError, type LanguageModelUsage } from "ai";
 import { capture } from "./server";
 
 /**
@@ -11,6 +11,16 @@ import { capture } from "./server";
 /** Which of the three model call sites produced the generation. */
 export type AiSpan = "assistant_turn" | "proposal_extraction" | "reflection";
 
+/**
+ * Who a model call is attributed to, handed to a model-backed function by its service. Optional
+ * so tests and scripts can call the function without analytics.
+ */
+export interface AiTelemetry {
+  userId: string;
+  /** Bounded, content-free metadata such as `project_id`. */
+  properties?: Record<string, unknown>;
+}
+
 export interface Generation {
   span: AiSpan;
   /** Groups the calls of one Assistant turn, proposal pass or reflection. */
@@ -21,11 +31,16 @@ export interface Generation {
   usage?: LanguageModelUsage;
   finishReason?: string;
   error?: unknown;
-  /** Bounded, content-free metadata such as `project_id` or `step`. */
   properties?: Record<string, unknown>;
 }
 
 const errorName = (error: unknown) => (error instanceof Error ? error.name : "UnknownError");
+
+/**
+ * The provider family only: the OpenAI SDK names its chat model `openai.responses` or `openai.chat`,
+ * and PostHog's cost lookup and any breakdown by provider should see one `openai`.
+ */
+const providerFamily = (provider: string) => provider.split(".")[0];
 
 /** Never throws: telemetry cannot fail a model call or the write around it. */
 export async function captureGeneration(userId: string, g: Generation) {
@@ -34,7 +49,7 @@ export async function captureGeneration(userId: string, g: Generation) {
       ...g.properties,
       $ai_trace_id: g.traceId,
       $ai_span_name: g.span,
-      $ai_provider: g.provider,
+      $ai_provider: providerFamily(g.provider),
       $ai_model: g.model,
       $ai_latency: g.latencyMs / 1000,
       $ai_input_tokens: g.usage?.inputTokens,
@@ -52,21 +67,32 @@ export async function captureGeneration(userId: string, g: Generation) {
 }
 
 /**
- * Times one non-streaming model call and records it, success or failure. The result is returned
- * or the error rethrown unchanged, so callers keep their own failure handling.
+ * Times one `generateObject` call and records it, success or failure; without `telemetry` it only
+ * runs it. The result is returned or the error rethrown unchanged. Latency spans the whole call,
+ * including any retries the SDK makes after a provider error.
  */
-export async function traceGeneration<T extends { usage?: LanguageModelUsage }>(
-  userId: string,
-  g: Omit<Generation, "latencyMs" | "usage" | "error">,
+export async function traceGeneration<T extends { usage: LanguageModelUsage }>(
+  telemetry: AiTelemetry | undefined,
+  g: { span: AiSpan; provider: string; model: string },
   run: () => Promise<T>,
 ): Promise<T> {
+  if (!telemetry) return run();
   const started = performance.now();
+  const record = (rest: Pick<Generation, "usage" | "error">) =>
+    captureGeneration(telemetry.userId, {
+      ...g,
+      ...rest,
+      traceId: crypto.randomUUID(),
+      latencyMs: performance.now() - started,
+      properties: telemetry.properties,
+    });
   try {
     const result = await run();
-    await captureGeneration(userId, { ...g, latencyMs: performance.now() - started, usage: result.usage });
+    await record({ usage: result.usage });
     return result;
   } catch (error) {
-    await captureGeneration(userId, { ...g, latencyMs: performance.now() - started, error });
+    // A schema mismatch still spent tokens; keep them in the cost totals.
+    await record({ error, usage: NoObjectGeneratedError.isInstance(error) ? error.usage : undefined });
     throw error;
   }
 }

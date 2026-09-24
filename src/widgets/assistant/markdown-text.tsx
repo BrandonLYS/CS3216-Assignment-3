@@ -67,8 +67,12 @@ function SafeLink({ href, children }: ComponentPropsWithoutRef<"a">) {
   );
 }
 
-/** What a citation points at: the dialog it opens (`?decision=`), else the Project section it links. */
-function citationKind(href: string) {
-  const url = new URL(href, "http://app.local");
-  return url.searchParams.keys().next().value ?? url.pathname.split("/")[3] ?? "overview";
+/** Project sections a citation can land on; anything else the model wrote reports as `other`. */
+const CITATION_KINDS = new Set(["decisions", "evidence", "tasks", "timeline", "risks", "graph", "people", "calendar"]);
+
+/** Which Project section a citation opens, from a closed set so model text never becomes a property value. */
+export function citationKind(href: string) {
+  const section = new URL(href, "http://app.local").pathname.split("/").filter(Boolean)[2];
+  if (!section) return "overview";
+  return CITATION_KINDS.has(section) ? section : "other";
 }
