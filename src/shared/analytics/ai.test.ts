@@ -1,4 +1,13 @@
-import { NoObjectGeneratedError, type LanguageModelUsage } from "ai";
+import {
+  APICallError,
+  NoObjectGeneratedError,
+  simulateReadableStream,
+  streamText,
+  tool,
+  type LanguageModelUsage,
+} from "ai";
+import { MockLanguageModelV4 } from "ai/test";
+import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({ capture: vi.fn() }));
@@ -85,5 +94,93 @@ describe("LLM generation telemetry", () => {
     server.capture.mockRejectedValue(new Error("collector down"));
     const { traceGeneration } = await import("./ai");
     await expect(traceGeneration(telemetry, call, async () => ({ usage }))).resolves.toEqual({ usage });
+  });
+});
+
+describe("streamText generation recorder", () => {
+  const providerUsage = {
+    inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 5, text: 5, reasoning: 0 },
+  };
+  const text = [
+    { type: "text-start" as const, id: "1" },
+    { type: "text-delta" as const, id: "1", delta: "hi" },
+  ];
+  const finish = (unified: "stop" | "error" | "tool-calls") => ({
+    type: "finish" as const,
+    finishReason: { unified, raw: unified },
+    usage: providerUsage,
+  });
+  const streaming = (...chunks: unknown[][]) => {
+    let call = 0;
+    return new MockLanguageModelV4({
+      doStream: async () => ({ stream: simulateReadableStream({ chunks: chunks[call++] as never[] }) }),
+    });
+  };
+
+  async function run(model: MockLanguageModelV4, extra: Record<string, unknown> = {}) {
+    const { generationRecorder } = await import("./ai");
+    const g = generationRecorder("user-a", { traceId: "turn-1", provider: "openai", model: "gpt-4o-mini" });
+    await streamText({
+      model,
+      prompt: "x",
+      maxRetries: 1,
+      ...g,
+      onError: ({ error }) => g.onError(error),
+      ...extra,
+    }).consumeStream();
+    return server.capture.mock.calls.map((c) => c[2]);
+  }
+
+  it("records each successful call once with its usage and step", async () => {
+    const events = await run(
+      streaming(
+        [{ type: "tool-call", toolCallId: "c", toolName: "echo", input: "{}" }, finish("tool-calls")],
+        [...text, { type: "text-end", id: "1" }, finish("stop")],
+      ),
+      { tools: { echo: tool({ inputSchema: z.object({}), execute: async () => "ok" }) }, stopWhen: () => false },
+    );
+    expect(events).toHaveLength(2);
+    expect(events.map((e) => [e.step, e.$ai_is_error, e.$ai_input_tokens])).toEqual([
+      [0, false, 10],
+      [1, false, 10],
+    ]);
+    expect(events[0]).toMatchObject({ $ai_trace_id: "turn-1", $ai_span_name: "assistant_turn" });
+  });
+
+  it("records a stream that fails midway once, as an error", async () => {
+    const events = await run(streaming([...text, { type: "error", error: new Error("mid") }, finish("error")]));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ $ai_is_error: true, step: 0 });
+  });
+
+  it("records a mid-stream error with no finish chunk", async () => {
+    const events = await run(streaming([...text, { type: "error", error: new Error("mid") }]));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ $ai_is_error: true });
+  });
+
+  it("records a call that failed before streaming, once across retries", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        throw new APICallError({
+          message: "down",
+          url: "u",
+          requestBodyValues: {},
+          statusCode: 500,
+          isRetryable: true,
+        });
+      },
+    });
+    const events = await run(model);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ $ai_is_error: true, $ai_error: "AI_RetryError" });
+  });
+
+  it("does not count an error outside a model call as a generation", async () => {
+    const { generationRecorder } = await import("./ai");
+    const g = generationRecorder("user-a", { traceId: "t", provider: "openai", model: "gpt-4o-mini" });
+    await g.onError(new Error("tool approval signature"));
+    expect(server.capture).not.toHaveBeenCalled();
   });
 });

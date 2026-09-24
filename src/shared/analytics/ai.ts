@@ -1,4 +1,4 @@
-import { NoObjectGeneratedError, type LanguageModelUsage } from "ai";
+import { NoObjectGeneratedError, type LanguageModelCallEndEvent, type LanguageModelUsage } from "ai";
 import { capture } from "./server";
 
 /**
@@ -97,4 +97,51 @@ export async function traceGeneration<T extends { usage: LanguageModelUsage }>(
     await record({ error, usage: NoObjectGeneratedError.isInstance(error) ? error.usage : undefined });
     throw error;
   }
+}
+
+/**
+ * `streamText` callbacks that record one `$ai_generation` per model call. Whichever callback reports
+ * a call first records it: a stream that fails midway reaches `onError` and then
+ * `onLanguageModelCallEnd` with finish reason `error`, and must not count twice. An error outside
+ * a model call (a tool, an approval) is not a generation and is not recorded.
+ */
+export function generationRecorder(
+  userId: string,
+  g: { traceId: string; provider: string; model: string; properties?: Record<string, unknown> },
+) {
+  let step = 0;
+  let started = 0;
+  let call: "idle" | "open" | "recorded" = "idle";
+  const record = (rest: Pick<Generation, "provider" | "model" | "usage" | "finishReason" | "error">) => {
+    call = "recorded";
+    return captureGeneration(userId, {
+      ...g,
+      ...rest,
+      span: "assistant_turn",
+      latencyMs: performance.now() - started,
+      properties: { ...g.properties, step },
+    });
+  };
+  return {
+    /** Fires before every attempt, including one that fails before a stream exists. */
+    onLanguageModelCallStart: () => {
+      started = performance.now();
+      call = "open";
+    },
+    onLanguageModelCallEnd: async (end: LanguageModelCallEndEvent) => {
+      if (call === "open")
+        await record({
+          provider: end.provider,
+          model: end.modelId,
+          usage: end.usage,
+          finishReason: end.finishReason,
+          error: end.finishReason === "error" ? new Error("Stream finished with an error") : undefined,
+        });
+      call = "idle";
+      step++;
+    },
+    onError: async (error: unknown) => {
+      if (call === "open") await record({ provider: g.provider, model: g.model, error });
+    },
+  };
 }

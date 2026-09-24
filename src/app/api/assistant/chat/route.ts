@@ -1,6 +1,4 @@
 import {
-  APICallError,
-  RetryError,
   convertToModelMessages,
   createUIMessageStreamResponse,
   generateId,
@@ -24,7 +22,7 @@ import { assistantService } from "@/server/modules/assistant/service";
 import { ASSISTANT_TOOLS, PROJECT_TOOLS, findTool } from "@/server/modules/assistant/tools";
 import { memoryService } from "@/server/modules/memory/service";
 import { reflect } from "@/server/modules/reflection/service";
-import { captureGeneration } from "@/shared/analytics/ai";
+import { generationRecorder } from "@/shared/analytics/ai";
 import { capture } from "@/shared/analytics/server";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 
@@ -87,10 +85,7 @@ export async function POST(req: Request) {
     const traceId = crypto.randomUUID();
     const started = performance.now();
     const properties = { workflow, conversation_id: conversationId };
-    let step = 0;
-    let callStarted = started;
-    // A model call is in flight: an error now is a failed generation, whatever its class.
-    let inCall = false;
+    const generations = generationRecorder(ctx.userId, { traceId, ...modelInfo(), properties });
     const result = streamText({
       model,
       system,
@@ -100,37 +95,11 @@ export async function POST(req: Request) {
       // Signs approval requests so a client cannot forge an "approved" response.
       experimental_toolApprovalSecret: process.env.BETTER_AUTH_SECRET,
       stopWhen: stepCountIs(maxSteps),
-      onLanguageModelCallStart: () => {
-        callStarted = performance.now();
-        inCall = true;
-      },
-      onLanguageModelCallEnd: (call) => {
-        inCall = false;
-        return captureGeneration(ctx.userId, {
-          span: "assistant_turn",
-          traceId,
-          provider: call.provider,
-          model: call.modelId,
-          // Timed like a failed call below, so success and error latencies compare.
-          latencyMs: performance.now() - callStarted,
-          usage: call.usage,
-          finishReason: call.finishReason,
-          properties: { ...properties, step: step++ },
-        });
-      },
+      onLanguageModelCallStart: generations.onLanguageModelCallStart,
+      onLanguageModelCallEnd: generations.onLanguageModelCallEnd,
       onError: async ({ error }) => {
         console.error(error);
-        // A failed provider call (before or mid-stream) is a failed generation; a tool or approval error is not.
-        if (!inCall && !APICallError.isInstance(error) && !RetryError.isInstance(error)) return;
-        inCall = false;
-        await captureGeneration(ctx.userId, {
-          span: "assistant_turn",
-          traceId,
-          ...modelInfo(),
-          latencyMs: performance.now() - callStarted,
-          error,
-          properties: { ...properties, step },
-        });
+        await generations.onError(error);
       },
       onEnd: async ({ steps, totalUsage, finishReason }) => {
         const toolNames = steps.flatMap((s) => s.toolCalls.map((c) => c.toolName));
