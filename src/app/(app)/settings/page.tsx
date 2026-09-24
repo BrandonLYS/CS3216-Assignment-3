@@ -11,10 +11,10 @@ export const metadata = { title: "Settings" };
 
 export default async function UserSettingsPage() {
   const ctx = await ctxForCurrentUser();
-  const [versions, tokens, aiConfig] = await Promise.all([
+  const [versions, tokens, aiConfigs] = await Promise.all([
     memoryService.versions(ctx, null),
     apiTokensService.list(ctx),
-    aiConfigService.summary(ctx),
+    aiConfigService.list(ctx),
   ]);
   const endpoint = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/api/mcp`;
   return (
@@ -27,11 +27,11 @@ export default async function UserSettingsPage() {
             <div>
               <h3 className="text-body-sm font-medium text-ink">Provider</h3>
               <p className="mt-1 text-caption text-ink-subtle">
-                Use your own provider credential for Assistant conversations, Reflection, and Proposal extraction. The
-                key is encrypted and is never sent back to your browser.
+                Save provider credentials for Assistant conversations, Reflection, and Proposal extraction. Keys are
+                encrypted and are never sent back to your browser; each conversation can switch between saved models.
               </p>
             </div>
-            <AiProvider config={aiConfig} />
+            <AiProvider configs={aiConfigs} />
             <div>
               <h3 className="text-body-sm font-medium text-ink">Profile</h3>
               <p className="mt-1 text-caption text-ink-subtle">

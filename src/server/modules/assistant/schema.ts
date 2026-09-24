@@ -2,6 +2,7 @@ import { index, jsonb, pgTable, primaryKey, text, timestamp, unique } from "driz
 import { user } from "@/server/auth/schema";
 import { id, timestamps } from "@/server/db/columns";
 import { messageRoleEnum } from "@/server/db/enums";
+import { userAiConfigs } from "@/server/modules/ai-config/schema";
 import { projects } from "@/server/modules/projects/schema";
 
 /** One thread between a User and the Assistant about one Project (or none, on the dashboard). */
@@ -13,6 +14,8 @@ export const conversations = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    /** The credential this thread answers with; null falls back to the User's default. */
+    aiConfigId: text("ai_config_id").references(() => userAiConfigs.id, { onDelete: "set null" }),
     ...timestamps,
   },
   (t) => [unique("conversations_user_project_unique").on(t.userId, t.projectId).nullsNotDistinct()],

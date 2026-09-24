@@ -2,9 +2,10 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { LanguageModel } from "ai";
 import type { Ctx } from "@/server/core/context";
+import { ForbiddenError } from "@/server/core/errors";
 import { decryptApiKey } from "@/server/modules/ai-config/crypto";
 import { guardedFetch } from "@/server/modules/ai-config/endpoint";
 import { userAiConfigs } from "@/server/modules/ai-config/schema";
@@ -60,9 +61,25 @@ function environmentSettings(): ModelSettings | null {
   return null;
 }
 
-/** Personal configuration wins. Corrupt credentials fail closed instead of falling back. */
-export async function getModel(ctx: Ctx): Promise<LanguageModel | null> {
-  const [personal] = await ctx.db.select().from(userAiConfigs).where(eq(userAiConfigs.userId, ctx.userId)).limit(1);
+/**
+ * Resolves the model for `configId` when given (must be one of the User's saved configurations,
+ * or a Conversation could pin a stranger's credential); otherwise the User's default, then the
+ * environment fallback. Corrupt credentials fail closed instead of falling back.
+ */
+export async function getModel(ctx: Ctx, configId?: string | null): Promise<LanguageModel | null> {
+  const [personal] = configId
+    ? await ctx.db
+        .select()
+        .from(userAiConfigs)
+        .where(and(eq(userAiConfigs.id, configId), eq(userAiConfigs.userId, ctx.userId)))
+        .limit(1)
+    : await ctx.db
+        .select()
+        .from(userAiConfigs)
+        .where(eq(userAiConfigs.userId, ctx.userId))
+        .orderBy(desc(userAiConfigs.isDefault), desc(userAiConfigs.updatedAt))
+        .limit(1);
+  if (configId && !personal) throw new ForbiddenError("Assistant configuration not found");
   if (personal)
     return buildModel({
       provider: personal.provider,

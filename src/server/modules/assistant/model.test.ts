@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
+import { ForbiddenError } from "@/server/core/errors";
 import { aiConfigService } from "@/server/modules/ai-config/service";
 import { userAiConfigs } from "@/server/modules/ai-config/schema";
 import { closeDb, makeCtx } from "@/test/helpers";
 import { getModel } from "./model";
 
 let ctx: Ctx;
+let stranger: Ctx;
 const encryptionKey = Buffer.alloc(32, 3).toString("base64");
 const details = (model: Awaited<ReturnType<typeof getModel>>) => {
   if (!model || typeof model === "string") return model;
@@ -14,11 +16,12 @@ const details = (model: Awaited<ReturnType<typeof getModel>>) => {
 
 beforeAll(async () => {
   ctx = await makeCtx();
+  stranger = await makeCtx();
 });
 beforeEach(async () => {
   vi.unstubAllEnvs();
   vi.stubEnv("AI_CREDENTIALS_ENCRYPTION_KEY", encryptionKey);
-  await aiConfigService.remove(ctx);
+  await ctx.db.delete(userAiConfigs);
 });
 afterAll(closeDb);
 
@@ -65,8 +68,20 @@ describe("getModel", () => {
       async () => {},
     );
     expect(details(await getModel(ctx))).toMatchObject({ provider: "anthropic.messages", modelId: "personal-model" });
-    await aiConfigService.remove(ctx);
+    const [saved] = await aiConfigService.list(ctx);
+    await aiConfigService.remove(ctx, saved.id);
     expect(details(await getModel(ctx))).toMatchObject({ provider: "openai.responses", modelId: "environment-model" });
+  });
+
+  it("honours an explicit configuration id for model switching and rejects strangers' ids", async () => {
+    await aiConfigService.save(ctx, { provider: "openai", model: "default-model", apiKey: "key-a" }, async () => {});
+    await aiConfigService.save(ctx, { provider: "openai", model: "switched-model", apiKey: "key-b" }, async () => {});
+    const [first, second] = await aiConfigService.list(ctx);
+    expect(details(await getModel(ctx))).toMatchObject({ modelId: "default-model" });
+    expect(details(await getModel(ctx, second.id))).toMatchObject({ modelId: "switched-model" });
+    expect(details(await getModel(ctx, first.id))).toMatchObject({ modelId: "default-model" });
+    await expect(getModel(stranger, second.id)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(getModel(ctx, "missing-id")).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("fails closed when a personal credential is corrupted", async () => {

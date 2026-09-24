@@ -2,46 +2,60 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { discoverAiModelsAction, removeAiConfigAction, saveAiConfigAction } from "@/server/modules/ai-config/actions";
+import {
+  discoverAiModelsAction,
+  removeAiConfigAction,
+  saveAiConfigAction,
+  setDefaultAiConfigAction,
+} from "@/server/modules/ai-config/actions";
 import type { AiConfigSummary } from "@/server/modules/ai-config/service";
-import type { AiProvider as AiProviderName } from "@/shared/domain";
-import { ActionForm, Button, Panel, SelectField, TextField } from "@/shared/ui";
+import { AI_PROVIDER_LABELS, type AiProvider as AiProviderName } from "@/shared/domain";
+import { ActionForm, Badge, Button, Panel, SelectField, TextField } from "@/shared/ui";
 
-const providers = [
-  { value: "openai", label: "OpenAI" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "google", label: "Google Gemini" },
-  { value: "openai_compatible", label: "OpenAI-compatible" },
-];
+const providers = Object.entries(AI_PROVIDER_LABELS).map(([value, label]) => ({ value, label }));
 
-export function AiProvider({ config }: { config: AiConfigSummary | null }) {
+export function AiProvider({ configs }: { configs: AiConfigSummary[] }) {
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
-  const [provider, setProvider] = React.useState(config?.provider ?? "openai");
-  const [model, setModel] = React.useState(config?.model ?? "");
+  const [editing, setEditing] = React.useState<AiConfigSummary | null>(null);
+  const [provider, setProvider] = React.useState<AiProviderName>("openai");
+  const [model, setModel] = React.useState("");
   const [availableModels, setAvailableModels] = React.useState<string[]>([]);
+  const [busy, setBusy] = React.useState(false);
   const [discovering, setDiscovering] = React.useState(false);
-  const [discoveryError, setDiscoveryError] = React.useState<string | null>(null);
-  const sameProvider = config?.provider === provider;
+  const [error, setError] = React.useState<string | null>(null);
 
-  const changeProvider = (next: AiProviderName) => {
-    setProvider(next);
-    setModel(config?.provider === next ? config.model : "");
+  const startEdit = (config: AiConfigSummary | null) => {
+    setEditing(config);
+    setProvider(config?.provider ?? "openai");
+    setModel(config?.model ?? "");
     setAvailableModels([]);
-    setDiscoveryError(null);
+    setError(null);
+  };
+
+  const run = async (action: () => Promise<{ ok: boolean; error?: string }>) => {
+    setBusy(true);
+    setError(null);
+    const result = await action();
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error ?? "Something went wrong. Please try again.");
+      return;
+    }
+    router.refresh();
   };
 
   const discover = async () => {
     if (!formRef.current) return;
     setDiscovering(true);
-    setDiscoveryError(null);
+    setError(null);
 
     const result = await discoverAiModelsAction(new FormData(formRef.current));
     setDiscovering(false);
 
     if (!result.ok) {
       setAvailableModels([]);
-      setDiscoveryError(result.error);
+      setError(result.error);
       return;
     }
 
@@ -50,37 +64,91 @@ export function AiProvider({ config }: { config: AiConfigSummary | null }) {
     setModel((current) => (found.includes(current) ? current : (found[0] ?? "")));
 
     if (!found.length) {
-      setDiscoveryError("The provider returned no text-generation models for this key.");
+      setError("The provider returned no text-generation models for this key.");
     }
   };
 
   const modelOptions = [
-    ...(sameProvider && config && !availableModels.includes(config.model)
-      ? [{ value: config.model, label: `${config.model} (saved - check availability)` }]
+    ...(editing && !availableModels.includes(editing.model)
+      ? [{ value: editing.model, label: `${editing.model} (saved - check availability)` }]
       : []),
     ...availableModels.map((value) => ({ value, label: value })),
   ];
 
   return (
     <div className="flex flex-col gap-3">
+      {configs.length > 0 && (
+        <Panel className="divide-y divide-hairline">
+          {configs.map((config) => (
+            <div key={config.id} className="flex items-center gap-2 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-body-sm text-ink">
+                  {AI_PROVIDER_LABELS[config.provider]} · {config.model}
+                </p>
+                {config.baseUrl && <p className="truncate text-caption text-ink-subtle">{config.baseUrl}</p>}
+              </div>
+              {config.isDefault && <Badge>Default</Badge>}
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => startEdit(config)}>
+                Edit
+              </Button>
+              {!config.isDefault && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => void run(() => setDefaultAiConfigAction({ id: config.id }))}
+                >
+                  Make default
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    const result = await removeAiConfigAction({ id: config.id });
+                    if (result.ok && editing?.id === config.id) startEdit(null);
+                    return result;
+                  })
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+        </Panel>
+      )}
       <Panel className="p-5">
         <ActionForm
+          key={editing?.id ?? "new"}
           action={saveAiConfigAction}
           submitLabel="Validate and save"
-          onSuccess={() => router.refresh()}
+          onSuccess={() => {
+            startEdit(null);
+            router.refresh();
+          }}
+          cancel={editing ? () => startEdit(null) : undefined}
           formRef={formRef}
+          hidden={{ id: editing?.id ?? undefined, configId: editing?.id ?? undefined }}
           footerStart={
             <Button type="button" loading={discovering} onClick={() => void discover()}>
               Check available models
             </Button>
           }
         >
+          <p className="text-body-sm font-medium text-ink">{editing ? "Edit configuration" : "New configuration"}</p>
           <SelectField
             name="provider"
             label="Provider"
             options={providers}
             value={provider}
-            onChange={(event) => changeProvider(event.target.value as AiProviderName)}
+            onChange={(event) => {
+              setProvider(event.target.value as AiProviderName);
+              setModel(editing?.provider === event.target.value ? editing.model : "");
+              setAvailableModels([]);
+              setError(null);
+            }}
           />
           <SelectField
             name="model"
@@ -98,7 +166,7 @@ export function AiProvider({ config }: { config: AiConfigSummary | null }) {
               label="Base URL"
               type="url"
               required
-              defaultValue={sameProvider ? (config?.baseUrl ?? "") : ""}
+              defaultValue={editing?.baseUrl ?? ""}
               placeholder="https://api.example.com/v1"
               hint="Public HTTPS only. Redirects and private network addresses are blocked."
             />
@@ -108,36 +176,25 @@ export function AiProvider({ config }: { config: AiConfigSummary | null }) {
             label="API key"
             type="password"
             autoComplete="new-password"
-            required={!sameProvider}
-            placeholder={sameProvider ? "Leave blank to keep the stored key" : "Required"}
-            hint={sameProvider ? "A key is stored. Enter a new value only to replace it." : undefined}
+            required={!editing}
+            placeholder={editing ? "Leave blank to keep the stored key" : "Required"}
+            hint={editing ? "A key is stored. Enter a new value only to replace it." : undefined}
           />
           <p className="text-caption text-ink-subtle">
             Checking models reads the provider&apos;s model catalog. Saving then makes a small generation request to
             validate access to the selected model, which may incur a minimal charge.
           </p>
-          {discoveryError && (
+          {error && (
             <p className="text-caption text-tag-red" role="alert">
-              {discoveryError}
+              {error}
             </p>
           )}
         </ActionForm>
       </Panel>
-      {config && (
-        <Panel className="p-5">
-          <ActionForm
-            action={removeAiConfigAction}
-            submitLabel="Remove personal configuration and use environment fallback"
-            danger
-            onSuccess={() => router.refresh()}
-          >
-            <p className="text-caption text-ink-subtle">
-              Removal deletes your stored credential. The Assistant will use the deployment operator&apos;s environment
-              configuration when available.
-            </p>
-          </ActionForm>
-        </Panel>
-      )}
+      <p className="text-caption text-ink-subtle">
+        The default configuration runs the Assistant, Reflection, and Proposal extraction unless a conversation picks
+        another saved model. With no saved configuration the deployment&apos;s environment settings apply.
+      </p>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import type { UIMessage } from "ai";
+import { and, eq } from "drizzle-orm";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError } from "@/server/core/errors";
+import { userAiConfigs } from "@/server/modules/ai-config/schema";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { conversationsRepo, messagesRepo } from "./repository";
 
@@ -31,6 +33,21 @@ export const assistantService = {
       ctx.db,
       msgs.map((m) => ({ id: m.id, conversationId, role: m.role, parts: m.parts })),
     );
+  },
+
+  /** Pin the Conversation to one of the User's saved configurations (or clear the pin with null). */
+  selectModel: async (ctx: Ctx, conversationId: string, aiConfigId: string | null) => {
+    const conversation = await conversationsRepo.findById(ctx.db, conversationId);
+    if (!conversation || conversation.userId !== ctx.userId) throw new ForbiddenError("Conversation not found");
+    if (aiConfigId) {
+      const [config] = await ctx.db
+        .select({ id: userAiConfigs.id })
+        .from(userAiConfigs)
+        .where(and(eq(userAiConfigs.id, aiConfigId), eq(userAiConfigs.userId, ctx.userId)))
+        .limit(1);
+      if (!config) throw new ForbiddenError("Assistant configuration not found");
+    }
+    await conversationsRepo.setAiConfig(ctx.db, conversationId, aiConfigId);
   },
 
   turnsToday: (ctx: Ctx) => messagesRepo.countUserMessagesSince(ctx.db, ctx.userId, startOfToday()),

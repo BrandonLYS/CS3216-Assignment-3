@@ -26,18 +26,27 @@ export const maxDuration = 60;
 type ValidateTools = Parameters<typeof safeValidateUIMessages>[0]["tools"];
 
 // `messages` gets its real check from safeValidateUIMessages against the bound tools below.
-const bodySchema = z.object({ projectId: z.string().nullable(), messages: z.array(z.unknown()) });
+const bodySchema = z.object({
+  projectId: z.string().nullable(),
+  aiConfigId: z.string().nullish(),
+  messages: z.array(z.unknown()),
+});
 
 export async function POST(req: Request) {
-  const parsed = bodySchema.safeParse(await req.json());
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return new Response("Bad request", { status: 400 });
   const { projectId } = parsed.data;
 
   const ctx = { ...(await ctxForCurrentUser()), via: "assistant" as const };
-  const model = await getModel(ctx);
-  if (!model) return new Response(ASSISTANT_NOT_CONFIGURED, { status: 503 });
   const { maxSteps, dailyTurnCap } = assistantConfig();
   try {
+    const { conversation } = await assistantService.conversation(ctx, projectId);
+    // A fresh selection wins and is pinned to the Conversation; a stored pin applies next.
+    const aiConfigId = parsed.data.aiConfigId ?? conversation.aiConfigId;
+    const model = await getModel(ctx, aiConfigId);
+    if (!model) return new Response(ASSISTANT_NOT_CONFIGURED, { status: 503 });
+    if (parsed.data.aiConfigId !== undefined && parsed.data.aiConfigId !== conversation.aiConfigId)
+      await assistantService.selectModel(ctx, conversation.id, parsed.data.aiConfigId ?? null);
     const scope = projectId ? { projectId } : undefined;
     const tools = toAiTools(ctx, scope ? PROJECT_TOOLS : WORKSPACE_TOOLS, scope);
     const valid = await safeValidateUIMessages<UIMessage>({
@@ -48,7 +57,6 @@ export async function POST(req: Request) {
     const messages = valid.data;
     if ((await assistantService.turnsToday(ctx)) >= dailyTurnCap)
       return new Response(ASSISTANT_LIMIT_REACHED, { status: 429 });
-    const { conversation } = await assistantService.conversation(ctx, projectId);
     capture(ctx.userId, "assistant_question_sent", { workflow: projectId ? "project" : "workspace" });
     const [profile, workingMemory] = await Promise.all([
       memoryService.current(ctx, null),

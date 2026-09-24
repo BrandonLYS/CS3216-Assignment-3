@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { closeDb, makeCtx } from "@/test/helpers";
+import { userAiConfigs } from "./schema";
 import { aiConfigService } from "./service";
 
 let ctx: Ctx;
@@ -11,7 +12,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   vi.stubEnv("AI_CREDENTIALS_ENCRYPTION_KEY", encryptionKey);
-  await aiConfigService.remove(ctx);
+  await ctx.db.delete(userAiConfigs);
 });
 afterAll(closeDb);
 
@@ -51,15 +52,16 @@ describe("aiConfigService.models", () => {
     );
   });
 
-  it("uses a same-provider stored key without returning it and sanitizes provider failures", async () => {
+  it("uses the stored key of a named configuration without returning it and sanitizes provider failures", async () => {
     await aiConfigService.save(ctx, { provider: "openai", model: "model-a", apiKey: "stored-secret" }, async () => {});
+    const [saved] = await aiConfigService.list(ctx);
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer stored-secret");
       return Response.json({ data: [{ id: "model-a" }] });
     });
-    expect(JSON.stringify(await aiConfigService.models(ctx, { provider: "openai" }, fetcher))).not.toContain(
-      "stored-secret",
-    );
+    expect(
+      JSON.stringify(await aiConfigService.models(ctx, { provider: "openai", configId: saved.id }, fetcher)),
+    ).not.toContain("stored-secret");
     await expect(
       aiConfigService.models(ctx, { provider: "openai", apiKey: "bad-key" }, async () =>
         Response.json({ error: { message: "secret upstream body" } }, { status: 401 }),

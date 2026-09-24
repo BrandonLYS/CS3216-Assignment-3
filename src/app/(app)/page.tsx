@@ -1,6 +1,7 @@
 import { ArrowRight, Diamond, Inbox } from "lucide-react";
 import Link from "next/link";
 import { ctxForCurrentUser } from "@/server/core/action";
+import { aiConfigService } from "@/server/modules/ai-config/service";
 import { getModel } from "@/server/modules/assistant/model";
 import { assistantService } from "@/server/modules/assistant/service";
 import { workspaceOverview } from "@/server/modules/workspace/queries";
@@ -19,9 +20,10 @@ export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const ctx = await ctxForCurrentUser();
-  const [o, { conversation, messages }] = await Promise.all([
+  const [o, { conversation, messages }, configs] = await Promise.all([
     workspaceOverview(ctx),
     assistantService.conversation(ctx, null),
+    aiConfigService.list(ctx),
   ]);
   const dock = (
     <AssistantDock
@@ -29,6 +31,10 @@ export default async function DashboardPage() {
       conversationId={conversation.id}
       initialMessages={messages}
       configured={(await getModel(ctx)) !== null}
+      configs={configs}
+      modelConfigId={
+        configs.some((c) => c.id === conversation.aiConfigId) ? conversation.aiConfigId : (configs[0]?.id ?? null)
+      }
     />
   );
 

@@ -11,6 +11,8 @@ import {
 import { ArrowUp, Loader2, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
+import type { AiConfigSummary } from "@/server/modules/ai-config/service";
+import { AI_PROVIDER_LABELS } from "@/shared/domain";
 import { useShell } from "@/shared/lib/shell-context";
 import { ASSISTANT_LIMIT_REACHED, ASSISTANT_NOT_CONFIGURED } from "@/shared/lib/assistant-errors";
 import { cn } from "@/shared/lib/cn";
@@ -143,15 +145,20 @@ export function AssistantDock({
   conversationId,
   initialMessages,
   configured,
+  configs,
+  modelConfigId,
 }: {
   projectId: string | null;
   conversationId: string;
   initialMessages: UIMessage[];
   configured: boolean;
+  configs: AiConfigSummary[];
+  modelConfigId: string | null;
 }) {
   const { assistantOpen, toggleAssistant } = useShell();
   const router = useRouter();
   const [input, setInput] = React.useState("");
+  const [aiConfigId, setAiConfigId] = React.useState(modelConfigId ?? configs[0]?.id ?? null);
   const { messages, sendMessage, addToolApprovalResponse, status, error } = useChat({
     id: conversationId,
     messages: initialMessages,
@@ -179,7 +186,9 @@ export function AssistantDock({
   const submit = () => {
     const text = input.trim();
     if (!text || busy || pendingCard) return;
-    void sendMessage({ text });
+    // The server pins aiConfigId to the Conversation, so later approval-triggered
+    // re-sends (which carry no selection) keep answering with the same model.
+    void sendMessage({ text }, { body: { projectId, aiConfigId } });
     setInput("");
   };
   const notice = !configured ? FRIENDLY[ASSISTANT_NOT_CONFIGURED] : error ? friendly(error) : null;
@@ -187,9 +196,29 @@ export function AssistantDock({
   return (
     <aside aria-label="Assistant" className="flex w-96 shrink-0 flex-col border-l border-hairline bg-surface-1">
       <div className="flex h-11 items-center gap-2 border-b border-hairline px-4">
-        <Sparkles className="size-3.5 text-primary" />
-        <h2 className="text-body-sm font-medium text-ink">Assistant</h2>
-        <Button size="icon" variant="ghost" className="ml-auto" onClick={toggleAssistant} aria-label="Close Assistant">
+        <Sparkles className="size-3.5 shrink-0 text-primary" />
+        <h2 className="shrink-0 text-body-sm font-medium text-ink">Assistant</h2>
+        {configs.length > 0 && (
+          <select
+            aria-label="Assistant model"
+            value={aiConfigId ?? ""}
+            onChange={(event) => setAiConfigId(event.target.value)}
+            className="min-w-0 flex-1 cursor-pointer truncate rounded-sm bg-transparent px-1 py-0.5 text-caption text-ink-subtle hover:bg-surface-2 focus:outline-none"
+          >
+            {configs.map((config) => (
+              <option key={config.id} value={config.id}>
+                {AI_PROVIDER_LABELS[config.provider]} · {config.model}
+              </option>
+            ))}
+          </select>
+        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="ml-auto shrink-0"
+          onClick={toggleAssistant}
+          aria-label="Close Assistant"
+        >
           <X className="size-3.5" />
         </Button>
       </div>
@@ -215,7 +244,9 @@ export function AssistantDock({
                   <Part
                     key={i}
                     part={part}
-                    onAnswer={(id, approved) => void addToolApprovalResponse({ id, approved })}
+                    onAnswer={(id, approved) =>
+                      void addToolApprovalResponse({ id, approved, options: { body: { projectId, aiConfigId } } })
+                    }
                   />
                 ))}
               </div>

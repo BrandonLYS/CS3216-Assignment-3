@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ctxForCurrentUser } from "@/server/core/action";
 import { DomainError } from "@/server/core/errors";
+import { aiConfigService } from "@/server/modules/ai-config/service";
 import { getModel } from "@/server/modules/assistant/model";
 import { assistantService } from "@/server/modules/assistant/service";
 import { projectsService } from "@/server/modules/projects/service";
@@ -14,7 +15,10 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
     if (e instanceof DomainError) notFound();
     throw e;
   });
-  const { conversation, messages } = await assistantService.conversation(ctx, projectId);
+  const [{ conversation, messages }, configs] = await Promise.all([
+    assistantService.conversation(ctx, projectId),
+    aiConfigService.list(ctx),
+  ]);
   return (
     <>
       <ProjectHeader project={project} />
@@ -25,6 +29,10 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
           conversationId={conversation.id}
           initialMessages={messages}
           configured={(await getModel(ctx)) !== null}
+          configs={configs}
+          modelConfigId={
+            configs.some((c) => c.id === conversation.aiConfigId) ? conversation.aiConfigId : (configs[0]?.id ?? null)
+          }
         />
       </div>
     </>

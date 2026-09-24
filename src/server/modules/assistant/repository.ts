@@ -25,6 +25,9 @@ export const conversationsRepo = {
     const [row] = await db.select().from(conversations).where(eq(conversations.id, id));
     return row;
   },
+
+  setAiConfig: (db: DbOrTx, id: string, aiConfigId: string | null) =>
+    db.update(conversations).set({ aiConfigId }).where(eq(conversations.id, id)),
 };
 
 export const messagesRepo = {
