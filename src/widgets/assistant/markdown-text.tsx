@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { captureEvent } from "@/shared/analytics/browser";
+import { PROJECT_SECTIONS } from "@/widgets/command-palette/command-palette";
 import { internalHref } from "./linked-text";
 
 /**
@@ -67,8 +70,8 @@ function SafeLink({ href, children }: ComponentPropsWithoutRef<"a">) {
   );
 }
 
-/** Project sections a citation can land on; anything else the model wrote reports as `other`. */
-const CITATION_KINDS = new Set(["decisions", "evidence", "tasks", "timeline", "risks", "graph", "people", "calendar"]);
+/** Project sections a citation can land on (plus the graph, which has no tab); anything else reports as `other`. */
+const CITATION_KINDS = new Set<string>([...PROJECT_SECTIONS.map((s) => s.slug).filter(Boolean), "graph"]);
 
 /** Which Project section a citation opens, from a closed set so model text never becomes a property value. */
 export function citationKind(href: string) {

@@ -34,6 +34,8 @@ describe("citationKind", () => {
     ["/projects/p/decisions?decision=d", "decisions"],
     ["/projects/p/evidence?item=e#passage-x", "evidence"],
     ["/projects/p/tasks?note=x&task=t", "tasks"],
+    ["/projects/p/renders?render=r", "renders"],
+    ["/projects/p/graph?node=decision:d", "graph"],
     ["/projects/p", "overview"],
     ["/projects/p/?utm=x", "overview"],
     ["/projects/p/invented-by-the-model", "other"],

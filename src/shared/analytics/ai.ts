@@ -19,6 +19,8 @@ export interface AiTelemetry {
   userId: string;
   /** Bounded, content-free metadata such as `project_id`. */
   properties?: Record<string, unknown>;
+  /** Joins the trace of the work that caused this call, such as the Assistant turn a reflection follows. */
+  traceId?: string;
 }
 
 export interface Generation {
@@ -82,7 +84,7 @@ export async function traceGeneration<T extends { usage: LanguageModelUsage }>(
     captureGeneration(telemetry.userId, {
       ...g,
       ...rest,
-      traceId: crypto.randomUUID(),
+      traceId: telemetry.traceId ?? crypto.randomUUID(),
       latencyMs: performance.now() - started,
       properties: telemetry.properties,
     });

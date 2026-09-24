@@ -93,7 +93,7 @@ const transcriptOf = (messages: UIMessage[]) =>
 export async function reflect(
   ctx: Ctx,
   conversationId: string,
-  { rewrite = modelRewrite }: { rewrite?: Rewrite } = {},
+  { rewrite = modelRewrite, traceId }: { rewrite?: Rewrite; traceId?: string } = {},
 ): Promise<ReflectOutcome> {
   const conversation = await conversationsRepo.findById(ctx.db, conversationId);
   if (!conversation || conversation.userId !== ctx.userId) throw new ForbiddenError("Conversation not found");
@@ -125,7 +125,11 @@ export async function reflect(
       userLines,
       transcript: transcriptOf(messages.slice(-12)),
       hasProject: Boolean(projectId),
-      telemetry: { userId: ctx.userId, properties: { conversation_id: conversationId, project_id: projectId } },
+      telemetry: {
+        userId: ctx.userId,
+        traceId,
+        properties: { conversation_id: conversationId, project_id: projectId },
+      },
     });
   } catch (e) {
     console.error("Reflection failed", e);

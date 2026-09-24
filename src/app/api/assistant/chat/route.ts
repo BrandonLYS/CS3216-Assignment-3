@@ -66,8 +66,9 @@ export async function POST(req: Request) {
     const last = messages.at(-1);
     // A resubmit after an approval card ends on the Assistant's message: that is a decision, not a question.
     if (last?.role === "user") await capture(ctx.userId, "assistant_question_sent", { workflow });
-    // The User's answers to approval cards. Recorded only once the turn completes: the SDK verifies
-    // each signed approval while streaming, so a forged or stale one never reaches `onEnd`.
+    // The User's answers to approval cards, recorded once the turn completes. An approval is signed,
+    // so a forged or stale one errors the stream and never reaches `onEnd`; a denial is not signed.
+    // This is the answer, not the outcome: the server can still deny an approved call it re-checks.
     const approvals = (last?.role === "assistant" ? last.parts : []).flatMap((part) =>
       isToolUIPart(part) && part.state === "approval-responded" && !part.approval.isAutomatic
         ? [{ tool: getToolName(part), approved: part.approval.approved }]
@@ -88,6 +89,8 @@ export async function POST(req: Request) {
     const properties = { workflow, conversation_id: conversationId };
     let step = 0;
     let callStarted = started;
+    // A model call is in flight: an error now is a failed generation, whatever its class.
+    let inCall = false;
     const result = streamText({
       model,
       system,
@@ -99,22 +102,27 @@ export async function POST(req: Request) {
       stopWhen: stepCountIs(maxSteps),
       onLanguageModelCallStart: () => {
         callStarted = performance.now();
+        inCall = true;
       },
-      onLanguageModelCallEnd: (call) =>
-        captureGeneration(ctx.userId, {
+      onLanguageModelCallEnd: (call) => {
+        inCall = false;
+        return captureGeneration(ctx.userId, {
           span: "assistant_turn",
           traceId,
           provider: call.provider,
           model: call.modelId,
-          latencyMs: call.performance.responseTimeMs,
+          // Timed like a failed call below, so success and error latencies compare.
+          latencyMs: performance.now() - callStarted,
           usage: call.usage,
           finishReason: call.finishReason,
           properties: { ...properties, step: step++ },
-        }),
+        });
+      },
       onError: async ({ error }) => {
         console.error(error);
-        // Only a failed provider call is a failed generation; a tool or approval error is not.
-        if (!APICallError.isInstance(error) && !RetryError.isInstance(error)) return;
+        // A failed provider call (before or mid-stream) is a failed generation; a tool or approval error is not.
+        if (!inCall && !APICallError.isInstance(error) && !RetryError.isInstance(error)) return;
+        inCall = false;
         await captureGeneration(ctx.userId, {
           span: "assistant_turn",
           traceId,
@@ -147,7 +155,8 @@ export async function POST(req: Request) {
     // Reflection runs once the response is out and the thread is saved; its failures never reach the User (ADR 0007).
     const { promise: saved, resolve: markSaved } = Promise.withResolvers<boolean>();
     after(async () => {
-      if (await saved) await reflect({ ...ctx, via: "reflection" }, conversation.id).catch((e) => console.error(e));
+      if (await saved)
+        await reflect({ ...ctx, via: "reflection" }, conversation.id, { traceId }).catch((e) => console.error(e));
     });
     return createUIMessageStreamResponse({
       stream: toUIMessageStream({
