@@ -120,6 +120,20 @@
       "when": 1790183722151,
       "tag": "0016_known_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790240798331,
+      "tag": "0017_serious_randall_flagg",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790240834980,
+      "tag": "0018_outgoing_venom",
+      "breakpoints": true
     }
   ]
 }

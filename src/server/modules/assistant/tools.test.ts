@@ -61,7 +61,6 @@ describe("assistant tool registry", () => {
       "create_task",
       "delete_milestone",
       "delete_task",
-      "get_evidence",
       "get_project_summary",
       "get_task",
       "link_evidence",
@@ -70,8 +69,11 @@ describe("assistant tool registry", () => {
       "list_people",
       "list_tasks",
       "list_teams",
+      "read_evidence",
       "remove_dependency",
       "search_decisions",
+      "search_evidence",
+      "set_evidence_labels",
       "set_task_labels",
       "update_milestone",
       "update_project",
@@ -226,11 +228,22 @@ describe("assistant tools over the rest of the Project", () => {
     expect(list.find((e) => e.id === noText.id)?.hasText).toBe(false);
     expect(list.some((e) => "extractedText" in e)).toBe(false);
 
-    const got = (await run("get_evidence", { id: withText.id })) as { extractedText: string };
+    const got = (await run("read_evidence", { id: withText.id })) as { extractedText: string };
     expect(got.extractedText).toBe("Scope: two phases.");
-    const none = (await run("get_evidence", { id: noText.id })) as { extractedText: null; note: string };
+    const byTitle = (await run("read_evidence", { projectId, title: "kickoff" })) as { id: string };
+    expect(byTitle.id).toBe(withText.id);
+    const none = (await run("read_evidence", { id: noText.id })) as { extractedText: null; note: string };
     expect(none.extractedText).toBeNull();
     expect(none.note).toMatch(/unavailable/);
+
+    const label = (await run("create_label", { projectId, name: "contract" })) as { id: string };
+    await run("set_evidence_labels", { id: withText.id, labelIds: [label.id] });
+    const tagged = (await run("list_evidence", { projectId })) as { id: string; labelIds: string[] }[];
+    expect(tagged.find((e) => e.id === withText.id)?.labelIds).toEqual([label.id]);
+    const hits = (await run("search_evidence", { projectId, labels: ["contract"] })) as {
+      matches: { evidenceId: string }[];
+    };
+    expect(hits.matches.map((m) => m.evidenceId)).toEqual([withText.id]);
 
     const task = (await run("create_task", { projectId, title: "Read minutes" })) as { id: string };
     await run("link_evidence", { projectId, evidenceId: withText.id, entityType: "task", entityId: task.id });
