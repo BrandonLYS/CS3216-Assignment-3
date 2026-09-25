@@ -1,6 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel, modelInfo } from "@/server/modules/assistant/model";
+import type { Ctx } from "@/server/core/context";
+import { getModelForUser, modelInfo } from "@/server/modules/assistant/model";
 import { traceGeneration, type AiTelemetry } from "@/shared/analytics/ai";
 import { ASSUMPTION_SUBTYPES, DATE_TARGET_FIELDS, type EvidenceKind, type ProposalExtractor } from "@/shared/domain";
 
@@ -106,9 +107,11 @@ export const heuristicExtract: Extract = async ({ sources }) => ({
 const outputSchema = z.object({ proposals: z.array(rawProposalSchema) });
 
 /** Model extractor: structured output, verbatim excerpts demanded, source text treated as data. */
-export const modelExtract: Extract = async ({ sources, context, telemetry }) => {
-  const model = getModel();
-  if (!model) throw new Error("Assistant not configured");
+export const modelExtract =
+  (ctx: Ctx): Extract =>
+  async ({ sources, context, telemetry }) => {
+    const model = await getModelForUser(ctx);
+    if (!model) throw new Error("Assistant not configured");
   const { object } = await traceGeneration(telemetry, { span: "proposal_extraction", ...modelInfo() }, () =>
     generateObject({
       model,
@@ -134,15 +137,15 @@ export const modelExtract: Extract = async ({ sources, context, telemetry }) => 
         .filter(Boolean)
         .join("\n\n"),
     }),
-  );
-  return { proposals: object.proposals };
-};
+    );
+    return { proposals: object.proposals };
+  };
 
 /** Which extractor the pass should use, or null when none can run. */
-export function pickExtractor(): { name: ProposalExtractor; extract: Extract } | null {
+export async function pickExtractor(ctx: Ctx): Promise<{ name: ProposalExtractor; extract: Extract } | null> {
   const forced = process.env.PROPOSALS_EXTRACTOR;
   if (forced === "heuristic") return { name: "heuristic", extract: heuristicExtract };
-  if (getModel()) return { name: "model", extract: modelExtract };
+  if (await getModelForUser(ctx)) return { name: "model", extract: modelExtract(ctx) };
   if (forced === "model") return null;
   return { name: "heuristic", extract: heuristicExtract };
 }
