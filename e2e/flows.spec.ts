@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { addDays, format } from "date-fns";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,6 +15,7 @@ const key = `F${stamp}`;
 const email = `flows-${run}@test.local`;
 const password = "flows-password-123";
 const projectName = "Payments Migration";
+let sessionCookies: Awaited<ReturnType<BrowserContext["cookies"]>> | undefined;
 
 const shots = (flow: string) => {
   const dir = path.join("docs", flow, "screenshots");
@@ -30,11 +31,20 @@ const shots = (flow: string) => {
 };
 
 async function login(page: Page) {
+  // The auth flow exercises sign-in once; subsequent flows reuse its session.
+  // Repeated sign-ins from the same browser-test host hit production rate limits.
+  if (sessionCookies) {
+    await page.context().addCookies(sessionCookies);
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL("/dashboard");
+    return;
+  }
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/dashboard");
+  sessionCookies = await page.context().cookies();
 }
 
 async function openProject(page: Page, section?: string) {
@@ -64,9 +74,10 @@ test.describe("auth", () => {
     await page.getByLabel("Password").fill(password);
     await shot(page, "signup-filled");
     await page.getByRole("button", { name: "Create account" }).click();
-    await expect(page).toHaveURL("/");
-    await expect(page.getByText("No projects yet", { exact: true })).toBeVisible();
-    await shot(page, "empty-workspace");
+    await expect(page).toHaveURL("/dashboard");
+    // A new account is not empty: every User starts with the sample Project (ADR 0013).
+    await expect(page.getByText("Bedok Community Centre").first()).toBeVisible();
+    await shot(page, "starter-workspace");
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/login/);
@@ -444,7 +455,7 @@ test.describe("overview", () => {
     await shot(page, "project-overview");
 
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     await expect(page.getByRole("link", { name: projectName }).first()).toBeVisible();
     await shot(page, "workspace-dashboard");
   });
@@ -667,7 +678,12 @@ test.describe("attention", () => {
     const list = page.locator("section", { hasText: "Needs attention" }).first();
     await expect(list.getByText("Overdue", { exact: true }).first()).toBeVisible();
     // Tolerant of midnight/clock skew between Playwright and the server: any past-day count.
-    await expect(list.getByText(/Due .*, \d+ days? ago/)).toBeVisible();
+    await expect(
+      list
+        .getByTestId("attention-item")
+        .filter({ hasText: "Reconcile legacy ledger" })
+        .getByText(/Due .*, \d+ days? ago/),
+    ).toBeVisible();
     await expect(list.getByText("Blocked", { exact: true }).first()).toBeVisible();
     await expect(list.getByText("Late dependency", { exact: true }).first()).toBeVisible();
     await expect(list.getByText(/Depends on .*, due .*, after start/)).toBeVisible();
@@ -680,7 +696,7 @@ test.describe("attention", () => {
     await shot(page, "overview-collapsed");
 
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     const row = page.getByRole("link", { name: projectName }).filter({ hasText: /overdue/ });
     await expect(row.getByText(/\d+ overdue/)).toBeVisible();
     await expect(row.getByText(/\d+ blocked/)).toBeVisible();
@@ -776,7 +792,7 @@ test.describe("task-search", () => {
 
     // Key search from the Dashboard → result shows project name → Enter opens the dialog.
     await page.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/dashboard");
     await page.keyboard.press("Meta+k");
     const input = page.getByPlaceholder("Type a command or search…");
     await input.fill(`${key}-1`);

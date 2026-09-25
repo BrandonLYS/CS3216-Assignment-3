@@ -38,9 +38,26 @@ That buys the same feed with a second copy of the messaging table underneath it 
 
 Issue #59's SSE fan-out and the future intelligence layer both refetch by id, so neither needs more than this.
 
+## Who the actor is (issue #55)
+
+A Chat Message written by a Participant carries `actorId: null`, and so does any other event an actor-less mutation publishes.
+
+A Person has no `user` row and never will (ADR 0009), while `activity_events.actor_id` is a foreign key to one, so `mutate`'s `Recorder` had no actor to take.
+The Person's id is not an answer: a subscriber reading `actorId` cannot tell a Person id from a User id, and every other event in the system means "a User" by it.
+The Chat Message row names its own author in `author_person_id` and the `author_name` snapshot, and the event is a notification rather than a payload, so nothing is lost by saying "not a User" plainly.
+
+The mechanism is `mutateAsParticipant(pctx, fn)` beside `mutate(ctx, fn)`, sharing one implementation of transaction, flush, commit and publish.
+`Recorder.actorId` became nullable for it, and `Recorder` throws if such a mutation calls `created`, `updated` or `deleted`: an actor-less mutation may signal and may not record.
+That guard is what keeps the nullable actor from becoming a quiet way to write an authorless row into a Project's history.
+
+Two contexts rather than one union, because `Ctx` and `ParticipantCtx` are deliberately distinct types (ADR 0009): a union on `mutate` would let a Person id reach any of the roughly forty existing callers, all of which pass their `userId` to `assertOwnsProject`.
+
+`via` is null for the same kind of reason: `Via` names the Assistant, Reflection and the system acting **for the User**, and a Participant acts for nobody.
+
 ## Consequences
 
 - There are now two exceptions to "every mutation records an Activity Event": `project.deleted`, because the Project's events cascade away with the row, and `chat_message.created`, for the reasons above. AGENTS.md names both.
 - A Project's history will never show what was said in a Room, only that a Room was created and who was admitted to it. That is the intended reading of ADR 0009's separation between the messaging surface and the Project.
-- If Vantage ever wants "3 new messages" in the activity feed, the answer is a read model over `room_messages`, not an Activity Event per Chat Message.
+- If PrismPM ever wants "3 new messages" in the activity feed, the answer is a read model over `room_messages`, not an Activity Event per Chat Message.
 - A subscriber that needs the text must read `room_messages` by `entityId`. The event is a notification, not a payload.
+- A subscriber must handle `actorId: null`, which `DomainEvent` has always allowed. Any subscriber that needs to know who spoke reads the Chat Message row.

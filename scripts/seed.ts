@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { addDays, formatISO } from "date-fns";
 import { eq } from "drizzle-orm";
+import { hashPassword } from "better-auth/crypto";
 import { auth } from "@/server/auth/auth";
 import { user } from "@/server/auth/schema";
 import type { Ctx } from "@/server/core/context";
@@ -8,10 +9,11 @@ import { db } from "@/server/db/client";
 import { dependenciesService } from "@/server/modules/dependencies/service";
 import { evidenceService } from "@/server/modules/evidence/service";
 import { labelsService } from "@/server/modules/labels/service";
-import { messagingRepo } from "@/server/modules/messaging/repository";
-import { messagingService } from "@/server/modules/messaging/service";
+import { messagingService, participantMessagingService } from "@/server/modules/messaging/service";
 import { milestonesService } from "@/server/modules/milestones/service";
+import { peopleRepo } from "@/server/modules/people/repository";
 import { peopleService } from "@/server/modules/people/service";
+import { seedSampleProject } from "@/server/modules/onboarding/sample-project";
 import { projects } from "@/server/modules/projects/schema";
 import { projectsService } from "@/server/modules/projects/service";
 import { risksService } from "@/server/modules/risks/service";
@@ -20,6 +22,9 @@ import { tasksService } from "@/server/modules/tasks/service";
 
 const DEMO_EMAIL = process.env.DEMO_EMAIL ?? "demo@example.com";
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? "demo-password-123";
+/** The seeded Participant, so the messaging member surface can be opened without an invite. */
+const DEMO_MEMBER_EMAIL = process.env.DEMO_MEMBER_EMAIL ?? "jason@example.com";
+const DEMO_MEMBER_PASSWORD = process.env.DEMO_MEMBER_PASSWORD ?? "member-password-123";
 
 const today = new Date();
 const d = (offset: number) => formatISO(addDays(today, offset), { representation: "date" });
@@ -34,6 +39,9 @@ async function ensureDemoUser(): Promise<string> {
   const res = await auth.api.signUpEmail({
     body: { email: DEMO_EMAIL, password: DEMO_PASSWORD, name: "Demo PM" },
   });
+  // Signing up fires the onboarding hook, which gives every new User the sample Project.
+  // The demo account is seeded explicitly below, so clear it and start from nothing.
+  await db.delete(projects).where(eq(projects.ownerId, res.user.id));
   console.log(`Created ${DEMO_EMAIL}`);
   return res.user.id;
 }
@@ -61,14 +69,21 @@ async function seedPayments(ctx: Ctx) {
     description: "External supplier for the settlement service",
   });
 
-  const p = async (name: string, role: string, teamId: string | null) =>
-    peopleService.createPerson(ctx, { projectId: pid, name, role, teamId });
-  const jason = await p("Jason Lim", "Backend lead", teamB.id);
-  const sarah = await p("Sarah Tan", "QA lead", teamC.id);
-  const alice = await p("Alice Wong", "Business analyst", teamC.id);
-  const ben = await p("Ben Koh", "Security reviewer", null);
-  const chen = await p("Chen Wei", "Frontend engineer", teamFE.id);
-  const marcus = await p("Marcus Reyes", "Vendor delivery manager", vendor.id);
+  // Everyone carries an email: it is the identifier the messaging login uses (ADR 0009), so a
+  // Person without one cannot be invited.
+  const p = async (name: string, role: string, teamId: string | null, email: string) =>
+    peopleService.createPerson(ctx, { projectId: pid, name, role, teamId, email });
+  const jason = await p("Jason Lim", "Backend lead", teamB.id, DEMO_MEMBER_EMAIL);
+  const sarah = await p("Sarah Tan", "QA lead", teamC.id, "sarah@example.com");
+  const alice = await p("Alice Wong", "Business analyst", teamC.id, "alice@example.com");
+  const ben = await p("Ben Koh", "Security reviewer", null, "ben@example.com");
+  const chen = await p("Chen Wei", "Frontend engineer", teamFE.id, "chen@example.com");
+  const marcus = await p("Marcus Reyes", "Vendor delivery manager", vendor.id, "marcus@acme.example.com");
+
+  // One Person can sign in straight away, so the member surface is reachable without first
+  // generating an invite. Written through the repository on purpose: a password is not a field
+  // of `createPersonSchema`, and a credential must not become reachable through an action.
+  await peopleRepo.setPassword(db, jason.id, await hashPassword(DEMO_MEMBER_PASSWORD));
 
   const lbl = async (name: string, color: string) => labelsService.create(ctx, { projectId: pid, name, color });
   const backend = await lbl("backend", "#4ea7fc");
@@ -366,24 +381,25 @@ Asks: sponsor support escalating IAM credentials with Acme.`,
     body: `Deliverable A (settlement service): 90% complete.\nPlanned finish ${d(-2)}; new forecast ${d(7)}.\nBlocker: customer credentials.`,
   });
 
-  const launch = await messagingService.createRoom(ctx, { projectId: pid, type: "group", name: "Launch readiness" });
-  for (const person of [jason, sarah, marcus]) {
-    await messagingService.addParticipant(ctx, { projectId: pid, roomId: launch.id, personId: person.id });
-  }
-  const withBen = await messagingService.createRoom(ctx, { projectId: pid, type: "one_to_one" });
-  await messagingService.addParticipant(ctx, { projectId: pid, roomId: withBen.id, personId: ben.id });
+  const launch = await messagingService.createRoom(ctx, {
+    projectId: pid,
+    type: "group",
+    name: "Launch readiness",
+    personIds: [jason.id, sarah.id, marcus.id],
+  });
+  const withBen = await messagingService.createRoom(ctx, {
+    projectId: pid,
+    type: "one_to_one",
+    personIds: [ben.id],
+  });
 
-  // A Person's reply goes in through the repository because the service that lets a Person
-  // write is issue #55; only the PM can post today. Replace both calls when #55 lands.
-  const reply = async (roomId: string, person: { id: string; name: string }, text: string) =>
-    messagingRepo.insertMessage(
-      ctx.db,
-      { id: roomId, projectId: pid },
-      {
-        text,
-        authorPersonId: person.id,
-        authorName: person.name,
-      },
+  // Through the Participant's own service, so the seed exercises the seam a real Person goes
+  // through: a Person who was never admitted to the Room would fail here rather than seed a
+  // conversation nobody could have had. The author name is snapshotted from the Person row.
+  const reply = async (roomId: string, person: { id: string }, text: string) =>
+    participantMessagingService.postMessage(
+      { db: ctx.db, person: { id: person.id, projectId: pid } },
+      { projectId: pid, roomId, text },
     );
 
   const say = (roomId: string, text: string) => messagingService.postMessage(ctx, { projectId: pid, roomId, text });
@@ -398,6 +414,7 @@ Asks: sponsor support escalating IAM credentials with Acme.`,
   await reply(withBen.id, ben, "Partly. I can review the architecture now and the live flows afterwards.");
 
   console.log(`Seeded ${project.name}`);
+  console.log(`Messaging member: ${DEMO_MEMBER_EMAIL} / ${DEMO_MEMBER_PASSWORD} at /m/${pid}/login`);
 }
 
 async function seedWarehouse(ctx: Ctx) {
@@ -501,6 +518,8 @@ async function main() {
   const ctx: Ctx = { db, userId };
   await seedPayments(ctx);
   await seedWarehouse(ctx);
+  const sample = await seedSampleProject(ctx);
+  console.log(`Seeded ${sample.name}`);
   console.log(`\nDemo login: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
   process.exit(0);
 }

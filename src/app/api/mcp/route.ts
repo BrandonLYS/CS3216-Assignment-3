@@ -29,7 +29,7 @@ const handler = createMcpHandler(
       });
     }
   },
-  { serverInfo: { name: "vantage", version: "1.0.0" } },
+  { serverInfo: { name: "prismpm", version: "1.0.0" } },
 );
 
 const authed = withMcpAuth(

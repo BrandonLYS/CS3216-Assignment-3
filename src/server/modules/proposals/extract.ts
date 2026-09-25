@@ -1,7 +1,8 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel } from "@/server/modules/assistant/model";
 import type { Ctx } from "@/server/core/context";
+import { getModelForUser, modelInfo } from "@/server/modules/assistant/model";
+import { traceGeneration, type AiTelemetry } from "@/shared/analytics/ai";
 import { ASSUMPTION_SUBTYPES, DATE_TARGET_FIELDS, type EvidenceKind, type ProposalExtractor } from "@/shared/domain";
 
 /**
@@ -54,6 +55,8 @@ export type RawAssumption = z.infer<typeof rawAssumptionSchema>;
 export interface ExtractInput {
   sources: ExtractSource[];
   context: ExtractContext;
+  /** Attributes a model call in LLM analytics; extractors that call no model ignore it. */
+  telemetry?: AiTelemetry;
 }
 export type Extract = (input: ExtractInput) => Promise<{ proposals: RawProposal[] }>;
 
@@ -106,10 +109,11 @@ const outputSchema = z.object({ proposals: z.array(rawProposalSchema) });
 /** Model extractor: structured output, verbatim excerpts demanded, source text treated as data. */
 export const modelExtract =
   (ctx: Ctx): Extract =>
-  async ({ sources, context }) => {
-    const model = await getModel(ctx);
+  async ({ sources, context, telemetry }) => {
+    const model = await getModelForUser(ctx);
     if (!model) throw new Error("Assistant not configured");
-    const { object } = await generateObject({
+  const { object } = await traceGeneration(telemetry, { span: "proposal_extraction", ...modelInfo() }, () =>
+    generateObject({
       model,
       schema: outputSchema,
       system: [
@@ -132,7 +136,8 @@ export const modelExtract =
       ]
         .filter(Boolean)
         .join("\n\n"),
-    });
+    }),
+    );
     return { proposals: object.proposals };
   };
 
@@ -140,7 +145,7 @@ export const modelExtract =
 export async function pickExtractor(ctx: Ctx): Promise<{ name: ProposalExtractor; extract: Extract } | null> {
   const forced = process.env.PROPOSALS_EXTRACTOR;
   if (forced === "heuristic") return { name: "heuristic", extract: heuristicExtract };
-  if (await getModel(ctx)) return { name: "model", extract: modelExtract(ctx) };
+  if (await getModelForUser(ctx)) return { name: "model", extract: modelExtract(ctx) };
   if (forced === "model") return null;
   return { name: "heuristic", extract: heuristicExtract };
 }

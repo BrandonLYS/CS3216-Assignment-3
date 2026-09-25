@@ -10,7 +10,7 @@ async function signUp(page: Page) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/dashboard");
 }
 
 test.describe.configure({ mode: "serial" });
@@ -22,9 +22,9 @@ test("unauthenticated users are redirected to login", async ({ page }) => {
 
 test("sign up → create project → create task → move it → see it on the timeline", async ({ page }) => {
   await signUp(page);
-  await expect(page.getByText("No projects yet", { exact: true })).toBeVisible();
+  // A new account starts with the sample Project (ADR 0013), not an empty workspace.
+  await expect(page.getByText("Bedok Community Centre").first()).toBeVisible();
 
-  // Create a project from the empty state.
   await page.getByRole("button", { name: "New project" }).first().click();
   await page.getByLabel("Name").fill("E2E Project");
   await page.getByLabel("Key").fill(`E${stamp}`);
@@ -75,7 +75,9 @@ test("custom statuses must keep a category and cannot be deleted while in use", 
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByRole("link", { name: "E2E Project" }).first().click();
-  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+  await page.getByRole("main").getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/settings$/);
 
   await page.getByRole("button", { name: "Add", exact: true }).first().click();
   const dialog = page.getByRole("dialog");

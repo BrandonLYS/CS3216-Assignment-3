@@ -1,6 +1,6 @@
 # Developer onboarding
 
-This guide takes a new Vantage developer from a fresh clone to a verified local environment.
+This guide takes a new PrismPM developer from a fresh clone to a verified local environment.
 
 ## 1. Install prerequisites
 
@@ -86,7 +86,8 @@ npm run db:studio
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign in with the demo credentials from `.env`.
+Open [http://localhost:3000](http://localhost:3000) for the landing page, then sign in at `/login` with the demo credentials from `.env`.
+The workspace itself lives at `/dashboard`.
 
 For a production-mode check:
 
@@ -137,7 +138,7 @@ E2E_PORT=3001 npm run test:e2e
 
 Read these before making substantial changes:
 
-- `CONTEXT.md`: Vantage domain vocabulary
+- `CONTEXT.md`: PrismPM domain vocabulary
 - `DESIGN.md`: visual language and design tokens
 - `AGENTS.md`: architecture rules and verification commands
 - `docs/adr/`: architecture decisions and their trade-offs

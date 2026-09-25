@@ -162,4 +162,32 @@ export const messagingRepo = {
       )
       .orderBy(desc(roomMessages.createdAt), desc(roomMessages.id))
       .limit(limit),
+
+  /**
+   * Oldest first from a cursor: the mirror of `listMessages`, and what a pane catching up on
+   * a Room asks for (issue #59). Separate rather than a direction flag on `listMessages`,
+   * which would have to flip both the comparison and the `order by` while every existing
+   * caller paid the reading cost of a branch it never takes.
+   *
+   * `room_messages_room_time_idx` is descending; Postgres reads it backwards for this,
+   * so the ascending scan seeks to the cursor exactly as the descending one does.
+   */
+  listMessagesAfter: (
+    db: DbOrTx,
+    projectId: string,
+    roomId: string,
+    { after, limit }: { after: MessageCursor; limit: number },
+  ): Promise<RoomMessageRow[]> =>
+    db
+      .select()
+      .from(roomMessages)
+      .where(
+        and(
+          eq(roomMessages.roomId, roomId),
+          eq(roomMessages.projectId, projectId),
+          sql`(${roomMessages.createdAt}, ${roomMessages.id}) > (${after.createdAt.toISOString()}::timestamptz, ${after.id})`,
+        ),
+      )
+      .orderBy(asc(roomMessages.createdAt), asc(roomMessages.id))
+      .limit(limit),
 };

@@ -1,0 +1,128 @@
+{
+  "checkedAt": "2026-09-21T22:38:16.932Z",
+  "scope": "Local optimized production build, not a deployed release",
+  "codeCommit": "b957c8ca80364baded40b1f164aef8d9642f4047",
+  "baseCommit": "a0cb75506c74d807e28e09d42759855056c28f01",
+  "url": "http://localhost:3000/",
+  "canonicalFixture": "https://prismpm.example/",
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900,
+      "pricingCaptureHeight": 900,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "pricingCaptureHeight": 1200,
+      "overflow": false,
+      "errors": []
+    }
+  ],
+  "title": "PrismPM - project management with a memory",
+  "metadata": [
+    {
+      "name": "description",
+      "content": "Keep Tasks, Decisions and Evidence in one workspace. See which Assumptions have broken, understand what changed, and recover the reasoning behind your Project."
+    },
+    {
+      "name": "robots",
+      "content": "index, follow"
+    },
+    {
+      "rel": "canonical",
+      "href": "https://prismpm.example"
+    },
+    {
+      "property": "og:title",
+      "content": "PrismPM - project management with a memory"
+    },
+    {
+      "property": "og:description",
+      "content": "Keep Tasks, Decisions and Evidence in one workspace. See which Assumptions have broken, understand what changed, and recover the reasoning behind your Project."
+    },
+    {
+      "property": "og:url",
+      "content": "https://prismpm.example"
+    },
+    {
+      "property": "og:site_name",
+      "content": "PrismPM"
+    },
+    {
+      "property": "og:locale",
+      "content": "en_US"
+    },
+    {
+      "property": "og:image",
+      "content": "https://prismpm.example/opengraph-image"
+    },
+    {
+      "property": "og:image:width",
+      "content": "1200"
+    },
+    {
+      "property": "og:image:height",
+      "content": "630"
+    },
+    {
+      "property": "og:image:alt",
+      "content": "PrismPM. Stand above the whole project. Project management with a memory."
+    },
+    {
+      "property": "og:type",
+      "content": "website"
+    },
+    {
+      "name": "twitter:card",
+      "content": "summary_large_image"
+    },
+    {
+      "name": "twitter:title",
+      "content": "PrismPM - project management with a memory"
+    },
+    {
+      "name": "twitter:description",
+      "content": "Keep Tasks, Decisions and Evidence in one workspace. See which Assumptions have broken, understand what changed, and recover the reasoning behind your Project."
+    },
+    {
+      "name": "twitter:image",
+      "content": "https://prismpm.example/opengraph-image"
+    },
+    {
+      "name": "twitter:image:alt",
+      "content": "PrismPM. Stand above the whole project. Project management with a memory."
+    },
+    {
+      "name": "twitter:image:width",
+      "content": "1200"
+    },
+    {
+      "name": "twitter:image:height",
+      "content": "630"
+    }
+  ],
+  "/robots.txt": {
+    "status": 200,
+    "contentType": "text/plain",
+    "body": "User-Agent: *\nAllow: /\nDisallow: /dashboard\nDisallow: /projects\nDisallow: /calendar\nDisallow: /settings\nDisallow: /login\nDisallow: /signup\nDisallow: /invite/\nDisallow: /m/\nDisallow: /api/\n\nSitemap: https://prismpm.example/sitemap.xml\n"
+  },
+  "/sitemap.xml": {
+    "status": 200,
+    "contentType": "application/xml",
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url>\n<loc>https://prismpm.example/</loc>\n</url>\n</urlset>\n"
+  },
+  "/opengraph-image": {
+    "status": 200,
+    "contentType": "image/png"
+  },
+  "crawler": {
+    "status": 200,
+    "canonicalInHtml": true,
+    "imageInHtml": true
+  }
+}

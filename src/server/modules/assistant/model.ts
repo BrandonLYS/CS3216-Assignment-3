@@ -61,12 +61,21 @@ function environmentSettings(): ModelSettings | null {
   return null;
 }
 
+/** The configured provider and model id: what `getModel` builds and what analytics reports. */
+export const modelInfo = (settings?: Pick<ModelSettings, "provider" | "model"> | null) =>
+  settings ? { provider: settings.provider, model: settings.model } : { provider: process.env.AI_PROVIDER ?? "openai", model: process.env.AI_MODEL || DEFAULT_MODEL };
+
+/** The configured chat model, or null so the app boots and the dock can say "not configured". */
+export function getModel(): LanguageModel | null {
+  const fallback = environmentSettings();
+  return fallback ? buildModel(fallback) : null;
+}
+
 /**
- * Resolves the model for `configId` when given (must be one of the User's saved configurations,
- * or a Conversation could pin a stranger's credential); otherwise the User's default, then the
- * environment fallback. Corrupt credentials fail closed instead of falling back.
+ * Resolves the model for `configId` when given (must belong to the User); otherwise the User's
+ * default saved config, then environment fallback.
  */
-export async function getModel(ctx: Ctx, configId?: string | null): Promise<LanguageModel | null> {
+export async function getModelForUser(ctx: Ctx, configId?: string | null): Promise<LanguageModel | null> {
   const [personal] = configId
     ? await ctx.db
         .select()

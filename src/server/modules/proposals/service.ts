@@ -14,6 +14,7 @@ import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
 import type { ProposalExtractor } from "@/shared/domain";
+import { proposalGenerated, proposalRejected, today, type PassTrigger } from "./analytics";
 import { pickExtractor, type Extract, type ExtractSource } from "./extract";
 import { passSourcesRepo, proposalsRepo } from "./repository";
 import type { ProposalRow } from "./schema";
@@ -50,7 +51,12 @@ export const proposalsService = {
   /** True when a pass can run at all (a model is configured or the heuristic is selected). */
   enabled: async (ctx: Ctx) => (await pickExtractor(ctx)) !== null,
 
-  runPass: async (ctx: Ctx, projectId: string, opts: { extract?: Extract } = {}): Promise<PassOutcome> => {
+  /** `trigger` is required: an unnamed trigger is the mis-attribution this funnel exists to end. */
+  runPass: async (
+    ctx: Ctx,
+    projectId: string,
+    opts: { trigger: PassTrigger; extract?: Extract },
+  ): Promise<PassOutcome> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const picked = await pickExtractor(ctx);
     const extract = opts.extract ?? picked?.extract;
@@ -100,7 +106,9 @@ export const proposalsService = {
       peopleRepo.listByProject(ctx.db, projectId),
       milestonesRepo.listByProject(ctx.db, projectId),
       tasksRepo.listByProject(ctx.db, projectId),
-      conversationsRepo.findOrCreate(ctx.db, ctx.userId, projectId),
+      conversationsRepo
+        .latest(ctx.db, ctx.userId, projectId)
+        .then((c) => c ?? conversationsRepo.create(ctx.db, ctx.userId, projectId)),
     ]);
     const recent = (await messagesRepo.listByConversation(ctx.db, conversation.id)).slice(-12);
     const refs: TraceRefs = {
@@ -125,6 +133,10 @@ export const proposalsService = {
           tasks: refs.tasks.map((t) => t.title),
           conversation: transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage)),
         },
+        telemetry: {
+          userId: ctx.userId,
+          properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
+        },
       });
     } catch (e) {
       console.error("Proposal pass failed", e);
@@ -146,7 +158,22 @@ export const proposalsService = {
         kept.map((k) => ({ ...k, projectId, extractor: extractorName })),
       );
     });
-    return { extractor: extractorName, sourcesPassed: candidates.length, proposed: inserted.length, discarded };
+    const outcome = {
+      extractor: extractorName,
+      sourcesPassed: candidates.length,
+      proposed: inserted.length,
+      discarded,
+    };
+    await proposalGenerated(ctx, {
+      ...outcome,
+      projectId,
+      trigger: opts.trigger,
+      sourceKinds: {
+        evidence: candidates.filter((c) => c.kind === "evidence").length,
+        comment: candidates.filter((c) => c.kind === "comment").length,
+      },
+    });
+    return outcome;
   },
 
   listPending: async (ctx: Ctx, projectId: string) => {
@@ -170,7 +197,7 @@ export const proposalsService = {
       {
         projectId: p.projectId,
         title: p.title,
-        decidedOn: p.decidedOn ?? new Date().toISOString().slice(0, 10),
+        decidedOn: p.decidedOn ?? today(),
         context: p.context,
         chosen: p.chosen,
         alternatives: p.alternatives,
@@ -194,6 +221,7 @@ export const proposalsService = {
     const p = await proposalsService.get(ctx, id);
     const [row] = await proposalsRepo.markRejected(ctx.db, p.id);
     if (!row) throw new ConflictError("That proposal was already resolved");
+    await proposalRejected(ctx, row);
     return row;
   },
 

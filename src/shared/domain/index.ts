@@ -104,6 +104,7 @@ export const ENTITY_TYPES = [
   "room",
   "participant",
   "chat_message",
+  "render",
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -111,6 +112,31 @@ export type EntityType = (typeof ENTITY_TYPES)[number];
 export const COMMENTABLE_ENTITY_TYPES = ["task", "risk", "milestone"] as const satisfies readonly EntityType[];
 export type CommentableEntityType = (typeof COMMENTABLE_ENTITY_TYPES)[number];
 export const COMMENT_MAX_LENGTH = 4000;
+
+/**
+ * How much of a Room's history is read at a time (issue #60): the newest page the route
+ * renders, and each older page the pane pulls in as the reader scrolls back.
+ *
+ * Here rather than in the messaging service because the pane needs them too, and a client
+ * component must not import a server module. The ceiling on what any caller may ask for is
+ * `MESSAGE_PAGE_MAX`, which stays on the server - it is a limit, not shared vocabulary.
+ */
+export const MESSAGE_PAGE_FIRST = 50;
+export const MESSAGE_PAGE_MORE = 20;
+
+/**
+ * How an open pane learns what the other side said (issue #59, ADR 0011): it asks for the
+ * Chat Messages written after the newest one it holds, every `MESSAGE_POLL_MS`.
+ *
+ * The cursor is moved back by `MESSAGE_POLL_OVERLAP_MS` first, and that is not a safety
+ * margin - it is load-bearing. `room_messages.created_at` defaults to `now()`, which is the
+ * writing transaction's *start* time, so a transaction that began earlier and committed
+ * later leaves a row below a cursor the reader has already passed, where a strict cursor
+ * would never see it again. Re-reading the last few seconds costs nothing: the pane unions
+ * by id, so a row it already has is dropped on arrival.
+ */
+export const MESSAGE_POLL_MS = 4000;
+export const MESSAGE_POLL_OVERLAP_MS = 10_000;
 
 /** Items an Evidence record can be linked to (same set as Comments). */
 export const LINKABLE_ENTITY_TYPES = COMMENTABLE_ENTITY_TYPES;
@@ -188,6 +214,31 @@ export const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   google: "Google Gemini",
   openai_compatible: "OpenAI-compatible",
 };
+
+// ---------------------------------------------------------------------------
+// Concept renders. A Render is a generated picture of what a Project delivers,
+// so the PM and the people building it argue about one image instead of one
+// paragraph each. It is an illustration of intent, never a measured drawing.
+// ---------------------------------------------------------------------------
+/**
+ * Where a Render is in its life. "State" rather than "Status" on purpose: a Status is
+ * user-defined and maps to a Status Category (ADR 0003), and a Render has neither.
+ */
+export const RENDER_STATES = ["pending", "ready", "failed"] as const;
+export type RenderState = (typeof RENDER_STATES)[number];
+
+/** Per-Project ceiling. A generated image costs money and nobody needs eleven of them. */
+export const RENDER_MAX_PER_PROJECT = 10;
+export const RENDER_PROMPT_MAX = 1000;
+
+/**
+ * A pending Render is waited on the same way a Chat Message is (ADR 0011): the page asks
+ * again rather than holding a connection open. Generation takes roughly 5 to 30 seconds,
+ * so the interval is longer than messaging's and the poll stops as soon as nothing is pending.
+ */
+export const RENDER_POLL_MS = 2500;
+/** A Render still pending after this long is presumed dead; the poll gives up and says so. */
+export const RENDER_POLL_GIVE_UP_MS = 180_000;
 
 export const labelFor = (value: string) => value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 

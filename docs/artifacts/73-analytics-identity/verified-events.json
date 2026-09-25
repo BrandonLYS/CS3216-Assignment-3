@@ -1,0 +1,120 @@
+{
+  "environment": "local real SDK, synthetic Users",
+  "checkedAt": "2026-09-21T23:05:58.257Z",
+  "events": [
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c637-8b36-7eea-834f-c7403a4e8e7d",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:24.025Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c637-8b36-7eea-834f-c7403a4e8e7d",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:27.317Z"
+    },
+    {
+      "event": "$identify",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:30.868Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c637-8b36-7eea-834f-c7403a4e8e7d",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:30.702Z"
+    },
+    {
+      "event": "signup_completed",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:30.869Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:31.152Z"
+    },
+    {
+      "event": "project_created",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:34.388Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:34.880Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:38.347Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-8b43-7044-adf6-89c4541fcdb2",
+      "timestamp": "2026-09-21T23:05:42.297Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c637-e19c-71e0-a00f-0968b5e766d3",
+      "session_id": "01a0c637-e1bf-7400-bfd6-fc0fe6326164",
+      "timestamp": "2026-09-21T23:05:46.174Z"
+    },
+    {
+      "event": "$identify",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-e1bf-7400-bfd6-fc0fe6326164",
+      "timestamp": "2026-09-21T23:05:50.229Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "onFZgNSDawQ2E26K4gyjURHernyOaakQ",
+      "session_id": "01a0c637-e1bf-7400-bfd6-fc0fe6326164",
+      "timestamp": "2026-09-21T23:05:50.321Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c638-0192-7229-b55a-f6cdf6f8503d",
+      "session_id": "01a0c638-01b8-74d5-82ce-0c1e1a95eab0",
+      "timestamp": "2026-09-21T23:05:54.360Z"
+    },
+    {
+      "event": "$identify",
+      "distinct_id": "TzuEHIVRyvR3eozyGe8QHc7Rjw6SgsKU",
+      "session_id": "01a0c638-01b8-74d5-82ce-0c1e1a95eab0",
+      "timestamp": "2026-09-21T23:05:54.642Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "01a0c638-0192-7229-b55a-f6cdf6f8503d",
+      "session_id": "01a0c638-01b8-74d5-82ce-0c1e1a95eab0",
+      "timestamp": "2026-09-21T23:05:54.502Z"
+    },
+    {
+      "event": "signup_completed",
+      "distinct_id": "TzuEHIVRyvR3eozyGe8QHc7Rjw6SgsKU",
+      "session_id": "01a0c638-01b8-74d5-82ce-0c1e1a95eab0",
+      "timestamp": "2026-09-21T23:05:54.644Z"
+    },
+    {
+      "event": "$pageview",
+      "distinct_id": "TzuEHIVRyvR3eozyGe8QHc7Rjw6SgsKU",
+      "session_id": "01a0c638-01b8-74d5-82ce-0c1e1a95eab0",
+      "timestamp": "2026-09-21T23:05:54.776Z"
+    },
+    {
+      "event": "project_created",
+      "distinct_id": "TzuEHIVRyvR3eozyGe8QHc7Rjw6SgsKU",
+      "session_id": "01a0c638-01b8-74d5-82ce-0c1e1a95eab0",
+      "timestamp": "2026-09-21T23:05:57.995Z"
+    }
+  ]
+}
