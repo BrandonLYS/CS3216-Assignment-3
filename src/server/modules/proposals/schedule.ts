@@ -9,6 +9,8 @@ import { proposalsService } from "./service";
 export function scheduleProposalPass(ctx: Ctx, projectId: string) {
   after(async () => {
     if (await proposalsService.enabled(ctx))
-      await proposalsService.runPass(ctx, projectId, { trigger: "automatic" }).catch((e) => console.error("Proposal pass failed", e));
+      await proposalsService
+        .runPass(ctx, projectId, { trigger: "automatic" })
+        .catch((e) => console.error("Proposal pass failed", e));
   });
 }
