@@ -1,4 +1,4 @@
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
 import { evidenceChunks, type EvidenceChunkRow } from "./schema";
 
@@ -10,24 +10,19 @@ export const chunksRepo = {
       .where(eq(evidenceChunks.projectId, projectId))
       .orderBy(asc(evidenceChunks.evidenceId), asc(evidenceChunks.ordinal)),
 
-  /** evidenceId -> chunk presence, for the lazy backfill that indexes pre-existing Evidence. */
+  /** evidenceId -> chunk presence and the embedder recorded on it, for the lazy backfill. */
   indexState: async (
     db: DbOrTx,
     projectId: string,
-  ): Promise<Map<string, { chunked: boolean; vectorized: boolean }>> => {
+  ): Promise<Map<string, { chunked: boolean; model: string | null }>> => {
     const rows = await db
-      .select({
-        evidenceId: evidenceChunks.evidenceId,
-        embedded: sql<boolean>`${evidenceChunks.embedding} is not null`,
-      })
+      .select({ evidenceId: evidenceChunks.evidenceId, model: evidenceChunks.model })
       .from(evidenceChunks)
       .where(eq(evidenceChunks.projectId, projectId));
-    const state = new Map<string, { chunked: boolean; vectorized: boolean }>();
+    // Chunks are rewritten whole, so one Evidence carries one model value.
+    const state = new Map<string, { chunked: boolean; model: string | null }>();
     for (const r of rows) {
-      const s = state.get(r.evidenceId) ?? { chunked: false, vectorized: false };
-      s.chunked = true;
-      s.vectorized ||= r.embedded;
-      state.set(r.evidenceId, s);
+      state.set(r.evidenceId, { chunked: true, model: state.get(r.evidenceId)?.model ?? r.model });
     }
     return state;
   },
@@ -42,6 +37,7 @@ export const chunksRepo = {
     projectId: string,
     texts: string[],
     embeddings: number[][] | null,
+    model: string | null,
   ) => {
     await db.delete(evidenceChunks).where(eq(evidenceChunks.evidenceId, evidenceId));
     if (!texts.length) return [];
@@ -54,6 +50,7 @@ export const chunksRepo = {
           ordinal,
           text,
           embedding: embeddings?.[ordinal] ?? null,
+          model,
         })),
       )
       .returning();

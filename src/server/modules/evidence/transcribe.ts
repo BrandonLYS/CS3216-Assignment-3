@@ -16,7 +16,7 @@ export async function fileToTextViaModel(file: UploadedFile): Promise<string | n
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
   try {
-    const model = createOpenAI({ apiKey })(process.env.AI_VISION_MODEL || process.env.AI_MODEL || "gpt-4o-mini");
+    const model = createOpenAI({ apiKey })(process.env.AI_MODEL || "gpt-4o-mini");
     const res = await generateText({
       model,
       messages: [

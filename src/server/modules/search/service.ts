@@ -8,7 +8,7 @@ import { evidenceText } from "@/server/modules/evidence/service";
 import { labelsRepo } from "@/server/modules/labels/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { LINKABLE_ENTITY_TYPES, labelFor } from "@/shared/domain";
-import { chunkText, embedTexts, getEmbeddingModel } from "./embed";
+import { chunkText, embedTexts, embeddingModelId, getEmbeddingModel } from "./embed";
 import { invalidateIndex, searchIndex } from "./index";
 import { chunksRepo } from "./repository";
 
@@ -78,8 +78,9 @@ async function resolveLinkedScope(
 /**
  * Evidence that predates the search subscriber has no chunks; index it on the Project's first
  * search so existing Projects self-heal. Bounded per search; an unfinished Project is retried
- * on the next one. Chunks created before an embedding model was configured get their vectors
- * filled in the same pass.
+ * on the next one. Chunks recorded with a different embedder identity (a provider/model
+ * switch) are stale - embedding spaces are not comparable - and are re-embedded in the
+ * same pass.
  */
 const BACKFILL_MAX = 100;
 const globalForBackfill = globalThis as unknown as { __searchBackfilled?: Set<string> };
@@ -87,14 +88,14 @@ const backfilledProjects = (globalForBackfill.__searchBackfilled ??= new Set());
 
 async function ensureIndexed(ctx: Ctx, projectId: string) {
   if (backfilledProjects.has(projectId)) return;
-  const model = getEmbeddingModel();
+  const currentModel = embeddingModelId();
   const [rows, state] = await Promise.all([
     evidenceRepo.listByProject(ctx.db, projectId),
     chunksRepo.indexState(ctx.db, projectId),
   ]);
   const pending = rows.filter((row) => {
     const s = state.get(row.id);
-    return !s?.chunked || (model && !s.vectorized);
+    return !s?.chunked || s.model !== currentModel;
   });
   for (const row of pending.slice(0, BACKFILL_MAX)) {
     try {
@@ -114,8 +115,11 @@ export const searchService = {
    */
   syncEvidence: async (row: EvidenceRow) => {
     const chunks = chunkText(row.prunedText ?? evidenceText(row));
-    const embeddings = chunks.length ? await embedTexts(chunks) : null;
-    await db.transaction((tx) => chunksRepo.replaceForEvidence(tx, row.id, row.projectId, chunks, embeddings));
+    const embeddings = chunks.length ? await embedTexts(chunks, "RETRIEVAL_DOCUMENT") : null;
+    // Record the attempted embedder identity even on failure so a transient outage does not
+    // re-embed every search; a configured-model change still marks them stale.
+    const model = embeddingModelId();
+    await db.transaction((tx) => chunksRepo.replaceForEvidence(tx, row.id, row.projectId, chunks, embeddings, model));
     invalidateIndex(row.projectId);
   },
 
@@ -164,7 +168,7 @@ export const searchService = {
 /** Ranked chunk matches, or null when embeddings can't run and the caller should fall back. */
 async function semanticMatches(ctx: Ctx, projectId: string, query: string, scoped: Set<string> | null, limit: number) {
   if (!getEmbeddingModel()) return null;
-  const [vector] = (await embedTexts([query])) ?? [];
+  const [vector] = (await embedTexts([query], "RETRIEVAL_QUERY")) ?? [];
   if (!vector) return null;
   // Overfetch when a label filter will discard hits.
   const hits = await searchIndex(projectId, vector, scoped ? limit * 4 : limit);

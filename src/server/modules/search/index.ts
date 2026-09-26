@@ -1,6 +1,6 @@
 import { IndexFlatIP } from "faiss-node";
 import { db } from "@/server/db/client";
-import { EMBEDDING_DIMS } from "./embed";
+import { EMBEDDING_DIMS, embeddingModelId } from "./embed";
 import { chunksRepo } from "./repository";
 
 /**
@@ -32,7 +32,12 @@ async function getIndex(projectId: string): Promise<ProjectIndex> {
   const pending = building.get(projectId);
   if (pending) return pending;
   const build = (async () => {
-    const chunks = (await chunksRepo.listForProject(db, projectId)).filter((c) => c.embedding?.length);
+    // Only current-model vectors go in: a provider switch leaves stale rows (different
+    // embedding space) until the backfill rewrites them, and they must not be ranked.
+    const currentModel = embeddingModelId();
+    const chunks = (await chunksRepo.listForProject(db, projectId)).filter(
+      (c) => c.embedding?.length && c.model === currentModel,
+    );
     const index = new IndexFlatIP(EMBEDDING_DIMS);
     if (chunks.length) index.add(chunks.flatMap((c) => normalize(c.embedding!)));
     const entry = { index, chunkIds: chunks.map((c) => c.id) };

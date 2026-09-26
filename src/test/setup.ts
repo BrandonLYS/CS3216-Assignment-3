@@ -7,5 +7,7 @@ process.env.STORAGE_DIR = "./.test-storage";
 
 // Tests exercise the deterministic fallbacks: no live model calls and no local binaries.
 process.env.OPENAI_API_KEY = "";
+process.env.GEMINI_API_KEY = "";
+process.env.GOOGLE_GENERATIVE_AI_API_KEY = "";
 process.env.LITEPRUNER_API_KEY = "";
 process.env.MARKITDOWN_BIN = "/nonexistent/markitdown";

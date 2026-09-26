@@ -43,8 +43,9 @@ The Assistant tools (`search_evidence`, `set_evidence_labels`, and a `title` par
 
 - Semantic search needs `OPENAI_API_KEY` and `faiss-node`; without either, `search_evidence` degrades to label-filtered listing and says why.
 - Embedding is lazy in the event subscriber, so `npm run dev` syncs on boot but tests and one-off scripts never embed unless they opt in via `syncForEvidence`.
-- Evidence that predates the subscriber is backfilled lazily on the Project's first `search_evidence` call (bounded per call, retried until done), so existing Projects self-heal without a migration job. The same pass fills vectors into chunks written before an embedding model was configured.
+- Evidence that predates the subscriber is backfilled lazily on the Project's first `search_evidence` call (bounded per call, retried until done), so existing Projects self-heal without a migration job.
+- Each chunk records the "provider:model" identity that embedded it; the same backfill pass rewrites chunks whose recorded identity no longer matches the configured embedder, so switching provider or model re-embeds automatically instead of mixing incompatible vector spaces in one index. The FAISS build also filters to the current identity, so stale vectors are never ranked while awaiting re-embedding.
 - `MARKITDOWN_BIN` points at a project `.venv` (`pip install "markitdown[all]"`); missing binary means no compression, not no upload.
-- A file no extractor could read - scanned or image-only PDFs carry no text layer for markitdown or unpdf to find - is handed to the chat model as-is to transcribe (`AI_VISION_MODEL`, defaulting to `AI_MODEL`). Same never-fail rule: no key, unsupported format or a failed call leaves `extractedText` null.
+- A file markitdown cannot read - scanned or image-only PDFs carry no text layer to find - is transcribed by the chat model (`AI_MODEL`), which accepts PDF input; embeddings take text only, so this is the file-to-text step. Same never-fail rule: no key, unsupported format or a failed call leaves `extractedText` null.
 - `LITEPRUNER_API_KEY` is optional; `LITEPRUNER_RATIO` defaults to 0.7.
 - Label changes on Evidence record Activity Events with field `labelIds`, same as Tasks, even though Evidence has no history tab - the record exists for the AI layer to read.

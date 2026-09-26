@@ -14,7 +14,7 @@ import { labelFor, type LinkableEntityType } from "@/shared/domain";
 import { assertLabelsInProject } from "@/server/modules/labels/service";
 import { pruneText } from "@/server/modules/search/prune";
 import { fileToMarkdown } from "./markitdown";
-import { fileToTextViaModel } from "./vision";
+import { fileToTextViaModel } from "./transcribe";
 import { segmentTranscript } from "./passages";
 import { evidenceLabelsRepo, evidenceLinksRepo, evidenceRepo, passagesRepo } from "./repository";
 import type { EvidenceRow } from "./schema";

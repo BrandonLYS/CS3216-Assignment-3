@@ -22,8 +22,12 @@ export const evidenceChunks = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     ordinal: integer("ordinal").notNull(),
     text: text("text").notNull(),
-    /** text-embedding-3-small vector (1536 dims). */
+    /** Embedding vector (1536 dims regardless of provider). */
     embedding: doublePrecision("embedding").array(),
+    /** "provider:model" that produced the embedding (e.g. "gemini:gemini-embedding-001"); null
+     * means no model was configured. A change in the configured model makes these stale, which
+     * the lazy backfill detects and re-embeds. */
+    model: text("model"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

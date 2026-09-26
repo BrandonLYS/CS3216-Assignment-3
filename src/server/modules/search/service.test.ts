@@ -201,4 +201,29 @@ describe("chunking and the indexing subscriber", () => {
       false,
     );
   });
+
+  it("re-embeds chunks recorded under a different embedder identity on the next search", async () => {
+    // Chunks carry "provider:model" of the embedder that wrote them; a configured-model switch
+    // makes every vector stale, so the backfill rewrites them with the current identity
+    // (null here - tests configure no provider).
+    const switchedProject = (await makeProject(ctx, "SW")).id;
+    const ev = await evidenceRepo.insert(ctx.db, {
+      projectId: switchedProject,
+      title: "Old vectors",
+      kind: "other",
+      body: "embedded before the switch",
+    });
+    await chunksRepo.replaceForEvidence(
+      ctx.db,
+      ev.id,
+      switchedProject,
+      ["embedded before the switch"],
+      [new Array(1536).fill(0.01)],
+      "openai:text-embedding-3-small",
+    );
+
+    await searchService.search(ctx, { projectId: switchedProject });
+    const chunks = await chunksRepo.listForProject(ctx.db, switchedProject);
+    expect(chunks.some((c) => c.evidenceId === ev.id && c.model === null && c.embedding === null)).toBe(true);
+  });
 });
