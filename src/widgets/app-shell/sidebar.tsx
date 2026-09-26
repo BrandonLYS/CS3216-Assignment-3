@@ -91,10 +91,10 @@ export function Sidebar({
               key={p.id}
               href={`/projects/${p.id}`}
               className={cn(
-               "group flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body-sm transition-[transform,background-color,color] duration-200",
-               active
-                 ? "bg-surface-2 text-ink shadow-[inset_2px_0_0_var(--color-primary)]"
-                 : "text-ink-subtle hover:translate-x-0.5 hover:bg-surface-1 hover:text-ink",
+                "group flex h-9 items-center gap-2.5 rounded-md px-2.5 text-body-sm transition-[transform,background-color,color] duration-200",
+                active
+                  ? "bg-surface-2 text-ink shadow-[inset_2px_0_0_var(--color-primary)]"
+                  : "text-ink-subtle hover:translate-x-0.5 hover:bg-surface-1 hover:text-ink",
               )}
             >
               <HealthDot health={p.health} />

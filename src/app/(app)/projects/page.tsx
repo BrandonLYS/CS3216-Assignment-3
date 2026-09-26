@@ -60,7 +60,10 @@ export default async function ProjectsPage() {
                         <span>{pct}%</span>
                       </div>
                       <div className="h-1 overflow-hidden rounded-full bg-surface-3">
-                        <div className="h-full animate-progress-in rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                        <div
+                          className="h-full animate-progress-in rounded-full bg-primary"
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                       <div className="flex items-center justify-between pt-1">
                         <ProjectStatusBadge status={p.status} />
