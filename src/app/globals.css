@@ -44,7 +44,7 @@
   --color-black: #000000;
   --color-transparent: transparent;
 
-  --font-sans: var(--font-inter), "SF Pro Display", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-playpen-sans), "SF Pro Display", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
 
   --radius-xs: 4px;
