@@ -128,15 +128,11 @@ export function citations(answer: string, ids: EntityIds): CitationVerdict[] {
 
 /** The sentence the prompt requires after an empty `search_decisions`, and looser variants of it. */
 const ABSTAIN_STRICT = "there is no recorded decision about that";
-const ABSTAIN_SOFT = [
-  "no recorded decision",
-  "no decision",
-  "nothing recorded",
-  "no source",
-  "does not record",
-  "not recorded",
-  "no evidence",
-];
+/**
+ * Paraphrases that say no Decision exists. Phrases about evidence or sources ("no evidence it was
+ * reconsidered") are left out: they turn up inside answers that assert a reason.
+ */
+const ABSTAIN_SOFT = ["no recorded decision", "no decision", "nothing recorded", "does not record a decision"];
 
 export function gradeWhy(
   expect: WhyExpectation,
@@ -164,7 +160,15 @@ export function gradeWhy(
   }
 
   if (expect.abstain) {
-    checks.push({ name: "abstained", pass: abstainSoft, detail: abstainSoft ? undefined : "asserted an answer" });
+    // Citing a Decision is giving a reason, whatever phrase the answer also contains.
+    const decisionIds = new Set([...ids.decisions.values()].map((d) => d.id));
+    const citedDecision = cited.some((c) => c.targetId && decisionIds.has(c.targetId));
+    const abstained = abstainSoft && !citedDecision;
+    checks.push({
+      name: "abstained",
+      pass: abstained,
+      detail: abstained ? undefined : citedDecision ? "cited a Decision as the reason" : "asserted an answer",
+    });
   } else {
     const wantDecisions = (expect.citeDecisions ?? []).map((key) => ids.decisions.get(key)!);
     if (wantDecisions.length) {
