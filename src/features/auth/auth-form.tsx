@@ -7,17 +7,43 @@ import { authenticationCompleted } from "@/shared/analytics/browser";
 import { signIn, signUp } from "@/shared/lib/auth-client";
 import { startTour } from "@/shared/lib/tour";
 import { Button, Field, Input } from "@/shared/ui";
+import { GoogleIcon } from "./google-icon";
+import { safeReturnPath } from "./return-path";
 
-/** Only same-origin absolute paths; rejects `//host`, `javascript:` and anything else attacker-controlled. */
-function safeReturnPath(next: string | null) {
-  return next && /^\/(?!\/)/.test(next) ? next : "/dashboard";
-}
+/** Better Auth sends a failed Google sign-in back with `?error=<code>`; these are the ones a User can act on. */
+const OAUTH_ERRORS: Record<string, string> = {
+  account_not_linked: "An account with this email already exists. Sign in with your password instead.",
+  unable_to_link_account: "An account with this email already exists. Sign in with your password instead.",
+  access_denied: "Google sign-in was cancelled.",
+};
 
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+export function AuthForm({ mode, google }: { mode: "login" | "signup"; google: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  const oauthError = params.get("error");
+  const [error, setError] = useState<string | null>(
+    oauthError ? (OAUTH_ERRORS[oauthError] ?? "Google sign-in failed. Try again.") : null,
+  );
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  async function onGoogle() {
+    setError(null);
+    setGoogleLoading(true);
+    const next = params.get("next");
+    const complete = new URLSearchParams(next ? { next } : {});
+    const res = await signIn.social({
+      provider: "google",
+      callbackURL: `/auth/complete?${complete}`,
+      newUserCallbackURL: `/auth/complete?${new URLSearchParams({ ...Object.fromEntries(complete), new: "1" })}`,
+      errorCallbackURL: `/${mode}${next ? `?${new URLSearchParams({ next })}` : ""}`,
+    });
+    // Success navigates away to Google, so only a failure to start comes back here.
+    if (res.error) {
+      setGoogleLoading(false);
+      setError(res.error.message ?? "Google sign-in failed. Try again.");
+    }
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -48,6 +74,25 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           {mode === "login" ? "Welcome back." : "Start managing projects with a memory."}
         </p>
       </div>
+      {google && (
+        <>
+          <Button
+            type="button"
+            loading={googleLoading}
+            disabled={loading}
+            onClick={onGoogle}
+            className="justify-center"
+          >
+            {!googleLoading && <GoogleIcon className="size-3.5" />}
+            Continue with Google
+          </Button>
+          <div className="flex items-center gap-3 text-caption text-ink-subtle">
+            <span className="h-px flex-1 bg-hairline" />
+            or
+            <span className="h-px flex-1 bg-hairline" />
+          </div>
+        </>
+      )}
       {mode === "signup" && (
         <Field label="Name">
           <Input name="name" required autoComplete="name" placeholder="Ada Lovelace" />
@@ -66,7 +111,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         />
       </Field>
       {error && <p className="text-caption text-tag-red">{error}</p>}
-      <Button type="submit" variant="primary" loading={loading} className="mt-1 justify-center">
+      <Button
+        type="submit"
+        variant="primary"
+        loading={loading}
+        disabled={googleLoading}
+        className="mt-1 justify-center"
+      >
         {mode === "login" ? "Sign in" : "Create account"}
       </Button>
       <p className="text-center text-caption text-ink-subtle">

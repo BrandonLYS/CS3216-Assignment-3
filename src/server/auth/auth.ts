@@ -5,9 +5,29 @@ import { db } from "@/server/db/client";
 import { seedSampleProject } from "@/server/modules/onboarding/sample-project";
 import * as authSchema from "./schema";
 
+/**
+ * Google sign-in is on only when both credentials are set, so local development and CI boot
+ * without a Google Cloud project. The login and signup pages read this to decide whether to
+ * show the button.
+ */
+export const googleAuthEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
   emailAndPassword: { enabled: true },
+  // Google's first sign-in creates the User, which fires the sample Project hook below like
+  // an email signup does. A Google login whose email already has a password account is refused
+  // rather than linked: those emails are never verified, so linking would let whoever registered
+  // the address first keep a way into the owner's account.
+  socialProviders: googleAuthEnabled
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID!,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          prompt: "select_account",
+        },
+      }
+    : undefined,
   databaseHooks: {
     user: {
       create: {
