@@ -7,7 +7,7 @@ The deployed release SHA was not available and is not assumed to equal the local
 They show exercised workflows, Proposal decisions, and actionable AI failures.
 They do not establish clean production adoption, retention, model accuracy, or complete application reliability.
 The PostHog project contains both deployed and localhost traffic, and its internal/test exclusion cohort is empty.
-The application verification also found existing failures, so this is not an all-green certification.
+The verification also recorded failures (one browser scenario, and two tests in an uncommitted local test file), so this is not an all-green certification.
 
 ## Evidence and method
 
@@ -49,7 +49,7 @@ It does not prove market preference or sustained engagement.
 The question event fires only after authentication, model configuration, message validation, and the daily-cap check; unsupported, invalid, or capped submissions do not all count as questions.
 
 The 47.4% Proposal figure is worth submitting even though it is not a flattering headline.
-It shows that users exercised both acceptance and rejection, and motivates inspecting rejected suggestions and the edits needed before acceptance.
+It shows that users exercised both acceptance and rejection, and motivates inspecting rejected Proposals and the edits needed before acceptance.
 Six of the nine historical acceptances carry `edited_before_accept: true`, but earlier instrumentation and the small mixed sample make this a recorded flag, not a trustworthy estimate of AI correctness or editing burden.
 Pending Proposals are excluded from the denominator.
 Do not divide 9 acceptances by the 46 generated Proposals to claim cohort conversion: acceptance logging predates generation logging, and the events are not a matched creation cohort.
@@ -74,7 +74,7 @@ Neither is a task-completion benchmark for external users.
 A Render is not required to accept a Proposal, so zero at the last step does not mean nobody received value: nine acceptance events exist outside this prescribed sequence.
 There is also no same-Project constraint, and Evidence, transcript, and Render events currently omit `project_id`.
 A person's Project creation can therefore be followed by activity in a different Project.
-The 50% figure is valid for this saved query, but not evidence that half of Projects activated or half of uploads succeeded.
+The 50% figure is valid for this saved query, but not evidence that half of Projects activated or half of Evidence items succeeded.
 
 Replace the general activation interpretation with separate paths: signup to first meaningful action; Evidence to generated Proposal to Decision; and Render requested to Render completed.
 Define the denominator and conversion window for each path, keep Project identity consistent, and treat no-observation days as missing observations rather than a 0% acceptance judgment.
@@ -126,9 +126,11 @@ Investigate provider/configuration failures first, but the error class alone doe
 Do not present the fast failed calls as good answer latency or claim the model-name groups are controlled model comparisons.
 A User-facing turn may contain several model calls plus tools, and Reflection is background work.
 
-There is also a source-level attribution risk: the chat route resolves a User's selected model but initializes the generation recorder with environment-based `modelInfo()`.
-Successful completion callbacks provide the actual model; failures that are recorded before that callback can inherit the environment fallback and misattribute a personal model's error.
-This finding needs a controlled failing personal-provider request before claiming it explains the historical errors.
+Model attribution is unreliable at the source.
+Reflection (`reflection/service.ts`) and Proposal extraction (`proposals/extract.ts`) resolve the User's model with `getModelForUser` but always record the environment `modelInfo()`, on success and failure.
+The chat route records the actual model on success, but a failed call keeps the environment model and provider.
+The data fits this: all 15 failed Assistant calls are labelled `gpt-4o-mini`, the environment default, while successful ones carry resolved ids.
+A controlled failing personal-provider request would confirm it end to end.
 No prompt was changed and no paid model call was made for this verification.
 
 ## Submission conclusion and priorities
@@ -140,7 +142,7 @@ Do not use the general funnel as activation evidence, infer retention from a few
 1. Separate production and test traffic, populate the exclusion cohort, and include environment and release metadata on server events.
 2. Put Project identity and capture coverage at the appropriate successful service transitions, then rebuild the value and Render funnels separately.
 3. Verify explicit exception capture, rejected requests, personal-model failure attribution, tool approvals, and citation clicks with controlled end-to-end checks.
-4. Resolve the failing session-revocation regressions and intermittent Conversation error recorded in [verification results](verification-results.md).
+4. Resolve the session-revocation failures (in an uncommitted local test file) and the intermittent Conversation error recorded in [verification results](verification-results.md).
 5. Repeat the audit over a defined external-user cohort and completed observation period before making product-performance claims.
 
 ## Supplied dashboard screenshots

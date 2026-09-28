@@ -3,41 +3,52 @@
 ## Findings
 
 PostHog project `618308` receives events from both the deployed app and local development.
-The window is 29 August to 28 September 2026; the [audit](posthog-2026-09-28/README.md) holds the queries, raw exports and method, and was re-checked against fresh dashboard screenshots on 29 September with no change.
-Delivery works: a fresh deployed pageview reached PostHog, and the real browser and server SDKs reconciled event-for-event with the UI in a local run.
+The window is 29 August to 28 September 2026; the [audit](posthog-2026-09-28/README.md) holds the queries, raw exports and method.
+Delivery works: a fresh deployed pageview reached PostHog, and in a local run the real browser and server SDKs reconciled event-for-event with the UI (6 of 7 browser scenarios passed; the seventh hit an unrelated Conversation error).
 The sample is small and mixed, so these numbers describe exercised workflows, not adoption.
 
-| Measure                       | Result                        | Read it as                                                                          |
-| ----------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
-| Assistant questions           | 54 from 6 identities          | Peak 3 active in a day; a handful of testers, not a user base                       |
-| Project / workspace questions | 42 / 12                       | Project-scoped Assistant is where use concentrates                                  |
-| Proposal decisions            | 9 accepted, 10 rejected       | 47.4% of decided Proposals; 38 of 46 came from the heuristic, not a model           |
-| Model calls                   | 47, of which 27 errored       | All `AI_APICallError` (15 Assistant, 12 Reflection) - the clearest signal to act on |
-| Recorded model cost           | US$0.024 over 20 priced calls | Errors carry no tokens; not a billing figure                                        |
-| Browser exceptions            | 7, all unhandled              | Exception capture is not explicitly enabled, so this is a floor                     |
+| Measure                       | Result                        | Read it as                                                                              |
+| ----------------------------- | ----------------------------- | --------------------------------------------------------------------------------------- |
+| Assistant questions           | 54 from 6 identities          | Peak 3 active in a day; a handful of testers, not a user base                           |
+| Project / workspace questions | 42 / 12                       | 18 of the 42 came from one identity on 26 September                                     |
+| Proposal decisions            | 9 accepted, 10 rejected       | 47.4% of decided Proposals, from 21 September; not split by extractor                   |
+| Proposals generated           | 46 in 29 passes               | From 23 September; 38 heuristic, 8 model; a different set from the decided ones         |
+| Model calls                   | 47, of which 27 errored       | All `AI_APICallError` (15 Assistant, 12 Reflection)                                     |
+| Recorded model cost           | US$0.024 over 20 priced calls | The 27 errors here carry no tokens; not a billing figure                                |
+| Browser exceptions            | 7, all unhandled              | Historical; under the current config a fresh browser captures no exceptions (see below) |
 
 ### Useful
 
-- The 9/19 acceptance rate shows Users both accept and reject suggestions, and gives a baseline for the extraction work in M8 and M11.
-- The 27 failed model calls are the most actionable result; the error class alone does not say whether the cause is a key, model name or provider outage.
-- The Project/workspace split tells us which Assistant surface to test and polish first.
+- The failed model calls are the most actionable result: 27 of 47 calls, and likely most recent questions went unanswered (below).
+  The error class alone does not say whether the cause is a key, model name or provider outage.
+- Users exercised both outcomes of Proposal review, so the accept and reject paths are used, not just built.
+- The event and property design is sound: every generation has a trace id, no prompt or answer content reached PostHog, and current outcome events carry the Proposal and extractor.
 
 ### Not trustworthy yet
 
 - **Mixed environments.** 281 of 594 pageviews came from `localhost`, the internal/test cohort behind every "filter test accounts" toggle is empty, and server events carry no environment or release tag.
+- **Early autocapture.** Until 22 September the browser SDK ran with default autocapture, so the window holds 361 `$autocapture` events, 56 dead clicks and 1 rage click, which may include on-screen text such as Project or Task titles.
+  The Data safety section below describes the current configuration only.
 - **The "Core product funnel" is wrong.** It requires a Render before a Proposal is accepted, which the product never requires, so it reads 14 to 7 to 0 to 0 while 9 acceptances happened outside it.
   Evidence, transcript and Render events also omit `project_id`, so no same-Project funnel can be built yet.
-- **Coverage gaps.** Events are captured in server actions, so writes made by the Assistant, MCP or sample-Project seeding are not counted; `assistant_tool_approval` and `assistant_citation_opened` have no rows yet.
-- **Question versus answer.** Completion events started five days after question events (10 versus 54), so their ratio is not an answer-success rate.
-- **Model attribution.** The chat route labels failed calls with the environment default model, so a User's personal-model failure can be recorded under the wrong name.
-- The "Application exceptions" description promises a handled/unhandled split that the query does not do.
+- **Coverage gaps.** Project, Evidence and Render events are captured in server actions, so Projects created by the Assistant or MCP `create_project` tool, and the sample Project seeded at signup, are not counted.
+  Proposal and Assistant events are captured in services and the chat route, so they are counted whichever caller triggers them.
+  `assistant_tool_approval` and `assistant_citation_opened` have no rows yet.
+- **Question versus answer.** `assistant_turn_completed` first appears on 25 September.
+  From then on there are about 26 questions but only 10 completed turns, and 10 plus the 15 failed Assistant calls is about 26, so most of those questions likely got no answer.
+  This is arithmetic over daily totals, not a per-request match.
+- **Model attribution.** Reflection and Proposal extraction always record the environment default model and provider, even when a User's personal model ran; the chat route does the same for failed calls.
+  All 15 failed Assistant calls are labelled `gpt-4o-mini`, the default, so per-model error and cost figures are unreliable.
+- **Exception coverage.** The browser SDK disables remote config and does not set `capture_exceptions`, so a fresh browser captures no exceptions; the 7 recorded ones came from older settings.
+  The "Application exceptions" description also promises a handled/unhandled split that the query does not do.
 
 ### Next
 
 1. Separate production from development (own project or an `environment` property on every event) and populate the test cohort.
-2. Add `project_id` to Evidence, transcript and Render events, and rebuild the funnel as Evidence to Proposal to Decision.
-3. Fix the model-call errors and record the resolved model on failures.
-4. Re-measure over a defined external-user period before making product claims.
+2. Find and fix the cause of the failed model calls, then record the resolved model and provider on every span.
+3. Set `capture_exceptions` explicitly and verify it in a fresh browser.
+4. Add `project_id` to Evidence, transcript and Render events, and rebuild the funnel as Evidence to Proposal to Decision.
+5. Re-measure over a defined external-user period, with outcomes split by extractor, before making product claims.
 
 ![AI question volume and daily active AI users](posthog-2026-09-28/screenshots/01-ai-volume-and-users.png)
 ![AI questions by workflow and application exceptions](posthog-2026-09-28/screenshots/02-workflows-and-exceptions.png)
@@ -57,7 +68,7 @@ PostHog (client `posthog-js`, server `posthog-node`).
 - Signup is captured once after identification; returning and restored sessions do not create signup events.
 - Every server event carries `browser_context`, which is `browser` when the originating browser session correlates and `none` when there is none to correlate.
 - The Evidence to Proposal to Decision funnel follows the [issue #74 contract](../artifacts/74-proposal-funnel/README.md): the transitions emit their own events, after the write.
-- Automatic capture and replay are disabled; credential routes are suppressed and URL query/hash content is removed.
+- Automatic capture and replay are disabled (since 22 September); credential routes are suppressed and URL query/hash content is removed.
 
 ## Required environment variables
 

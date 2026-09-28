@@ -1,7 +1,8 @@
 # PostHog metric interpretation
 
 Research date: 2026-09-28.
-This note defines how to interpret the supplied dashboard screenshots; it does not certify their saved queries, production filters, identity mapping, or event delivery.
+This note defines how to interpret the supplied dashboard screenshots.
+It was written before the [audit](posthog-2026-09-28/README.md), which has since exported the saved queries, counts and filters; where this note says the screenshots cannot establish something, the audit settles it.
 The implementation inventory is in [M19](m19-analytics.md).
 
 ## Questions, users, and incomplete periods
@@ -19,7 +20,7 @@ The screenshots alone do not establish the dashboard timezone, exact time bounda
 
 PostHog's person funnel counts unique users completing a sequence, not the number of times each event fired, and its documented default conversion window is 14 days. [PostHog paths versus funnels](https://posthog.com/docs/product-analytics/paths#why-dont-my-path-numbers-match-my-funnel-numbers)
 The screenshot's 14 persons at `project_created` and 7 persons at `evidence_created` therefore mean 7 of the 14 counted identities reached the second step under that query's settings.
-They do not establish that 14 Projects were created or that half of all Evidence uploads succeeded.
+They do not establish that 14 Projects were created or that half of all Evidence items succeeded.
 “Persons” here is PostHog identity terminology, not PrismPM's Person domain entity.
 
 Funnel steps default to sequential order, and PostHog advises avoiding optional steps that can skew conversion. [PostHog funnel definitions](https://posthog.com/docs/product-analytics/funnels)
@@ -38,7 +39,7 @@ For event series A = `proposal_accepted` and B = `proposal_rejected`, define the
 Across the full period, calculate `sum(A) / (sum(A) + sum(B))`, not the unweighted average of daily percentages.
 Days with no decisions have an undefined rate and should be reported as no observations, not evidence of 0% acceptance.
 The visible outcome bars suggest 9 accepted and 10 rejected, giving approximately 47.4%, conditional on the screenshot containing all relevant bars and both series counting individual decisions.
-This is a visual reading, not an exported query result.
+The audit confirms 9 and 10 from exported query results.
 The denominator excludes pending Proposals and does not measure correctness, satisfaction, or the fraction of all generated Proposals accepted.
 
 ## AI cost, latency, and reliability
@@ -46,7 +47,7 @@ The denominator excludes pending Proposals and does not measure correctness, sat
 PostHog defines `$ai_generation` as one model call, `$ai_latency` in seconds, `$ai_is_error` as the error flag, and `$ai_trace_id` as the grouping identifier for related AI events. [PostHog manual capture reference](https://github.com/PostHog/skills/blob/main/skills/posthog/all/skills/llm-analytics-setup/references/manual-capture.md)
 That reference also explains automatic cost calculation from model and token counts, with explicit costs or custom prices available when needed.
 The local [AI telemetry helper](../../src/shared/analytics/ai.ts) converts milliseconds to seconds and sends model, tokens, error class, and trace metadata without prompt or answer text.
-Its existence does not establish that these fields arrived in the production project or that model pricing resolved correctly.
+The audit found all 47 generations arrived with trace ids, but only 20 have token counts and cost, and the recorded model name is unreliable (see M19).
 
 Recommended analysis: inspect generation volume, token totals, cost coverage, median and p95 latency, and generation error fraction by model and span.
 Compare those with `assistant_turn_completed` for user-facing turn duration, since one question can involve multiple model calls.

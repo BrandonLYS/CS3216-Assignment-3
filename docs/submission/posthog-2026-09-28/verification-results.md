@@ -11,7 +11,7 @@ This task changes submission documentation and adds evidence; it does not repair
 | Check                                       | Result                                | Meaning                                                                                                                                                     |
 | ------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Analytics, Proposal, and Decision tests     | **120 passed, 10 files**              | Covers browser identity/reset/transport, redaction, server isolation, LLM callbacks, committed Proposal outcomes, duplicate transitions, and edit detection |
-| Full Vitest suite                           | **574 passed, 2 failed, 58 files**    | Both failures are the existing session-revocation regressions described below                                                                               |
+| Full Vitest suite                           | **574 passed, 2 failed, 58 files**    | Both failures are in `src/server/auth/session.test.ts`, which is not committed; see below                                                                   |
 | Analytics real-SDK browser suite            | **6 passed, 1 failed**                | The failing scenario reaches a Project layout error after capture; it is not an all-green browser result                                                    |
 | Focused identity scenario, repeated 3 times | **3 passed**                          | Confirms successful browser/server identity linkage can work; server logs still contain Conversation errors, so the initial failure is not dismissed        |
 | Analytics completely unconfigured           | **1 passed, 6 intentionally skipped** | Signup, Project creation, and sign-out work without an analytics key                                                                                        |
@@ -123,6 +123,7 @@ git diff --check
 
 Read-only PostHog aggregate queries and their exact UTC cutoff are in [aggregate-queries.json](aggregate-queries.json).
 The internal/test cohort was empty when queried, so those all-project queries reconcile with the saved insights despite the insights having test-account filtering enabled.
-Use explicit raw JSON presence checks for promoted LLM properties: an initial `properties.$ai_trace_id IS NOT NULL` aggregate returned zero despite every raw event carrying a trace and a separate null check also returning zero.
+Use `JSONExtractString` presence checks for promoted LLM properties.
+An initial `properties.$ai_trace_id IS NOT NULL` aggregate returned zero, but so did the matching `IS NULL` check, while every raw event carried a trace.
 Cross-checking `JSONExtractString(properties, '$ai_trace_id')` established 47/47 trace coverage, and the canonical exported coverage query uses that form.
 Do not interpret that first query artifact as missing telemetry.
