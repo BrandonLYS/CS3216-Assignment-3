@@ -21,8 +21,14 @@ import type { ProposalRow } from "./schema";
 import { attachPassages, traceProposals, type TraceRefs } from "./trace";
 
 export type PassOutcome =
-  | { skipped: "not_configured" | "nothing_new" | "failed" }
-  | { extractor: ProposalExtractor; sourcesPassed: number; proposed: number; discarded: number };
+  | { skipped: "not_configured" | "nothing_new" | "failed"; proposalId?: string }
+  | {
+      extractor: ProposalExtractor;
+      sourcesPassed: number;
+      proposed: number;
+      discarded: number;
+      proposalId?: string;
+    };
 
 const hashOf = (text: string) => createHash("sha1").update(text).digest("hex");
 
@@ -49,7 +55,7 @@ export type AcceptOverrides = Partial<
  */
 export const proposalsService = {
   /** True when a pass can run at all (a model is configured or the heuristic is selected). */
-  enabled: () => pickExtractor() !== null,
+  enabled: async (ctx: Ctx) => (await pickExtractor(ctx)) !== null,
 
   /** `trigger` is required: an unnamed trigger is the mis-attribution this funnel exists to end. */
   runPass: async (
@@ -58,7 +64,7 @@ export const proposalsService = {
     opts: { trigger: PassTrigger; extract?: Extract },
   ): Promise<PassOutcome> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
-    const picked = pickExtractor();
+    const picked = await pickExtractor(ctx);
     const extract = opts.extract ?? picked?.extract;
     const extractorName: ProposalExtractor = opts.extract ? "heuristic" : (picked?.name ?? "heuristic");
     if (!extract) return { skipped: "not_configured" };
@@ -100,7 +106,11 @@ export const proposalsService = {
         textHash,
       });
     }
-    if (!candidates.length) return { skipped: "nothing_new" };
+    if (!candidates.length) {
+      if (opts.trigger !== "manual") return { skipped: "nothing_new" };
+      const [pending] = await proposalsRepo.listByProject(ctx.db, projectId, "pending");
+      return { skipped: "nothing_new", proposalId: pending?.id };
+    }
 
     const [people, milestones, tasks, conversation] = await Promise.all([
       peopleRepo.listByProject(ctx.db, projectId),
@@ -173,7 +183,7 @@ export const proposalsService = {
         comment: candidates.filter((c) => c.kind === "comment").length,
       },
     });
-    return outcome;
+    return inserted[0] ? { ...outcome, proposalId: inserted[0].id } : outcome;
   },
 
   listPending: async (ctx: Ctx, projectId: string) => {

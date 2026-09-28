@@ -16,7 +16,7 @@ import {
   MessagesSquare,
   Plus,
   Settings,
-  Sparkles,
+  MessageSquare,
   Users,
   GitBranch,
 } from "lucide-react";
@@ -221,7 +221,7 @@ function CommandPaletteBody({
               {actionHits.includes("assistant") && (
                 <Item
                   value="action:assistant"
-                  icon={Sparkles}
+                  icon={MessageSquare}
                   onSelect={() => {
                     onClose();
                     onToggleAssistant();

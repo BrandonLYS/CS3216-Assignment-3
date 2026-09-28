@@ -1,4 +1,6 @@
 import { ctxForCurrentUser } from "@/server/core/action";
+import { requireUser } from "@/server/auth/session";
+import { aiConfigService } from "@/server/modules/ai-config/service";
 import { apiTokensService } from "@/server/modules/api-tokens/service";
 import { assistantService } from "@/server/modules/assistant/service";
 import { memoryService } from "@/server/modules/memory/service";
@@ -6,17 +8,19 @@ import { WORKSPACE_TOOL_GROUPS } from "@/shared/lib/assistant-tools";
 import { PageHeader, SectionTitle } from "@/shared/ui";
 import { MemoryEditor } from "@/features/memory/memory-editor";
 import { ApiTokens } from "@/features/settings/api-tokens";
+import { AiProvider } from "@/features/settings/ai-provider";
 import { AssistantPermissions } from "@/features/settings/assistant-permissions";
 import { ProductTourSetting } from "@/features/settings/product-tour";
 
 export const metadata = { title: "Settings" };
 
 export default async function UserSettingsPage() {
-  const ctx = await ctxForCurrentUser();
-  const [versions, tokens, permissions] = await Promise.all([
+  const [ctx, user] = await Promise.all([ctxForCurrentUser(), requireUser()]);
+  const [versions, tokens, permissions, aiConfigs] = await Promise.all([
     memoryService.versions(ctx, null),
     apiTokensService.list(ctx),
     assistantService.permissions(ctx, null),
+    aiConfigService.list(ctx),
   ]);
   const endpoint = `${process.env.BETTER_AUTH_URL ?? "http://localhost:3000"}/api/mcp`;
   return (
@@ -26,6 +30,14 @@ export default async function UserSettingsPage() {
         <div className="mx-auto flex max-w-3xl flex-col gap-10 p-6">
           <section className="flex flex-col gap-4">
             <SectionTitle>Assistant</SectionTitle>
+            <div>
+              <h3 className="text-body-sm font-medium text-ink">Provider</h3>
+              <p className="mt-1 text-caption text-ink-subtle">
+                Save provider credentials for Assistant conversations, Reflection, and Proposal extraction. Keys are
+                encrypted and are never sent back to your browser.
+              </p>
+            </div>
+            <AiProvider configs={aiConfigs} />
             <div>
               <h3 className="text-body-sm font-medium text-ink">Profile</h3>
               <p className="mt-1 text-caption text-ink-subtle">
@@ -51,7 +63,7 @@ export default async function UserSettingsPage() {
 
           <section className="flex flex-col gap-4">
             <SectionTitle>Guided tour</SectionTitle>
-            <ProductTourSetting />
+            <ProductTourSetting userEmail={user.email} />
           </section>
 
           <section className="flex flex-col gap-4">

@@ -124,22 +124,43 @@
     {
       "idx": 17,
       "version": "7",
-      "when": 1790240798331,
-      "tag": "0017_serious_randall_flagg",
+      "when": 1790342940000,
+      "tag": "0017_create_user_ai_configs",
       "breakpoints": true
     },
     {
       "idx": 18,
       "version": "7",
-      "when": 1790240834980,
-      "tag": "0018_outgoing_venom",
+      "when": 1790342940001,
+      "tag": "0018_add_google_ai_provider",
       "breakpoints": true
     },
     {
       "idx": 19,
       "version": "7",
-      "when": 1790394498098,
-      "tag": "0019_ambiguous_kate_bishop",
+      "when": 1790342940002,
+      "tag": "0019_add_ai_config_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790394498100,
+      "tag": "0020_serious_randall_flagg",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790394498101,
+      "tag": "0021_outgoing_venom",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790394498102,
+      "tag": "0022_ambiguous_kate_bishop",
       "breakpoints": true
     }
   ]

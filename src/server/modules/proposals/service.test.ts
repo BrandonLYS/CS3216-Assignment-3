@@ -65,6 +65,8 @@ describe("proposalsService.runPass", () => {
     expect(await graphCounts()).toEqual(before);
 
     const pending = await proposalsService.listPending(ctx, projectId);
+    expect("proposalId" in out).toBe(true);
+    if ("proposalId" in out) expect(pending.map((p) => p.id)).toContain(out.proposalId);
     expect(pending.map((p) => p.title).sort()).toEqual([
       "Recruit through the alumni list instead of a public call",
       "Switch from weekly surveys to fortnightly interviews",
@@ -73,9 +75,8 @@ describe("proposalsService.runPass", () => {
     expect(fromMinutes.sources).toEqual([{ kind: "evidence", entityId: minutes.id, excerpt: SENTENCE }]);
     expect(pending.find((p) => p.sources[0]!.entityId === commentId)?.alternatives).toBe("a public call");
 
-    expect(await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract, trigger: "manual" })).toEqual({
-      skipped: "nothing_new",
-    });
+    const retry = await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract, trigger: "manual" });
+    expect(retry).toMatchObject({ skipped: "nothing_new", proposalId: pending[0]!.id });
     expect(await proposalsService.listPending(ctx, projectId)).toHaveLength(2);
   });
 
@@ -143,7 +144,7 @@ describe("proposalsService.runPass", () => {
   it("falls back to the heuristic without a model and honours PROPOSALS_EXTRACTOR", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     vi.stubEnv("PROPOSALS_EXTRACTOR", "");
-    expect(proposalsService.enabled()).toBe(true);
+    expect(await proposalsService.enabled(ctx)).toBe(true);
     const p = await makeProject(ctx, "ENV");
     await evidenceService.create(ctx, {
       projectId: p.id,
@@ -156,7 +157,7 @@ describe("proposalsService.runPass", () => {
       proposed: 1,
     });
     vi.stubEnv("PROPOSALS_EXTRACTOR", "model");
-    expect(proposalsService.enabled()).toBe(false);
+    expect(await proposalsService.enabled(ctx)).toBe(false);
     vi.unstubAllEnvs();
   });
 });

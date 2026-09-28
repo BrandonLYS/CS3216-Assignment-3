@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { FileSearch } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { runProposalPassAction } from "@/server/modules/proposals/actions";
@@ -38,10 +38,14 @@ export function ProposeButton({ projectId }: { projectId: string }) {
               ? SKIPPED_NOTE[out.skipped]
               : `${out.proposed} proposed${out.discarded ? `, ${out.discarded} discarded` : ""} from ${out.sourcesPassed} source${out.sourcesPassed === 1 ? "" : "s"}`,
           );
-          router.refresh();
+          if ("proposalId" in out && out.proposalId) {
+            router.push(`/projects/${projectId}/decisions?proposal=${out.proposalId}`);
+          } else {
+            router.refresh();
+          }
         }}
       >
-        <Sparkles className="size-3.5" /> Propose from evidence
+        <FileSearch className="size-3.5" /> Propose from evidence
       </Button>
     </span>
   );
