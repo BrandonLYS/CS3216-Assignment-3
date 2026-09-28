@@ -57,4 +57,4 @@ npx tsx scripts/eval.mts --out <dir> --suite extraction --skip-index --temperatu
   --models openai/gpt-4o-mini,google/gemini-2.5-flash
 ```
 
-Drop `--temperature 0` for the provider-default arm; use `--suite why` for the answer arm.
+Pass `--temperature default` for the provider-default arm (without the flag, extraction now runs at the shipped `EXTRACT_TEMPERATURE` of 0); use `--suite why` for the answer arm.

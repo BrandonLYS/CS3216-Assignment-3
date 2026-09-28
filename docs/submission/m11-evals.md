@@ -111,4 +111,4 @@ npx tsx scripts/eval.mts --out artifacts/<run> --suite both --models google/gemi
 npx tsx evals/report.ts   # rebuilds artifacts/eval-tables-2026-09-28.md
 ```
 
-Flags: `--suite extraction|why|pass|both`, `--models a,b`, `--only case-id,...`, `--temperature n`, `--max-steps n`, `--extractor heuristic`, `--skip-index`.
+Flags: `--suite extraction|why|pass|both`, `--models a,b`, `--only case-id,...`, `--temperature n|default`, `--max-steps n`, `--extractor heuristic`, `--skip-index`.

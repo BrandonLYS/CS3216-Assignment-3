@@ -14,8 +14,10 @@
  *   DATABASE_URL=... OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
  *   npx tsx scripts/eval.mts --out artifacts/<dir> --models openai/gpt-4o-mini,google/gemini-2.5-flash
  *
- * Flags: --suite extraction|why|both  --models a,b  --out dir  --max-steps n  --temperature n
- *        --skip-index  --label text  --results-name file.json
+ * Flags: --suite extraction|why|both  --models a,b  --out dir  --max-steps n  --temperature n|default
+ *        --skip-index  --label text  --results-name prefix
+ * Without --temperature, extraction samples at production's EXTRACT_TEMPERATURE and the answer
+ * loop at the provider default, as they ship; `--temperature default` leaves both unset.
  */
 import "dotenv/config";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -33,7 +35,12 @@ import { evidenceRepo } from "@/server/modules/evidence/repository";
 import { evidenceText } from "@/server/modules/evidence/service";
 import { proposalsService } from "@/server/modules/proposals/service";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
-import { heuristicExtract, modelExtract, type ExtractSource } from "@/server/modules/proposals/extract";
+import {
+  EXTRACT_TEMPERATURE,
+  heuristicExtract,
+  modelExtract,
+  type ExtractSource,
+} from "@/server/modules/proposals/extract";
 import { risksRepo } from "@/server/modules/risks/repository";
 import { embeddingModelId } from "@/server/modules/search/embed";
 import { searchService } from "@/server/modules/search/service";
@@ -63,7 +70,12 @@ const MODELS = arg("models", "openai/gpt-4o-mini")!
   .split(",")
   .map((m) => m.trim());
 const MAX_STEPS = Number(arg("max-steps", String(assistantConfig().maxSteps)));
-const TEMPERATURE = arg("temperature") === undefined ? undefined : Number(arg("temperature"));
+/** undefined: as production ships; null: provider default for both suites; a number: that, for both. */
+const TEMPERATURE: number | null | undefined =
+  arg("temperature") === undefined ? undefined : arg("temperature") === "default" ? null : Number(arg("temperature"));
+/** Per-suite, per-model progress file; `--results-name` only prefixes it, so no run overwrites another. */
+const resultsFile = (suite: string, model: string) =>
+  `${arg("results-name") ? `${arg("results-name")}-` : ""}${suite}-${slug(model)}.json`;
 const TOOL_NAMES = ["get_project_summary", "list_evidence", "search_evidence", "read_evidence", "search_decisions"];
 /** Comma-separated case ids, for debugging the harness without paying for the whole suite. */
 const ONLY = arg("only")
@@ -138,9 +150,7 @@ async function runExtraction(ctx: Ctx, model: string, take: () => Call[]) {
     take();
     try {
       const extract =
-        arg("extractor") === "heuristic"
-          ? heuristicExtract
-          : modelExtract(ctx, TEMPERATURE === undefined ? undefined : { temperature: TEMPERATURE });
+        arg("extractor") === "heuristic" ? heuristicExtract : modelExtract(ctx, { temperature: TEMPERATURE });
       const raw = await extract({
         sources,
         context: {
@@ -189,7 +199,7 @@ async function runExtraction(ctx: Ctx, model: string, take: () => Call[]) {
     }
     const last = results[results.length - 1]!;
     console.log(`[extract:${model}] ${c.id} ${last.pass ? "pass" : "FAIL"} ${last.ms}ms`);
-    await write(arg("results-name", `extraction-${slug(model)}.json`)!, results);
+    await write(resultsFile("extraction", model), results);
   }
   return results;
 }
@@ -212,7 +222,7 @@ async function runWhy(ctx: Ctx, fixture: Fixture, model: string, ids: EntityIds,
         model: getModel()!,
         system,
         tools,
-        temperature: TEMPERATURE,
+        temperature: TEMPERATURE ?? undefined,
         stopWhen: stepCountIs(MAX_STEPS),
         messages: [{ role: "user", content: c.prompt }],
       });
@@ -250,7 +260,7 @@ async function runWhy(ctx: Ctx, fixture: Fixture, model: string, ids: EntityIds,
     }
     const last = results[results.length - 1]!;
     console.log(`[why:${model}] ${c.id} ${last.pass ? "pass" : "FAIL"} ${last.ms}ms`);
-    await write(arg("results-name", `why-${slug(model)}.json`)!, results);
+    await write(resultsFile("why", model), results);
   }
   return results;
 }
@@ -287,7 +297,7 @@ async function runPassExperiment(ctx: Ctx, fixture: Fixture, model: string, take
     ...comments.map((c) => ({ kind: "comment" as const, entityId: c.id, title: "Comment", text: c.body })),
   ].filter((s) => s.text.trim().length > 0);
   const context = { people: [], milestones: [], tasks: [], conversation: "" };
-  const extract = modelExtract(ctx, TEMPERATURE === undefined ? undefined : { temperature: TEMPERATURE });
+  const extract = modelExtract(ctx, { temperature: TEMPERATURE });
   const perSource = [];
   for (const source of sources) {
     const run = await timed(() => extract({ sources: [source], context }));
@@ -370,7 +380,10 @@ async function main() {
     database: process.env.DATABASE_URL?.replace(/\/\/[^@]*@/, "//***@"),
     gateway: baseUrl,
     models: MODELS,
-    temperature: TEMPERATURE ?? "provider default",
+    temperature: {
+      extraction: TEMPERATURE === undefined ? EXTRACT_TEMPERATURE : (TEMPERATURE ?? "provider default"),
+      answers: TEMPERATURE ?? "provider default",
+    },
     maxSteps: MAX_STEPS,
     embeddingModel: embeddingModelId(),
     toolNames: TOOL_NAMES,

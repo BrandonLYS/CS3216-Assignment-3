@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { APICallError, generateObject } from "ai";
 import { z } from "zod";
 import type { Ctx } from "@/server/core/context";
 import { getModelForUser, modelInfo } from "@/server/modules/assistant/model";
@@ -108,7 +108,8 @@ const outputSchema = z.object({ proposals: z.array(rawProposalSchema) });
 
 /** Sampling settings for the extractor; the evaluation harness overrides them to compare models. */
 export interface ExtractSettings {
-  temperature?: number;
+  /** A temperature to sample at, or null for the provider's default; omitted means `EXTRACT_TEMPERATURE`. */
+  temperature?: number | null;
 }
 
 /**
@@ -118,7 +119,14 @@ export interface ExtractSettings {
  * repeat spent 19,743 completion tokens against a 3,100-token norm. At 0 both models repeated
  * their own output exactly. See `artifacts/param-sweep-2026-09-28/`.
  */
-const EXTRACT_TEMPERATURE = 0;
+export const EXTRACT_TEMPERATURE = 0;
+
+/**
+ * Some OpenAI-compatible endpoints reject any temperature for reasoning models, and a User can
+ * point one at any model (ADR 0011). Such a 400 names the parameter; the pass then retries unset.
+ */
+const rejectsTemperature = (e: unknown) =>
+  APICallError.isInstance(e) && e.statusCode === 400 && /temperature/i.test(`${e.message} ${e.responseBody ?? ""}`);
 
 /** Model extractor: structured output, verbatim excerpts demanded, source text treated as data. */
 export const modelExtract =
@@ -126,10 +134,11 @@ export const modelExtract =
   async ({ sources, context, telemetry }) => {
     const model = await getModelForUser(ctx);
     if (!model) throw new Error("Assistant not configured");
-    const { object } = await traceGeneration(telemetry, { span: "proposal_extraction", ...modelInfo() }, () =>
+    const temperature = settings.temperature === undefined ? EXTRACT_TEMPERATURE : (settings.temperature ?? undefined);
+    const extract = (temperature: number | undefined) =>
       generateObject({
         model,
-        temperature: settings.temperature ?? EXTRACT_TEMPERATURE,
+        temperature,
         schema: outputSchema,
         system: [
           "You extract Decisions a project team already made from meeting notes, plans and comments, so a project manager can confirm them.",
@@ -154,7 +163,11 @@ export const modelExtract =
         ]
           .filter(Boolean)
           .join("\n\n"),
-      }),
+      });
+    const { object } = await traceGeneration(telemetry, { span: "proposal_extraction", ...modelInfo() }, () =>
+      extract(temperature).catch((e) =>
+        temperature !== undefined && rejectsTemperature(e) ? extract(undefined) : Promise.reject(e),
+      ),
     );
     return { proposals: object.proposals };
   };
