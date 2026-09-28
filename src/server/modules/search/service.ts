@@ -8,6 +8,8 @@ import { evidenceText } from "@/server/modules/evidence/service";
 import { labelsRepo } from "@/server/modules/labels/service";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { LINKABLE_ENTITY_TYPES, labelFor } from "@/shared/domain";
+import { citation } from "@/shared/lib/citation";
+import { evidenceHref } from "@/shared/lib/hrefs";
 import { chunkText, embedTexts, embeddingModelId, getEmbeddingModel } from "./embed";
 import { invalidateIndex, searchIndex } from "./index";
 import { chunksRepo } from "./repository";
@@ -26,13 +28,22 @@ export type SearchEvidenceInput = z.infer<typeof searchEvidenceSchema>;
 const DEFAULT_LIMIT = 8;
 const SNIPPET_CHARS = 500;
 
-const meta = (e: EvidenceRow) => ({
-  evidenceId: e.id,
-  title: e.title,
-  kind: e.kind,
-  sourceDate: e.sourceDate,
-  fileName: e.fileName,
-});
+/**
+ * One match as the model sees it. `evidenceId` (not `id`) is what read_evidence takes; `href`
+ * and `cite` are the citation, because an id alone does not tell the model the route shape.
+ */
+const meta = (e: EvidenceRow) => {
+  const href = evidenceHref(e.projectId, e.id);
+  return {
+    evidenceId: e.id,
+    title: e.title,
+    kind: e.kind,
+    sourceDate: e.sourceDate,
+    fileName: e.fileName,
+    href,
+    cite: citation(e.title, href),
+  };
+};
 
 /** Resolve label names or ids to ids; an unknown term is a validation error the model can read. */
 async function resolveLabelIds(projectId: string, terms: string[]): Promise<string[]> {
