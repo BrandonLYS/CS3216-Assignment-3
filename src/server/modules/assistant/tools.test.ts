@@ -254,6 +254,35 @@ describe("assistant tools over the rest of the Project", () => {
     expect(summary.evidence.map((e) => e.id)).toEqual(expect.arrayContaining([withText.id, noText.id]));
   });
 
+  // The model cannot build a Project route from an id alone, so every Evidence surface hands it
+  // a link to paste. get_project_summary matters most: its list is in the system prompt each turn.
+  it("hands every Evidence surface a pasteable citation", async () => {
+    type Meta = { id?: string; evidenceId?: string; title: string; href: string; cite: string };
+    const check = (e: Meta) => {
+      const id = e.id ?? e.evidenceId;
+      expect(e.href).toBe(`/projects/${projectId}/evidence?item=${id}#evidence-${id}`);
+      expect(e.cite).toBe(`[${e.title}](${e.href})`);
+    };
+
+    const list = (await run("list_evidence", { projectId })) as Meta[];
+    expect(list.length).toBeGreaterThan(0);
+    list.forEach(check);
+
+    const summary = (await run("get_project_summary", { projectId })) as { evidence: Meta[] };
+    expect(summary.evidence.length).toBe(list.length);
+    summary.evidence.forEach(check);
+
+    const hits = (await run("search_evidence", { projectId })) as { matches: Meta[] };
+    expect(hits.matches.length).toBeGreaterThan(0);
+    hits.matches.forEach(check);
+
+    check((await run("read_evidence", { id: list[0]!.id })) as Meta);
+    const ambiguous = (await run("read_evidence", { projectId, title: "e" })) as { error: string; matches: Meta[] };
+    expect(ambiguous.error).toMatch(/more than one/i);
+    expect(ambiguous.matches.length).toBeGreaterThan(1);
+    ambiguous.matches.forEach(check);
+  });
+
   it("rejects foreign ids on every new tool", async () => {
     const stranger = await makeCtx();
     const foreignProject = (await makeProject(stranger, "FOR")).id;
