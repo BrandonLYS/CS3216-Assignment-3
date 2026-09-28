@@ -1,7 +1,7 @@
 import { APICallError, RetryError, type UIMessageChunk } from "ai";
 import { describe, expect, it } from "vitest";
 import { TURN_ERROR_PART } from "@/shared/lib/assistant-errors";
-import { keepTurnErrors, turnErrorMessage } from "./turn-error";
+import { keepTurnErrors, turnErrorDataSchemas, turnErrorMessage } from "./turn-error";
 
 const apiError = (statusCode: number) =>
   new APICallError({
@@ -43,6 +43,28 @@ describe("keepTurnErrors", () => {
     ]);
     expect(out.map((c) => c.type)).toEqual(["start", TURN_ERROR_PART, "error"]);
     expect(out[1]).toMatchObject({ data: { message: "The AI provider is unavailable right now. Try again shortly." } });
+  });
+
+  it("turns a stream that throws into a recorded, mapped error", async () => {
+    let sent = false;
+    const failing = new ReadableStream<UIMessageChunk>({
+      pull(c) {
+        if (sent) throw apiError(401);
+        sent = true;
+        c.enqueue({ type: "start", messageId: "a1" });
+      },
+    });
+    const reader = keepTurnErrors(failing).getReader();
+    const out: UIMessageChunk[] = [];
+    for (let r = await reader.read(); !r.done; r = await reader.read()) out.push(r.value);
+    expect(out.map((c) => c.type)).toEqual(["start", TURN_ERROR_PART, "error"]);
+    expect(out[2]).toMatchObject({ errorText: "The AI provider rejected the API key. Check it in Settings." });
+  });
+
+  it("clamps a long message to what the thread schema accepts", async () => {
+    const out = await collect([{ type: "error", errorText: "x".repeat(2000) }]);
+    const data = (out[0] as { data: { message: string } }).data;
+    expect(turnErrorDataSchemas.turn_error.safeParse(data).success).toBe(true);
   });
 
   it("leaves a healthy stream untouched", async () => {

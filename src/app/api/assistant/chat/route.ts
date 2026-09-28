@@ -202,6 +202,7 @@ async function streamTurn({
       // Gives the response message a stable id so a turn paused for approval continues the same
       // row on resubmit instead of saving an id-less message plus a duplicate (ADR 0011).
       generateId,
+      onError: turnErrorMessage,
       // The error is also written into the reply, so the saved thread keeps it after a reload.
       execute: ({ writer }) =>
         writer.merge(keepTurnErrors(toUIMessageStream({ stream: result.stream, onError: turnErrorMessage }))),
