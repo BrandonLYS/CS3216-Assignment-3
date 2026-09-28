@@ -80,6 +80,20 @@ describe("proposalsService.runPass", () => {
     expect(await proposalsService.listPending(ctx, projectId)).toHaveLength(2);
   });
 
+  it("a manual pass that reads new Sources but raises nothing still points at the pending Proposals", async () => {
+    const p = await makeProject(ctx, "MNP");
+    await evidenceService.create(ctx, { projectId: p.id, title: "Minutes", kind: "minutes", body: SENTENCE });
+    await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "automatic" });
+    const [older] = await proposalsService.listPending(ctx, p.id);
+    await evidenceService.create(ctx, { projectId: p.id, title: "Call", kind: "minutes", body: "Budget is on track." });
+
+    const out = await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "manual" });
+    expect(out).toMatchObject({ sourcesPassed: 1, proposed: 0, proposalId: older!.id });
+    expect(await proposalsService.runPass(ctx, p.id, { extract: heuristicExtract, trigger: "automatic" })).toEqual({
+      skipped: "nothing_new",
+    });
+  });
+
   it("discards output whose Source or excerpt is not traceable", async () => {
     const other = await makeProject(ctx, "TRC");
     await evidenceService.create(ctx, { projectId: other.id, title: "Plan", kind: "plan", body: "We chose Postgres." });

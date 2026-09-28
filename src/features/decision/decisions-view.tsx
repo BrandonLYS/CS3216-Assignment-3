@@ -58,6 +58,24 @@ export function DecisionsView({
     setCreating(false);
     if (openItem || proposal) router.replace(base, { scroll: false });
   };
+  // Review steps through the pending Proposals one at a time; closing ends it without accepting anything.
+  const at = proposal ? proposals.indexOf(proposal) : -1;
+  const show = (id: string) => router.replace(`${base}?proposal=${id}`, { scroll: false });
+  const prev = proposals[at - 1];
+  const next = proposals[at + 1];
+  const review = proposal
+    ? {
+        index: at,
+        total: proposals.length,
+        onPrev: prev && (() => show(prev.id)),
+        onNext: next && (() => show(next.id)),
+      }
+    : undefined;
+  const afterAccept = () => {
+    const following = next ?? prev;
+    if (following) show(following.id);
+    else close();
+  };
   const byId = new Map(decisions.map((r) => [r.decision.id, r.decision]));
   const visible = decisions.filter((r) => showSuperseded || r.decision.status !== "superseded");
 
@@ -173,6 +191,8 @@ export function DecisionsView({
         key={openItem?.decision.id ?? proposal?.id ?? (creating ? "new" : "closed")}
         open={Boolean(openItem) || Boolean(proposal) || creating}
         draft={draft}
+        review={review}
+        onAccepted={afterAccept}
         onClose={close}
         refs={refs}
         item={openItem}
