@@ -9,6 +9,7 @@ import {
   riskHref,
   taskHref,
 } from "@/shared/lib/hrefs";
+import { PROJECT_SECTIONS } from "@/shared/lib/project-sections";
 import { internalHref, splitLinks } from "./linked-text";
 
 /** A real id shape: ids are `gen_random_uuid()` values, and the boundary requires one. */
@@ -109,6 +110,13 @@ describe("internalHref", () => {
     ["the People page", `/projects/${P}/people`],
     ["the Renders page", `/projects/${P}/renders`],
   ])("keeps the query and hash of a citation to %s", (_what, href) => {
+    expect(internalHref(href)).toBe(href);
+  });
+
+  // Derived, not listed: narrowing the whitelist would otherwise break citations to a real
+  // section with no test to show it.
+  it.each(PROJECT_SECTIONS.map((s) => s.slug))("accepts the %s section", (slug) => {
+    const href = slug ? `/projects/${P}/${slug}` : `/projects/${P}`;
     expect(internalHref(href)).toBe(href);
   });
 

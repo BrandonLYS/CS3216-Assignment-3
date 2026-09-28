@@ -5,8 +5,9 @@
  * in the prompt is a string the model will paste into an answer.
  */
 export const CITATION_RULES = [
-  "Every Decision, Source and Evidence item a tool returns carries a ready-made Markdown link in its `cite` field. Cite something by copying its `cite` verbatim into your sentence. Never write a link yourself, never complete or rewrite an href, never make one absolute, and never cite anything no tool returned.",
-  "This applies to Evidence as much as to Decisions: get_project_summary, list_evidence, search_evidence and read_evidence all return a `cite` per item. If you state what a document says, end that sentence with the document's `cite`.",
+  "Cite by copying a `cite` field verbatim, character for character. Never write a link yourself, never complete or rewrite an href, never add a scheme or host to one, and never cite anything no tool returned.",
+  "get_project_summary, list_evidence, search_evidence and read_evidence return a `cite` for every Evidence item, and search_decisions returns one for every Decision and Source. If you state what an Evidence item says, end that sentence with that item's `cite`.",
+  "A tool that changes something may answer with a result that has no `cite`. To cite the item it changed, call read_evidence or list_evidence for it and copy the `cite` from there.",
 ] as const;
 
 /**

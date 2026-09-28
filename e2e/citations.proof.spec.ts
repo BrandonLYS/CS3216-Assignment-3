@@ -36,8 +36,10 @@ test("the Assistant cites Evidence with links that open the document", async ({ 
   await box.fill("What do the documents say about the delivery blockers? Cite your sources.");
   await box.press("Enter");
 
-  // The answer streams in; a citation is a link into this Project.
-  const citation = dock.getByRole("link").filter({ hasText: /\S/ }).first();
+  // The answer streams in; an Evidence citation is a link to this Project's Evidence page. The
+  // model may also cite a Decision or a Task, so the assertions below target an Evidence one.
+  // `:visible` for the same reason as the message box: the previous panel is still in the DOM.
+  const citation = dock.locator('a[href*="/evidence?item="]:visible').first();
   await expect(citation).toBeVisible({ timeout: 120_000 });
   await expect(dock.getByRole("status")).toHaveCount(0, { timeout: 120_000 });
   await page.screenshot({ path: "artifacts/after-assistant-citations.png" });
