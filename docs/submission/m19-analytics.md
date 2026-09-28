@@ -1,5 +1,12 @@
 # M19 - Analytics Evidence
 
+## Verified results: 28 September 2026
+
+The [verification report and four original dashboard screenshots](posthog-2026-09-28/README.md) now include authenticated PostHog query exports, a fresh production pageview delivery check, and local SDK test results.
+The observed sample contains 54 Assistant questions from 6 PostHog identities and 9 accepted versus 10 rejected Proposals, giving 47.4% acceptance among decided Proposals.
+These are mixed-environment results: 281 of 594 pageviews came from localhost and the configured internal/test exclusion cohort was empty.
+The report records incomplete capture coverage, a misleading general funnel, 27 errors among 47 recorded model calls, and application test failures rather than presenting an all-green verification.
+
 ## Tool
 
 PostHog (client `posthog-js`, server `posthog-node`).
@@ -24,16 +31,16 @@ PostHog (client `posthog-js`, server `posthog-node`).
 
 ## Event definitions
 
-| Event name                  | When captured                                                             | Properties (no PII)                                                                                                                                                                                                                                             |
+| Event name                  | When captured                                                             | Explicit properties (no business content)                                                                                                                                                                                                                       |
 | --------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$pageview`                 | Every client-side route change                                            | `$current_url`                                                                                                                                                                                                                                                  |
-| `signup_completed`          | After successful email sign-up                                            | None (SDK User/session context)                                                                                                                                                                                                                                 |
+| `signup_completed`          | After successful email or new-account OAuth sign-up                       | None (SDK User/session context)                                                                                                                                                                                                                                 |
 | `login_completed`           | After a successful sign-in to an existing account                         | None (SDK User/session context)                                                                                                                                                                                                                                 |
 | `project_created`           | After `createProjectAction` succeeds                                      | `project_id`                                                                                                                                                                                                                                                    |
 | `evidence_created`          | After `createEvidenceAction` succeeds                                     | `evidence_id`, `evidence_kind`                                                                                                                                                                                                                                  |
 | `transcript_created`        | After Evidence of kind `transcript` is created                            | `evidence_id`                                                                                                                                                                                                                                                   |
 | `render_requested`          | After a concept render is requested                                       | `render_id`                                                                                                                                                                                                                                                     |
-| `proposal_generated`        | After a pass commits at least one Proposal, automatic or requested        | `project_id`, `trigger`, `extractor`, `proposal_count`, `source_count`, `discarded_count`                                                                                                                                                                       |
+| `proposal_generated`        | After a pass commits at least one Proposal, automatic or requested        | `project_id`, `trigger`, `extractor`, `proposal_count`, `source_count`, `evidence_source_count`, `comment_source_count`, `discarded_count`                                                                                                                      |
 | `proposal_accepted`         | After the transaction that turns the Proposal into a Decision commits     | `project_id`, `proposal_id`, `extractor`, `edited_before_accept`                                                                                                                                                                                                |
 | `proposal_rejected`         | After a pending Proposal is marked rejected                               | `project_id`, `proposal_id`, `extractor`                                                                                                                                                                                                                        |
 | `assistant_question_sent`   | When the User sends a new message to `/api/assistant/chat`                | `workflow` (`project` or `workspace`)                                                                                                                                                                                                                           |
@@ -64,18 +71,22 @@ For the two `generateObject` spans, `$ai_latency` covers the whole call, includi
 `$ai_input` and `$ai_output_choices` are never sent, so no prompt, Evidence text or answer reaches PostHog.
 
 The Proposal funnel rows were verified on branch `fix/auth` against a local collector with the real browser and server SDKs; see [the funnel artifact](../artifacts/74-proposal-funnel/README.md) for the run and its reconciliation.
-A production Live Events run still has to be recorded here with its release SHA and timestamp by someone with access to the production PostHog project.
+The [28 September audit](posthog-2026-09-28/README.md) verifies historical events in the actual PostHog project and a fresh deployed landing pageview.
+It does not certify a fresh authenticated production funnel or a deployed release SHA; local real-SDK reconciliation and historical production-project observations remain distinct evidence.
 
 ## Data safety
 
 No raw evidence text, transcripts, prompts, names, emails, or project titles are sent.
-Only hashed/internal ids and metadata are attached.
+Explicit custom properties contain internal ids and bounded metadata; internal ids are not necessarily hashed.
+The browser SDK also supplies technical browser, host, and session metadata, and PostHog may enrich events.
+These are pseudonymous analytics, not a claim of anonymous or metadata-free collection.
 
 ## Dashboard checklist
 
-- [ ] Create a PostHog project and copy the API key into Vercel production env.
-- [ ] Trigger each event once in production and verify it appears in the Live events feed.
-- [ ] Create an insights board with: sign-up funnel, project creation count, proposal accept/reject ratio, assistant question volume, top pages.
-- [ ] Open LLM Analytics and confirm `$ai_generation` shows cost, latency and tokens for each span (M9, M12).
+- [x] Confirm the deployed browser sends to PostHog project `618308`; a fresh pageview was received on 28 September 2026.
+- [ ] Trigger every defined event in controlled authenticated production flows and reconcile it with the deployed release; historical coverage and a fresh anonymous pageview are verified.
+- [x] Inspect saved AI usage and core product dashboards, including Project counts, Proposal outcomes, and question volume.
+- [ ] Add or verify a signup funnel and top-pages view, and correct the general product funnel.
+- [x] Query `$ai_generation` for Assistant, extraction, and Reflection spans; cost and token coverage exists for 20 of 47 calls, with limitations recorded in the audit.
 - [ ] Add insights for tool approval rate (`assistant_tool_approval` by `approved`), turns hitting the step cap and `assistant_limit_reached` (M13, M17).
-- [ ] Capture a screenshot of the dashboard for this file.
+- [x] Preserve and embed all four supplied dashboard screenshots with checksums and query context.
