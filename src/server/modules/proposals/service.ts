@@ -185,7 +185,7 @@ export const proposalsService = {
         comment: candidates.filter((c) => c.kind === "comment").length,
       },
     });
-    const proposalId = inserted[0]?.id ?? (await firstPending());
+    const proposalId = opts.trigger === "manual" ? await firstPending() : inserted[0]?.id;
     return proposalId ? { ...outcome, proposalId } : outcome;
   },
 

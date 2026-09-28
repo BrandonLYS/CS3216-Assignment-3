@@ -47,7 +47,8 @@ export function DecisionsView({
   const params = useSearchParams();
   const base = `/projects/${refs.project.id}/decisions`;
   const openItem = decisions.find((r) => r.decision.id === params.get("decision")) ?? null;
-  const proposal = proposals.find((p) => p.id === params.get("proposal")) ?? null;
+  // An open Decision wins over a Proposal, so a URL carrying both never mixes edit and review.
+  const proposal = openItem ? null : (proposals.find((p) => p.id === params.get("proposal")) ?? null);
   const draft = React.useMemo(
     () => (proposal ? { ...proposal, sourceLabels: new Map(Object.entries(sourceLabels)) } : null),
     [proposal, sourceLabels],

@@ -45,7 +45,7 @@ export function ProposeButton({ projectId }: { projectId: string }) {
               : `${out.proposed} proposed${out.discarded ? `, ${out.discarded} discarded` : ""} from ${out.sourcesPassed} source${out.sourcesPassed === 1 ? "" : "s"}`,
           );
           if ("proposalId" in out && out.proposalId) {
-            router.push(`/projects/${projectId}/decisions?proposal=${out.proposalId}`);
+            router.replace(`/projects/${projectId}/decisions?proposal=${out.proposalId}`, { scroll: false });
           } else {
             router.refresh();
           }

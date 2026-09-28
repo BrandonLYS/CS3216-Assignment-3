@@ -15,13 +15,18 @@ async function addEvidence(page: Page, title: string, body: string) {
   await dialog.getByLabel("Kind").selectOption("minutes");
   await dialog.getByLabel("Pasted text").fill(body);
   await dialog.getByRole("button", { name: "Add evidence" }).click();
-  await expect(dialog).toBeHidden();
+  // Ingest prunes the text over the network before the row is written.
+  await expect(dialog).toBeHidden({ timeout: 20_000 });
 }
 
 test("Propose from evidence reviews the already-read Proposals one at a time", async ({ page }) => {
   test.setTimeout(90_000);
   const signup = await page.request.post("/api/auth/sign-up/email", {
-    data: { name: "Review", email: `propose-review-${Date.now()}@test.local`, password: "review-password-123" },
+    data: {
+      name: "Review",
+      email: `propose-review-${crypto.randomUUID()}@test.local`,
+      password: "review-password-123",
+    },
   });
   expect(signup.ok()).toBeTruthy();
   await page.goto("/dashboard");
@@ -53,6 +58,7 @@ test("Propose from evidence reviews the already-read Proposals one at a time", a
   await dialog.getByRole("button", { name: "Next" }).click();
   await expect(position).toHaveText("Suggested decision 2 of 2");
   await expect(dialog.getByLabel("Title")).not.toHaveValue(first);
+  const second = await dialog.getByLabel("Title").inputValue();
   await expect(dialog.getByRole("button", { name: "Next" })).toBeDisabled();
   await dialog.getByRole("button", { name: "Previous" }).click();
   await expect(position).toHaveText("Suggested decision 1 of 2");
@@ -67,11 +73,20 @@ test("Propose from evidence reviews the already-read Proposals one at a time", a
   await expect(page.getByText("All evidence already read", { exact: true })).toBeVisible();
   await expect(position).toHaveText("Suggested decision 1 of 2");
 
-  // Accepting moves on to the next one instead of ending the review.
+  // Accepting moves straight on to the next one: the dialog never closes in between.
+  await page.evaluate(() => {
+    const w = window as unknown as { dialogGone: number };
+    w.dialogGone = 0;
+    new MutationObserver(() => {
+      if (!document.querySelector('[role="dialog"]')) w.dialogGone++;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
   await dialog.getByLabel("Decided on").fill("2026-09-15");
   await dialog.getByRole("button", { name: "Accept and create decision" }).click();
-  await expect(dialog.getByLabel("Title")).not.toHaveValue(first);
+  await expect(page.getByText("1 decision · newest first")).toBeVisible();
+  await expect(dialog.getByLabel("Title")).toHaveValue(second);
   await expect(position).toBeHidden();
+  expect(await page.evaluate(() => (window as unknown as { dialogGone: number }).dialogGone)).toBe(0);
   await dialog.getByRole("button", { name: "Close" }).click();
   await expect(page.getByText("1 decision · newest first")).toBeVisible();
 });
