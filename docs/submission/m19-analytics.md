@@ -1,11 +1,48 @@
 # M19 - Analytics Evidence
 
-## Verified results: 28 September 2026
+## Findings
 
-The [verification report and four original dashboard screenshots](posthog-2026-09-28/README.md) now include authenticated PostHog query exports, a fresh production pageview delivery check, and local SDK test results.
-The observed sample contains 54 Assistant questions from 6 PostHog identities and 9 accepted versus 10 rejected Proposals, giving 47.4% acceptance among decided Proposals.
-These are mixed-environment results: 281 of 594 pageviews came from localhost and the configured internal/test exclusion cohort was empty.
-The report records incomplete capture coverage, a misleading general funnel, 27 errors among 47 recorded model calls, and application test failures rather than presenting an all-green verification.
+PostHog project `618308` receives events from both the deployed app and local development.
+The window is 29 August to 28 September 2026; the [audit](posthog-2026-09-28/README.md) holds the queries, raw exports and method, and was re-checked against fresh dashboard screenshots on 29 September with no change.
+Delivery works: a fresh deployed pageview reached PostHog, and the real browser and server SDKs reconciled event-for-event with the UI in a local run.
+The sample is small and mixed, so these numbers describe exercised workflows, not adoption.
+
+| Measure                       | Result                        | Read it as                                                                          |
+| ----------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| Assistant questions           | 54 from 6 identities          | Peak 3 active in a day; a handful of testers, not a user base                       |
+| Project / workspace questions | 42 / 12                       | Project-scoped Assistant is where use concentrates                                  |
+| Proposal decisions            | 9 accepted, 10 rejected       | 47.4% of decided Proposals; 38 of 46 came from the heuristic, not a model           |
+| Model calls                   | 47, of which 27 errored       | All `AI_APICallError` (15 Assistant, 12 Reflection) - the clearest signal to act on |
+| Recorded model cost           | US$0.024 over 20 priced calls | Errors carry no tokens; not a billing figure                                        |
+| Browser exceptions            | 7, all unhandled              | Exception capture is not explicitly enabled, so this is a floor                     |
+
+### Useful
+
+- The 9/19 acceptance rate shows Users both accept and reject suggestions, and gives a baseline for the extraction work in M8 and M11.
+- The 27 failed model calls are the most actionable result; the error class alone does not say whether the cause is a key, model name or provider outage.
+- The Project/workspace split tells us which Assistant surface to test and polish first.
+
+### Not trustworthy yet
+
+- **Mixed environments.** 281 of 594 pageviews came from `localhost`, the internal/test cohort behind every "filter test accounts" toggle is empty, and server events carry no environment or release tag.
+- **The "Core product funnel" is wrong.** It requires a Render before a Proposal is accepted, which the product never requires, so it reads 14 to 7 to 0 to 0 while 9 acceptances happened outside it.
+  Evidence, transcript and Render events also omit `project_id`, so no same-Project funnel can be built yet.
+- **Coverage gaps.** Events are captured in server actions, so writes made by the Assistant, MCP or sample-Project seeding are not counted; `assistant_tool_approval` and `assistant_citation_opened` have no rows yet.
+- **Question versus answer.** Completion events started five days after question events (10 versus 54), so their ratio is not an answer-success rate.
+- **Model attribution.** The chat route labels failed calls with the environment default model, so a User's personal-model failure can be recorded under the wrong name.
+- The "Application exceptions" description promises a handled/unhandled split that the query does not do.
+
+### Next
+
+1. Separate production from development (own project or an `environment` property on every event) and populate the test cohort.
+2. Add `project_id` to Evidence, transcript and Render events, and rebuild the funnel as Evidence to Proposal to Decision.
+3. Fix the model-call errors and record the resolved model on failures.
+4. Re-measure over a defined external-user period before making product claims.
+
+![AI question volume and daily active AI users](posthog-2026-09-28/screenshots/01-ai-volume-and-users.png)
+![AI questions by workflow and application exceptions](posthog-2026-09-28/screenshots/02-workflows-and-exceptions.png)
+![Core product activity and funnel](posthog-2026-09-28/screenshots/03-product-activity-and-funnel.png)
+![Proposal acceptance rate and outcomes](posthog-2026-09-28/screenshots/04-proposal-outcomes.png)
 
 ## Tool
 

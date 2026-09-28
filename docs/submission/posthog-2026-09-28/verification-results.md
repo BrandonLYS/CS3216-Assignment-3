@@ -27,7 +27,7 @@ This task changes submission documentation and adds evidence; it does not repair
 A second set of dashboard screenshots was supplied at 00:12 Singapore time, about 40 minutes after the preserved set.
 Their source files were no longer on disk, so they are not added; the preserved screenshots show the same data.
 Every total read from the new screenshots matches this audit: 54 Assistant questions (42 Project, 12 workspace), 9 accepted and 10 rejected Proposals, 7 exceptions, and a funnel of 14 to 7 persons with a 22-second median.
-No new events appeared between the two captures.
+No change is visible between the two captures.
 The source findings were re-read and still hold at commit `116e5a0`: Evidence, transcript, and Render events omit `project_id`; the browser SDK sets no explicit `capture_exceptions`; and the chat route starts its generation recorder with the environment `modelInfo()`.
 The analytics, Proposal, and Decision tests were re-run: 120 passed in 10 files.
 The live PostHog queries and the browser suites were not repeated, because the dashboard data was unchanged.
