@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authenticationCompleted } from "@/shared/analytics/browser";
 import { signIn, signUp } from "@/shared/lib/auth-client";
 import { startTour } from "@/shared/lib/tour";
 import { Button, Field, Input } from "@/shared/ui";
 import { GoogleIcon } from "./google-icon";
+import { clearOAuthPending, markOAuthPending } from "./oauth-pending";
 import { safeReturnPath } from "./return-path";
 
 /** Better Auth sends a failed Google sign-in back with `?error=<code>`; these are the ones a User can act on. */
@@ -15,6 +16,8 @@ const OAUTH_ERRORS: Record<string, string> = {
   account_not_linked: "An account with this email already exists. Sign in with your password instead.",
   unable_to_link_account: "An account with this email already exists. Sign in with your password instead.",
   access_denied: "Google sign-in was cancelled.",
+  state_not_found: "Google sign-in took too long. Try again.",
+  state_mismatch: "Google sign-in took too long. Try again.",
 };
 
 export function AuthForm({ mode, google }: { mode: "login" | "signup"; google: boolean }) {
@@ -27,9 +30,24 @@ export function AuthForm({ mode, google }: { mode: "login" | "signup"; google: b
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Being on this form means any Google sign-in this tab started has ended, including one the
+  // User backed out of: the browser can restore this page from its cache with the spinner still
+  // on, and without clearing the marker a later visit to `/auth/complete` would still honour it.
+  useEffect(() => {
+    clearOAuthPending();
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      clearOAuthPending();
+      setGoogleLoading(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   async function onGoogle() {
     setError(null);
     setGoogleLoading(true);
+    markOAuthPending();
     const next = params.get("next");
     const complete = new URLSearchParams(next ? { next } : {});
     const res = await signIn.social({
@@ -40,6 +58,7 @@ export function AuthForm({ mode, google }: { mode: "login" | "signup"; google: b
     });
     // Success navigates away to Google, so only a failure to start comes back here.
     if (res.error) {
+      clearOAuthPending();
       setGoogleLoading(false);
       setError(res.error.message ?? "Google sign-in failed. Try again.");
     }
