@@ -77,6 +77,8 @@ test.describe("auth", () => {
     await expect(page).toHaveURL("/dashboard");
     // A new account is not empty: every User starts with the sample Project (ADR 0013).
     await expect(page.getByText("Bedok Community Centre").first()).toBeVisible();
+    // Signup starts the product tour, whose overlay takes every click until it is dismissed.
+    await page.getByRole("button", { name: "Skip tour" }).click();
     await shot(page, "starter-workspace");
 
     await page.getByRole("button", { name: "Sign out" }).click();
@@ -493,9 +495,13 @@ test.describe("command-palette", () => {
 
   test("⌘K jumps between sections and projects", async ({ page }) => {
     await login(page);
-    await page.keyboard.press("Meta+k");
     const input = page.getByPlaceholder("Type a command or search…");
-    await expect(input).toBeVisible();
+    // Straight after navigation the shell's shortcut listener may not be hydrated yet; press
+    // again only while the palette is still closed, so a slow open is never toggled shut.
+    await expect(async () => {
+      if (!(await input.isVisible())) await page.keyboard.press("Meta+k");
+      await expect(input).toBeVisible({ timeout: 1_000 });
+    }).toPass();
     await shot(page, "open");
     await input.fill("Payments");
     await shot(page, "search-project");
