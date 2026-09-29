@@ -104,17 +104,18 @@ PostHog (client `posthog-js`, server `posthog-node`).
 ## LLM analytics
 
 `src/shared/analytics/ai.ts` records every model call as a PostHog `$ai_generation` event, which PostHog's LLM Analytics view turns into cost, latency and token dashboards per model.
-The three call sites are distinguished by `$ai_span_name`:
+The four call sites are distinguished by `$ai_span_name`:
 
 - `assistant_turn`: one event per model call in `/api/assistant/chat`, with `workflow`, `conversation_id` and `step`, grouped per request by `$ai_trace_id` and summarised by `assistant_turn_completed`.
   A provider failure, before or during the stream, is recorded; a tool or approval error is not a generation and is not.
   `hit_step_cap` is true only when the last allowed step still asked for tools.
 - `proposal_extraction`: the `generateObject` call of a model Proposal pass, with `project_id`, `trigger` and `source_count`.
+- `item_extraction`: the second `generateObject` call of the same pass, proposing Tasks and Milestones (#114), with the same properties.
 - `reflection`: the `generateObject` call that rewrites the Profile and Working Memory, with `conversation_id` and `project_id`, under the `$ai_trace_id` of the Assistant turn that triggered it.
 
 Failures are recorded with `$ai_is_error: true` and the error class name only, since a provider message can echo the prompt.
 A structured-output mismatch keeps the tokens it spent.
-For the two `generateObject` spans, `$ai_latency` covers the whole call, including any retries the SDK makes after a provider error.
+For the three `generateObject` spans, `$ai_latency` covers the whole call, including any retries the SDK makes after a provider error.
 `$ai_provider` is the provider family (`openai`), not the SDK's per-API name (`openai.responses`).
 `$ai_input` and `$ai_output_choices` are never sent, so no prompt, Evidence text or answer reaches PostHog.
 
