@@ -136,8 +136,11 @@ export const proposalsService = {
     const itemCandidates = unread("item");
 
     // A manual pass ends in review: it points at the newest pending Proposal, whichever pass raised it.
+    // Read after the writes committed, so a failure here only loses the pointer, never the outcome.
     const firstPending = async () =>
-      opts.trigger === "manual" ? (await proposalsRepo.listByProject(ctx.db, projectId, "pending"))[0]?.id : undefined;
+      opts.trigger === "manual"
+        ? (await proposalsRepo.listByProject(ctx.db, projectId, "pending").catch(() => []))[0]?.id
+        : undefined;
     const nothingNew = async (): Promise<DecisionPassOutcome> => {
       const proposalId = await firstPending();
       return proposalId ? { skipped: "nothing_new", proposalId } : { skipped: "nothing_new" };
@@ -145,18 +148,12 @@ export const proposalsService = {
     if (!decisionCandidates.length && !itemCandidates.length)
       return { ...(await nothingNew()), items: { skipped: "nothing_new" } };
 
-    const [people, milestones, tasks, conversation, itemRows] = await Promise.all([
+    // Only what both sides need is loaded here; each side loads the rest inside its own try.
+    const [people, milestones, tasks] = await Promise.all([
       peopleRepo.listByProject(ctx.db, projectId),
       milestonesRepo.listByProject(ctx.db, projectId),
       tasksRepo.listByProject(ctx.db, projectId),
-      decisionCandidates.length
-        ? conversationsRepo
-            .latest(ctx.db, ctx.userId, projectId)
-            .then((c) => c ?? conversationsRepo.create(ctx.db, ctx.userId, projectId))
-        : null,
-      itemCandidates.length ? itemProposalsRepo.listByProject(ctx.db, projectId) : [],
     ]);
-    const recent = conversation ? (await messagesRepo.listByConversation(ctx.db, conversation.id)).slice(-12) : [];
     const refs: TraceRefs = {
       people: people.map((p) => ({ id: p.id, name: p.name })),
       milestones: milestones.map((m) => ({ id: m.milestone.id, name: m.milestone.name })),
@@ -166,9 +163,9 @@ export const proposalsService = {
       people: refs.people.map((p) => p.name),
       milestones: refs.milestones.map((m) => m.name),
       tasks: refs.tasks.map((t) => t.title),
-      conversation: transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage)),
+      conversation: "",
     };
-    const extractorInput = (candidates: Candidate[]) => ({
+    const extractorInput = (candidates: Candidate[], conversation = "") => ({
       sources: candidates.map(({ kind, entityId, title, evidenceKind, text }) => ({
         kind,
         entityId,
@@ -176,7 +173,7 @@ export const proposalsService = {
         evidenceKind,
         text,
       })),
-      context,
+      context: { ...context, conversation },
       telemetry: {
         userId: ctx.userId,
         properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
@@ -193,7 +190,12 @@ export const proposalsService = {
       let inserted: ProposalRow[];
       let discarded: number;
       try {
-        const raw = await extract(extractorInput(decisionCandidates));
+        const conversation = await conversationsRepo
+          .latest(ctx.db, ctx.userId, projectId)
+          .then((c) => c ?? conversationsRepo.create(ctx.db, ctx.userId, projectId));
+        const recent = (await messagesRepo.listByConversation(ctx.db, conversation.id)).slice(-12);
+        const transcript = transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage));
+        const raw = await extract(extractorInput(decisionCandidates, transcript));
         const traced = traceProposals(raw.proposals, decisionCandidates, refs);
         const kept = attachPassages(traced.kept, passagesByEvidence);
         discarded = traced.discarded;
@@ -235,10 +237,8 @@ export const proposalsService = {
       let discarded: number;
       try {
         // The Conversation stays out of the item prompt (ADR 0015).
-        const raw = await extractItems({
-          ...extractorInput(itemCandidates),
-          context: { ...context, conversation: "" },
-        });
+        const raw = await extractItems(extractorInput(itemCandidates));
+        const itemRows = await itemProposalsRepo.listByProject(ctx.db, projectId);
         const known = itemRows.map((r) => ({
           kind: r.kind,
           title: "title" in r.fields ? r.fields.title : r.fields.name,

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { ConflictError, ForbiddenError } from "@/server/core/errors";
 import { activityRepo } from "@/server/modules/activity/service";
+import { conversationsRepo } from "@/server/modules/assistant/repository";
 import { commentsService } from "@/server/modules/comments/service";
 import { assumptionsRepo, sourcesRepo } from "@/server/modules/decisions/repository";
 import { assumptions, decisionEdges, decisionSources, decisions } from "@/server/modules/decisions/schema";
@@ -568,6 +569,29 @@ describe("item pass (#114)", () => {
     expect(out.items).toEqual({ skipped: "failed" });
     const retry = await proposalsService.runPass(ctx, pid, { extract: heuristicExtract, trigger: "automatic" });
     expect(retry.items).toMatchObject({ sourcesPassed: 1, tasks: 2 });
+  });
+
+  it("a load only one side needs fails that side alone", async () => {
+    const { pid } = await setup("LDF", `${NOTES}\nWe decided to run the pilot in two cities.`);
+    const latest = vi.spyOn(conversationsRepo, "latest").mockRejectedValueOnce(new Error("db down"));
+    const out = await proposalsService.runPass(ctx, pid, { extract: heuristicExtract, trigger: "automatic" });
+    latest.mockRestore();
+    expect(out).toMatchObject({ skipped: "failed", items: { tasks: 2, milestones: 1 } });
+
+    const { pid: other } = await setup("LDI", `${NOTES}\nWe decided to run the pilot in two cities.`);
+    const list = vi.spyOn(itemProposalsRepo, "listByProject").mockRejectedValueOnce(new Error("db down"));
+    const second = await proposalsService.runPass(ctx, other, { extract: heuristicExtract, trigger: "automatic" });
+    list.mockRestore();
+    expect(second).toMatchObject({ proposed: 1, items: { skipped: "failed" } });
+  });
+
+  it("a failed read after commit never loses what the pass created", async () => {
+    const { pid } = await setup("PCF", `${NOTES}\nWe decided to run the pilot in two cities.`);
+    const list = vi.spyOn(proposalsRepo, "listByProject").mockRejectedValue(new Error("db down"));
+    const out = await proposalsService.runPass(ctx, pid, { extract: heuristicExtract, trigger: "manual" });
+    list.mockRestore();
+    expect(out).toMatchObject({ proposed: 1, items: { tasks: 2, milestones: 1 } });
+    expect(out.proposalId).toBeUndefined();
   });
 
   it("never raises a rejected item again, nor a pending one restated elsewhere", async () => {
