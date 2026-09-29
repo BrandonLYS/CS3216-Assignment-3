@@ -3,7 +3,7 @@ import type { CreateDecisionInput } from "@/server/modules/decisions/validation"
 import { capture } from "@/shared/analytics/server";
 import type { ProposalExtractor } from "@/shared/domain";
 import type { CitableKind } from "./extract";
-import type { ProposalRow } from "./schema";
+import type { ItemProposalRow, ProposalRow } from "./schema";
 
 /**
  * The Evidence -> Proposal -> Decision funnel (issue #74). The transitions emit these events,
@@ -104,6 +104,41 @@ export function proposalGenerated(
     evidence_source_count: pass.sourceKinds.evidence,
     comment_source_count: pass.sourceKinds.comment,
     discarded_count: pass.discarded,
+  }));
+}
+
+/** Same contract as `proposalGenerated` for the item pass (#114): created rows only, silent otherwise. */
+export function itemProposalGenerated(
+  ctx: Ctx,
+  pass: {
+    projectId: string;
+    trigger: PassTrigger;
+    extractor: ProposalExtractor;
+    tasks: number;
+    milestones: number;
+    sourcesPassed: number;
+    discarded: number;
+  },
+) {
+  if (pass.tasks + pass.milestones < 1) return;
+  return record(ctx.userId, "item_proposal_generated", () => ({
+    project_id: pass.projectId,
+    trigger: pass.trigger,
+    extractor: pass.extractor,
+    task_count: pass.tasks,
+    milestone_count: pass.milestones,
+    source_count: pass.sourcesPassed,
+    discarded_count: pass.discarded,
+  }));
+}
+
+/** Called after the conditional update that rejected a still-pending item Proposal returned a row. */
+export function itemProposalRejected(ctx: Ctx, proposal: ItemProposalRow) {
+  return record(ctx.userId, "item_proposal_rejected", () => ({
+    project_id: proposal.projectId,
+    proposal_id: proposal.id,
+    kind: proposal.kind,
+    extractor: proposal.extractor,
   }));
 }
 

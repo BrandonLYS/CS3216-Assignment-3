@@ -13,14 +13,23 @@ import { milestonesRepo } from "@/server/modules/milestones/repository";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
-import type { ProposalExtractor } from "@/shared/domain";
-import { proposalGenerated, proposalRejected, today, type PassTrigger } from "./analytics";
+import type { DbOrTx } from "@/server/db/client";
+import type { ProposalExtractor, ProposalPass } from "@/shared/domain";
+import {
+  itemProposalGenerated,
+  itemProposalRejected,
+  proposalGenerated,
+  proposalRejected,
+  today,
+  type PassTrigger,
+} from "./analytics";
 import { pickExtractor, type Extract, type ExtractSource } from "./extract";
-import { passSourcesRepo, proposalsRepo } from "./repository";
-import type { ProposalRow } from "./schema";
-import { attachPassages, traceProposals, type TraceRefs } from "./trace";
+import { heuristicExtractItems, pickExtractors, type ExtractItems } from "./extract-items";
+import { itemProposalsRepo, passSourcesRepo, proposalsRepo } from "./repository";
+import type { ItemProposalRow, ProposalRow } from "./schema";
+import { attachPassages, traceItems, traceProposals, type TraceRefs } from "./trace";
 
-export type PassOutcome =
+export type DecisionPassOutcome =
   | { skipped: "not_configured" | "nothing_new" | "failed"; proposalId?: string }
   | {
       extractor: ProposalExtractor;
@@ -29,6 +38,16 @@ export type PassOutcome =
       discarded: number;
       proposalId?: string;
     };
+
+/** The item side of a pass (#114); `tasks` and `milestones` count inserted rows. */
+export type ItemPassOutcome =
+  | { skipped: "not_configured" | "nothing_new" | "failed" }
+  | { extractor: ProposalExtractor; sourcesPassed: number; tasks: number; milestones: number; discarded: number };
+
+/** The Decision side at the top level, as before #114, and the item side under `items`. */
+export type PassOutcome = DecisionPassOutcome & { items: ItemPassOutcome };
+
+type Candidate = ExtractSource & { textHash: string };
 
 const hashOf = (text: string) => createHash("sha1").update(text).digest("hex");
 
@@ -57,17 +76,25 @@ export const proposalsService = {
   /** True when a pass can run at all (a model is configured or the heuristic is selected). */
   enabled: async (ctx: Ctx) => (await pickExtractor(ctx)) !== null,
 
-  /** `trigger` is required: an unnamed trigger is the mis-attribution this funnel exists to end. */
+  /**
+   * `trigger` is required: an unnamed trigger is the mis-attribution this funnel exists to end.
+   * The Decision and item extractors read the same Sources but keep their own bookkeeping, and
+   * each side catches its own failures, so one failing never blocks or re-runs the other.
+   */
   runPass: async (
     ctx: Ctx,
     projectId: string,
-    opts: { trigger: PassTrigger; extract?: Extract },
+    opts: { trigger: PassTrigger; extract?: Extract; extractItems?: ExtractItems },
   ): Promise<PassOutcome> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
-    const picked = await pickExtractor(ctx);
+    const picked = await pickExtractors(ctx);
     const extract = opts.extract ?? picked?.extract;
+    // An injected Decision extractor is a test or script: keep the item side deterministic too.
+    const extractItems = opts.extractItems ?? (opts.extract ? heuristicExtractItems : picked?.extractItems);
     const extractorName: ProposalExtractor = opts.extract ? "heuristic" : (picked?.name ?? "heuristic");
-    if (!extract) return { skipped: "not_configured" };
+    const itemExtractorName: ProposalExtractor =
+      opts.extractItems || opts.extract ? "heuristic" : (picked?.name ?? "heuristic");
+    if (!extract || !extractItems) return { skipped: "not_configured", items: { skipped: "not_configured" } };
 
     const [evidence, comments, passed, passages] = await Promise.all([
       evidenceRepo.listByProject(ctx.db, projectId),
@@ -78,10 +105,7 @@ export const proposalsService = {
     const passagesByEvidence = new Map<string, typeof passages>();
     for (const p of passages)
       passagesByEvidence.set(p.evidenceId, [...(passagesByEvidence.get(p.evidenceId) ?? []), p]);
-    const seen = new Map(
-      passed.filter((p) => p.pass === "decision").map((p) => [`${p.kind}:${p.entityId}`, p.textHash]),
-    );
-    const candidates: Array<ExtractSource & { textHash: string }> = [];
+    const all: Candidate[] = [];
     // Transcripts first: they carry the stated reasoning (issue #42). The hash stays on the raw text so
     // "already read" is independent of segmentation; the extractor reads label-free Passage text so its
     // excerpts sit inside one Passage.
@@ -89,112 +113,180 @@ export const proposalsService = {
     for (const e of ordered) {
       const raw = evidenceText(e).trim();
       if (!raw) continue;
-      const textHash = hashOf(raw);
-      if (seen.get(`evidence:${e.id}`) === textHash) continue;
       const own = passagesByEvidence.get(e.id);
       const text = own?.length ? transcriptText(own) : raw;
-      candidates.push({ kind: "evidence", entityId: e.id, title: e.title, evidenceKind: e.kind, text, textHash });
+      all.push({ kind: "evidence", entityId: e.id, title: e.title, evidenceKind: e.kind, text, textHash: hashOf(raw) });
     }
     for (const c of comments) {
       const text = c.body.trim();
       if (!text) continue;
-      const textHash = hashOf(text);
-      if (seen.get(`comment:${c.id}`) === textHash) continue;
-      candidates.push({
+      all.push({
         kind: "comment",
         entityId: c.id,
         title: `Comment${c.saidByName ? ` by ${c.saidByName}` : ""}`,
         text,
-        textHash,
+        textHash: hashOf(text),
       });
     }
+    const unread = (pass: ProposalPass) => {
+      const seen = new Map(passed.filter((p) => p.pass === pass).map((p) => [`${p.kind}:${p.entityId}`, p.textHash]));
+      return all.filter((c) => seen.get(`${c.kind}:${c.entityId}`) !== c.textHash);
+    };
+    const decisionCandidates = unread("decision");
+    const itemCandidates = unread("item");
+
     // A manual pass ends in review: it points at the newest pending Proposal, whichever pass raised it.
     const firstPending = async () =>
       opts.trigger === "manual" ? (await proposalsRepo.listByProject(ctx.db, projectId, "pending"))[0]?.id : undefined;
-    if (!candidates.length) {
+    const nothingNew = async (): Promise<DecisionPassOutcome> => {
       const proposalId = await firstPending();
       return proposalId ? { skipped: "nothing_new", proposalId } : { skipped: "nothing_new" };
-    }
+    };
+    if (!decisionCandidates.length && !itemCandidates.length)
+      return { ...(await nothingNew()), items: { skipped: "nothing_new" } };
 
-    const [people, milestones, tasks, conversation] = await Promise.all([
+    const [people, milestones, tasks, conversation, itemRows] = await Promise.all([
       peopleRepo.listByProject(ctx.db, projectId),
       milestonesRepo.listByProject(ctx.db, projectId),
       tasksRepo.listByProject(ctx.db, projectId),
-      conversationsRepo
-        .latest(ctx.db, ctx.userId, projectId)
-        .then((c) => c ?? conversationsRepo.create(ctx.db, ctx.userId, projectId)),
+      decisionCandidates.length
+        ? conversationsRepo
+            .latest(ctx.db, ctx.userId, projectId)
+            .then((c) => c ?? conversationsRepo.create(ctx.db, ctx.userId, projectId))
+        : null,
+      itemCandidates.length ? itemProposalsRepo.listByProject(ctx.db, projectId) : [],
     ]);
-    const recent = (await messagesRepo.listByConversation(ctx.db, conversation.id)).slice(-12);
+    const recent = conversation ? (await messagesRepo.listByConversation(ctx.db, conversation.id)).slice(-12) : [];
     const refs: TraceRefs = {
       people: people.map((p) => ({ id: p.id, name: p.name })),
       milestones: milestones.map((m) => ({ id: m.milestone.id, name: m.milestone.name })),
       tasks: tasks.map((t) => ({ id: t.task.id, title: t.task.title })),
     };
-
-    let raw: Awaited<ReturnType<Extract>>;
-    try {
-      raw = await extract({
-        sources: candidates.map(({ kind, entityId, title, evidenceKind, text }) => ({
-          kind,
-          entityId,
-          title,
-          evidenceKind,
-          text,
-        })),
-        context: {
-          people: refs.people.map((p) => p.name),
-          milestones: refs.milestones.map((m) => m.name),
-          tasks: refs.tasks.map((t) => t.title),
-          conversation: transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage)),
-        },
-        telemetry: {
-          userId: ctx.userId,
-          properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
-        },
-      });
-    } catch (e) {
-      console.error("Proposal pass failed", e);
-      return { skipped: "failed" };
-    }
-    const traced = traceProposals(raw.proposals, candidates, refs);
-    const kept = attachPassages(traced.kept, passagesByEvidence);
-    const { discarded } = traced;
-
-    // Pass bookkeeping and the new Proposals land together, after the extractor returned. Two
-    // passes racing on one Project (two quick saves) are safe: the unique keys absorb the loser.
-    const inserted = await ctx.db.transaction(async (tx) => {
-      await passSourcesRepo.upsertMany(
-        tx,
-        candidates.map((c) => ({
-          projectId,
-          pass: "decision",
-          kind: c.kind,
-          entityId: c.entityId,
-          textHash: c.textHash,
-        })),
-      );
-      return proposalsRepo.insertMany(
-        tx,
-        kept.map((k) => ({ ...k, projectId, extractor: extractorName })),
-      );
-    });
-    const outcome = {
-      extractor: extractorName,
-      sourcesPassed: candidates.length,
-      proposed: inserted.length,
-      discarded,
+    const context = {
+      people: refs.people.map((p) => p.name),
+      milestones: refs.milestones.map((m) => m.name),
+      tasks: refs.tasks.map((t) => t.title),
+      conversation: transcriptOf(recent.map((r) => ({ id: r.id, role: r.role, parts: r.parts }) as UIMessage)),
     };
-    await proposalGenerated(ctx, {
-      ...outcome,
-      projectId,
-      trigger: opts.trigger,
-      sourceKinds: {
-        evidence: candidates.filter((c) => c.kind === "evidence").length,
-        comment: candidates.filter((c) => c.kind === "comment").length,
+    const extractorInput = (candidates: Candidate[]) => ({
+      sources: candidates.map(({ kind, entityId, title, evidenceKind, text }) => ({
+        kind,
+        entityId,
+        title,
+        evidenceKind,
+        text,
+      })),
+      context,
+      telemetry: {
+        userId: ctx.userId,
+        properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
       },
     });
-    const proposalId = opts.trigger === "manual" ? await firstPending() : inserted[0]?.id;
-    return proposalId ? { ...outcome, proposalId } : outcome;
+    const markRead = (tx: DbOrTx, pass: ProposalPass, candidates: Candidate[]) =>
+      passSourcesRepo.upsertMany(
+        tx,
+        candidates.map((c) => ({ projectId, pass, kind: c.kind, entityId: c.entityId, textHash: c.textHash })),
+      );
+
+    const decisionPass = async (): Promise<DecisionPassOutcome> => {
+      if (!decisionCandidates.length) return nothingNew();
+      let inserted: ProposalRow[];
+      let discarded: number;
+      try {
+        const raw = await extract(extractorInput(decisionCandidates));
+        const traced = traceProposals(raw.proposals, decisionCandidates, refs);
+        const kept = attachPassages(traced.kept, passagesByEvidence);
+        discarded = traced.discarded;
+        // Bookkeeping and the new Proposals land together, after the extractor returned. Two passes
+        // racing on one Project (two quick saves) are safe: the unique keys absorb the loser.
+        inserted = await ctx.db.transaction(async (tx) => {
+          await markRead(tx, "decision", decisionCandidates);
+          return proposalsRepo.insertMany(
+            tx,
+            kept.map((k) => ({ ...k, projectId, extractor: extractorName })),
+          );
+        });
+      } catch (e) {
+        console.error("Proposal pass failed", e);
+        return { skipped: "failed" };
+      }
+      const outcome = {
+        extractor: extractorName,
+        sourcesPassed: decisionCandidates.length,
+        proposed: inserted.length,
+        discarded,
+      };
+      await proposalGenerated(ctx, {
+        ...outcome,
+        projectId,
+        trigger: opts.trigger,
+        sourceKinds: {
+          evidence: decisionCandidates.filter((c) => c.kind === "evidence").length,
+          comment: decisionCandidates.filter((c) => c.kind === "comment").length,
+        },
+      });
+      const proposalId = opts.trigger === "manual" ? await firstPending() : inserted[0]?.id;
+      return proposalId ? { ...outcome, proposalId } : outcome;
+    };
+
+    const itemPass = async (): Promise<ItemPassOutcome> => {
+      if (!itemCandidates.length) return { skipped: "nothing_new" };
+      let inserted: ItemProposalRow[];
+      let discarded: number;
+      try {
+        // The Conversation stays out of the item prompt (ADR 0015).
+        const raw = await extractItems({
+          ...extractorInput(itemCandidates),
+          context: { ...context, conversation: "" },
+        });
+        const known = itemRows.map((r) => ({
+          kind: r.kind,
+          title: "title" in r.fields ? r.fields.title : r.fields.name,
+        }));
+        const traced = traceItems(raw, itemCandidates, refs, known);
+        const kept = attachPassages(traced.kept, passagesByEvidence);
+        discarded = traced.discarded;
+        inserted = await ctx.db.transaction(async (tx) => {
+          await markRead(tx, "item", itemCandidates);
+          return itemProposalsRepo.insertMany(
+            tx,
+            kept.map((k) => ({ ...k, projectId, extractor: itemExtractorName })),
+          );
+        });
+      } catch (e) {
+        console.error("Item proposal pass failed", e);
+        return { skipped: "failed" };
+      }
+      const outcome = {
+        extractor: itemExtractorName,
+        sourcesPassed: itemCandidates.length,
+        tasks: inserted.filter((r) => r.kind === "task").length,
+        milestones: inserted.filter((r) => r.kind === "milestone").length,
+        discarded,
+      };
+      await itemProposalGenerated(ctx, { ...outcome, projectId, trigger: opts.trigger });
+      return outcome;
+    };
+
+    const [decisionOutcome, items] = await Promise.all([decisionPass(), itemPass()]);
+    return { ...decisionOutcome, items };
+  },
+
+  /** Pending Task and Milestone Proposals (#114); review and accept arrive with #115. */
+  listPendingItems: async (ctx: Ctx, projectId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    return itemProposalsRepo.listByProject(ctx.db, projectId, "pending");
+  },
+
+  /** Kept, not deleted: a rejected item's fingerprint and title stop later passes raising it again. */
+  rejectItem: async (ctx: Ctx, id: string): Promise<ItemProposalRow> => {
+    const p = await itemProposalsRepo.findById(ctx.db, id);
+    if (!p) throw new NotFoundError("Proposal");
+    await assertOwnsProject(ctx.db, ctx.userId, p.projectId);
+    const [row] = await itemProposalsRepo.markRejected(ctx.db, p.id);
+    if (!row) throw new ConflictError("That proposal was already resolved");
+    await itemProposalRejected(ctx, row);
+    return row;
   },
 
   listPending: async (ctx: Ctx, projectId: string) => {

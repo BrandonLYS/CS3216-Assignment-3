@@ -103,7 +103,7 @@ describe("generation", () => {
     vi.mocked(capture).mockClear();
 
     expect(await proposalsService.runPass(ctx, projectId, { extract: heuristicExtract, trigger: "automatic" })).toEqual(
-      { skipped: "nothing_new" },
+      { skipped: "nothing_new", items: { skipped: "nothing_new" } },
     );
     expect(events()).toEqual([]);
   });
@@ -116,6 +116,7 @@ describe("generation", () => {
 
     expect(await proposalsService.runPass(ctx, project.id, { trigger: "manual" })).toEqual({
       skipped: "not_configured",
+      items: { skipped: "not_configured" },
     });
     expect(events()).toEqual([]);
     vi.unstubAllEnvs();
@@ -124,13 +125,17 @@ describe("generation", () => {
   it("stays silent when the extractor throws", async () => {
     const project = await makeProject(ctx, "ERR");
     await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: SENTENCE });
-    const failing: Extract = async () => {
+    const failing = async (): Promise<never> => {
       throw new Error("extractor unavailable");
     };
 
-    expect(await proposalsService.runPass(ctx, project.id, { extract: failing, trigger: "automatic" })).toEqual({
-      skipped: "failed",
-    });
+    expect(
+      await proposalsService.runPass(ctx, project.id, {
+        extract: failing,
+        extractItems: failing,
+        trigger: "automatic",
+      }),
+    ).toEqual({ skipped: "failed", items: { skipped: "failed" } });
     expect(events()).toEqual([]);
 
     // The failed pass wrote no bookkeeping, so the retry reads the same Source and records once.
@@ -346,5 +351,55 @@ describe("what counts as an edit", () => {
     const broken = { ...proposed, sources: null } as unknown as ProposalRow;
     await expect(proposalAccepted(ctx, broken, baseline)).resolves.toBeUndefined();
     expect(() => editedBeforeAccept(broken, baseline)).toThrow();
+  });
+});
+
+describe("item Proposals (#114)", () => {
+  const NOTES = "Action item: Book the usability lab\nMilestone: Pilot readout on 2026-10-20.";
+
+  it("records created Tasks and Milestones with counts only, and stays silent when nothing is new", async () => {
+    const project = await makeProject(ctx, "IGN");
+    await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: NOTES });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "manual" });
+
+    expect(events("item_proposal_generated")).toEqual([
+      {
+        userId: ctx.userId,
+        event: "item_proposal_generated",
+        properties: {
+          project_id: project.id,
+          trigger: "manual",
+          extractor: "heuristic",
+          task_count: 1,
+          milestone_count: 1,
+          source_count: 1,
+          discarded_count: 0,
+        },
+      },
+    ]);
+    // Nothing decided in the notes, so the Decision side stays silent too.
+    expect(events("proposal_generated")).toEqual([]);
+
+    vi.mocked(capture).mockClear();
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "manual" });
+    expect(events()).toEqual([]);
+  });
+
+  it("records a rejection once, with the kind and no content", async () => {
+    const project = await makeProject(ctx, "IRE");
+    await evidenceService.create(ctx, { projectId: project.id, title: "Minutes", kind: "minutes", body: NOTES });
+    await proposalsService.runPass(ctx, project.id, { extract: heuristicExtract, trigger: "manual" });
+    const milestone = (await proposalsService.listPendingItems(ctx, project.id)).find((p) => p.kind === "milestone")!;
+    vi.mocked(capture).mockClear();
+
+    await proposalsService.rejectItem(ctx, milestone.id);
+    await expect(proposalsService.rejectItem(ctx, milestone.id)).rejects.toBeInstanceOf(ConflictError);
+    expect(events()).toEqual([
+      {
+        userId: ctx.userId,
+        event: "item_proposal_rejected",
+        properties: { project_id: project.id, proposal_id: milestone.id, kind: "milestone", extractor: "heuristic" },
+      },
+    ]);
   });
 });

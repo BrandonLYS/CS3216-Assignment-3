@@ -267,9 +267,10 @@ async function runWhy(ctx: Ctx, fixture: Fixture, model: string, ids: EntityIds,
 
 /**
  * Batching and idempotency measurement for M12. The production pass sends every unread Evidence
- * and Comment of a Project in one model call; this records that call, then repeats it to show the
+ * and Comment of a Project in one Decision call and, since #114, one item call; this records that
+ * pass (usage covers both calls, the outcome carries both sides), then repeats it to show the
  * `proposal_pass_sources` hash bookkeeping making the second pass free, then bills the same
- * material one source at a time for the comparison.
+ * material one source at a time through the Decision extractor alone for the comparison.
  */
 async function runPassExperiment(ctx: Ctx, fixture: Fixture, model: string, take: () => Call[]) {
   const timed = async <T,>(run: () => Promise<T>) => {
