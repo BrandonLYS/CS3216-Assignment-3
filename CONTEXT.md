@@ -88,7 +88,7 @@ A citation from a Decision or an edge to something already in the Project histor
 _Avoid_: Reference, link (see Dependency and Evidence link), attachment, footnote
 
 **Proposal**:
-A Decision the Assistant extracted from Evidence or a Comment and offers to the PM for confirmation, with the Sources it came from and any typed Assumptions it suggests. It is pending, accepted or rejected; nothing enters the graph until a PM accepts it.
+A Decision, Task or Milestone the Assistant extracted from Evidence or a Comment and offers to the PM for confirmation, with the Sources it came from (and, for a Decision, any typed Assumptions it suggests). It is pending, accepted or rejected; nothing enters the Project until a PM accepts it.
 _Avoid_: Suggestion, draft decision, candidate, recommendation
 
 **Cause**, **Consequence**:
