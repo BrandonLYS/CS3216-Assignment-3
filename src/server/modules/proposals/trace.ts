@@ -1,8 +1,15 @@
 import { createHash } from "node:crypto";
 import { assumptionFieldErrors } from "@/server/modules/decisions/validation";
-import { SOURCE_EXCERPT_MAX, type AssumptionTargetType } from "@/shared/domain";
+import { SOURCE_EXCERPT_MAX, type AssumptionTargetType, type ItemProposalKind } from "@/shared/domain";
 import type { ExtractSource, RawAssumption, RawProposal } from "./extract";
-import type { NewProposalRow, ProposedAssumption, ProposedSource } from "./schema";
+import type { RawItems, RawTask } from "./extract-items";
+import type {
+  NewProposalRow,
+  ProposedAssumption,
+  ProposedMilestoneFields,
+  ProposedSource,
+  ProposedTaskFields,
+} from "./schema";
 
 /**
  * Traceability filter (issue #39): an extractor claim survives only when every cited Source
@@ -112,6 +119,118 @@ export interface TracedProposal extends Omit<NewProposalRow, "projectId" | "extr
   fingerprint: string;
   sources: ProposedSource[];
   assumptions: ProposedAssumption[];
+}
+
+export interface TracedItem {
+  kind: ItemProposalKind;
+  fingerprint: string;
+  fields: ProposedTaskFields | ProposedMilestoneFields;
+  sources: ProposedSource[];
+}
+
+/** Title of an existing item or pending item Proposal, for the duplicate check. */
+export interface KnownItem {
+  kind: ItemProposalKind;
+  title: string;
+}
+
+const ITEM_LIMITS = { title: 200, name: 160, description: 4000 } as const;
+
+export const itemFingerprintOf = (kind: ItemProposalKind, primary: ProposedSource) =>
+  createHash("sha1")
+    .update(`${kind}|${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}`)
+    .digest("hex");
+
+const words = (s: string) =>
+  norm(s)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+/**
+ * Same item: equal titles once punctuation is stripped, or one inside the other when the shorter
+ * has at least three words. `byName` alone is too loose here: a one-word title would match any
+ * unique Task that contains it.
+ */
+export function isDuplicateTitle(a: string, b: string) {
+  const [x, y] = [words(a), words(b)];
+  const [short, long] = x.length <= y.length ? [x.join(" "), y.join(" ")] : [y.join(" "), x.join(" ")];
+  if (!short) return false;
+  if (short === long) return true;
+  return Math.min(x.length, y.length) >= 3 && ` ${long} `.includes(` ${short} `);
+}
+
+const isoOrNull = (v: string | null | undefined) => (v && ISO_DATE.test(v) ? v : null);
+
+/** Resolve a name to `[id, canonical name]`; an unresolved name stays as the extractor wrote it. */
+const resolve = <T extends { id: string }>(rows: T[], name: string | null, key: (r: T) => string) => {
+  const snapshot = cap(name, ITEM_LIMITS.name);
+  const hit = byName(rows, snapshot, key);
+  return hit ? ([hit.id, key(hit)] as const) : ([null, snapshot] as const);
+};
+
+/**
+ * Keep traceable Task and Milestone Proposals (issue #114). An item is discarded when a Source does
+ * not trace, it has no title, a Milestone has no ISO date, or it duplicates an existing item or a
+ * pending item Proposal of the same kind. Unresolved names keep their snapshot with a null id.
+ */
+export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceRefs, pending: KnownItem[] = []) {
+  const known: KnownItem[] = [
+    ...refs.tasks.map((t) => ({ kind: "task" as const, title: t.title })),
+    ...refs.milestones.map((m) => ({ kind: "milestone" as const, title: m.name })),
+    ...pending,
+  ];
+  const kept: TracedItem[] = [];
+  const seen = new Set<string>();
+  let discarded = 0;
+  const keep = (
+    kind: ItemProposalKind,
+    title: string | null,
+    rawSources: RawTask["sources"],
+    build: () => TracedItem["fields"] | null,
+  ) => {
+    const traced = traceSources(rawSources, sources);
+    const fields = title && traced ? build() : null;
+    if (!traced || !fields || known.some((k) => k.kind === kind && isDuplicateTitle(k.title, title!))) {
+      discarded++;
+      return;
+    }
+    const fingerprint = itemFingerprintOf(kind, traced[0]!);
+    if (seen.has(fingerprint)) return;
+    seen.add(fingerprint);
+    known.push({ kind, title: title! });
+    kept.push({ kind, fingerprint, fields, sources: traced });
+  };
+
+  for (const t of raw.tasks) {
+    const title = cap(t.title, ITEM_LIMITS.title);
+    keep("task", title, t.sources, () => {
+      const [assigneeId, assigneeName] = resolve(refs.people, t.assigneeName, (r) => r.name);
+      const [milestoneId, milestoneName] = resolve(refs.milestones, t.milestoneName, (r) => r.name);
+      const dueDate = isoOrNull(t.dueDate);
+      const start = isoOrNull(t.startDate);
+      return {
+        title: title!,
+        description: cap(t.description, ITEM_LIMITS.description),
+        assigneeId,
+        assigneeName,
+        milestoneId,
+        milestoneName,
+        startDate: start && dueDate && start > dueDate ? null : start,
+        dueDate,
+      };
+    });
+  }
+  for (const m of raw.milestones) {
+    const name = cap(m.name, ITEM_LIMITS.name);
+    keep("milestone", name, m.sources, () => {
+      const dueDate = isoOrNull(m.dueDate);
+      if (!dueDate) return null;
+      const [ownerId, ownerName] = resolve(refs.people, m.ownerName, (r) => r.name);
+      return { name: name!, description: cap(m.description, ITEM_LIMITS.description), dueDate, ownerId, ownerName };
+    });
+  }
+  return { kept, discarded };
 }
 
 /** Keep the traceable Proposals, drop the rest; Assumptions that do not resolve are dropped individually. */
