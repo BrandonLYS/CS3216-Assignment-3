@@ -61,6 +61,27 @@ describe("heuristicExtractItems", () => {
     ]);
   });
 
+  it("splits two People's commitments in one sentence, each citing its own clause", async () => {
+    const { tasks } = await run("Priya will draft the spec and Marcus will review it by 2026-10-01.");
+    expect(tasks.map((t) => [t.title, t.assigneeName, t.dueDate, t.sources[0]!.excerpt])).toEqual([
+      ["Draft the spec", "Priya", null, "Priya will draft the spec"],
+      ["Review it", "Marcus", "2026-10-01", "Marcus will review it by 2026-10-01."],
+    ]);
+  });
+
+  it("ignores absences, states and empty action items", async () => {
+    const { tasks } = await run(
+      "Priya will not be able to attend the review.\nMarcus will be on leave by 2026-10-01.\nPriya won't join.\nAction: none\nTODO: n/a",
+    );
+    expect(tasks).toEqual([]);
+  });
+
+  it("stays fast on a pathological line", async () => {
+    const started = performance.now();
+    await run(`Milestone: x${" ".repeat(100_000)}\nAction item: a${" ".repeat(100_000)}by`);
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+
   it("returns nothing for plain prose", async () => {
     expect(await run("Status is green. The vendor sandbox is still pending.")).toEqual({ tasks: [], milestones: [] });
   });

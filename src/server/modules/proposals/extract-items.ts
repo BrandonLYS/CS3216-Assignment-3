@@ -57,11 +57,39 @@ const MILESTONE_LINE = new RegExp(
   "i",
 );
 const WILL = new RegExp(`^(.+?) will (.+?)(?: by (${ISO}))?[.!]?$`);
-const BY_DATE = new RegExp(`\\s+by (${ISO})[.!]?$`);
+const BY_DATE = new RegExp(` by (${ISO})[.!]?$`);
+/** Where a second commitment may start inside one sentence: "..., and Marcus will ...". */
+const AND = /,?\s+and\s+/g;
+/** "will not attend", "will be on leave", "will have left": a state or an absence, not work. */
+const NOT_WORK = /^(?:not|never|be|have)\b/i;
+const EMPTY_ACTION = /^(?:none|n\/?a|tbd|nil|nothing|-+)[.!]?$/i;
+/**
+ * Lines past this are skipped. A pasted line of thousands of characters is not an action item,
+ * and the cap bounds the lazy patterns above, whose cost grows with the square of the line.
+ */
+const MAX_LINE = 500;
 
 const titleCase = (s: string) => {
   const t = s.trim().replace(/[.!;]+$/, "");
   return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/**
+ * One sentence split where a known Person starts a new commitment, so "Priya will draft the spec
+ * and Marcus will review it" is two Tasks. Each part is a verbatim slice of the sentence.
+ */
+const clausesOf = (sentence: string, people: string[]) => {
+  const out: string[] = [];
+  let start = 0;
+  for (const m of sentence.matchAll(AND)) {
+    const rest = sentence.slice(m.index + m[0].length);
+    const next = WILL.exec(rest);
+    if (!next || !isKnownPerson(next[1]!, people)) continue;
+    out.push(sentence.slice(start, m.index).trim());
+    start = m.index + m[0].length;
+  }
+  out.push(sentence.slice(start).trim());
+  return out;
 };
 
 /** True when `name` is a known Person's full or first name. */
@@ -79,7 +107,8 @@ const emptyTask = { description: null, assigneeName: null, milestoneName: null, 
  * Deterministic fallback, so e2e can assert exact item Proposals without a model key. Reads each
  * line, then each sentence, skipping anything with a decision verb (that is the Decision pass):
  * `Action item: ...` / `TODO: ...` is a Task; `<known Person> will ... [by YYYY-MM-DD].` is an
- * assigned Task; `Milestone: <name> on YYYY-MM-DD` is a Milestone.
+ * assigned Task, one per Person when a sentence names several, and never "will not" or "will be";
+ * `Milestone: <name> on YYYY-MM-DD` is a Milestone.
  */
 export const heuristicExtractItems: ExtractItems = async ({ sources, context }) => {
   const out: RawItems = { tasks: [], milestones: [] };
@@ -87,7 +116,7 @@ export const heuristicExtractItems: ExtractItems = async ({ sources, context }) 
     const cite = (excerpt: string) => [{ kind: s.kind, entityId: s.entityId, excerpt }];
     for (const raw of s.text.split("\n")) {
       const line = raw.trim();
-      if (!line || DECISION_VERB.test(line)) continue;
+      if (!line || line.length > MAX_LINE || DECISION_VERB.test(line)) continue;
       const milestone = MILESTONE_LINE.exec(line);
       if (milestone) {
         out.milestones.push({
@@ -101,6 +130,7 @@ export const heuristicExtractItems: ExtractItems = async ({ sources, context }) 
       }
       const action = ACTION_LINE.exec(line);
       if (action) {
+        if (EMPTY_ACTION.test(action[1]!.trim())) continue;
         const due = BY_DATE.exec(action[1]!);
         out.tasks.push({
           ...emptyTask,
@@ -110,15 +140,15 @@ export const heuristicExtractItems: ExtractItems = async ({ sources, context }) 
         });
         continue;
       }
-      for (const sentence of sentencesOf(line)) {
-        const will = WILL.exec(sentence);
-        if (!will || !isKnownPerson(will[1]!, context.people)) continue;
+      for (const clause of sentencesOf(line).flatMap((sentence) => clausesOf(sentence, context.people))) {
+        const will = WILL.exec(clause);
+        if (!will || !isKnownPerson(will[1]!, context.people) || NOT_WORK.test(will[2]!)) continue;
         out.tasks.push({
           ...emptyTask,
           title: titleCase(will[2]!),
           assigneeName: will[1]!.trim(),
           dueDate: will[3] ?? null,
-          sources: cite(sentence),
+          sources: cite(clause),
         });
       }
     }
