@@ -78,7 +78,9 @@ export const proposalsService = {
     const passagesByEvidence = new Map<string, typeof passages>();
     for (const p of passages)
       passagesByEvidence.set(p.evidenceId, [...(passagesByEvidence.get(p.evidenceId) ?? []), p]);
-    const seen = new Map(passed.map((p) => [`${p.kind}:${p.entityId}`, p.textHash]));
+    const seen = new Map(
+      passed.filter((p) => p.pass === "decision").map((p) => [`${p.kind}:${p.entityId}`, p.textHash]),
+    );
     const candidates: Array<ExtractSource & { textHash: string }> = [];
     // Transcripts first: they carry the stated reasoning (issue #42). The hash stays on the raw text so
     // "already read" is independent of segmentation; the extractor reads label-free Passage text so its
@@ -163,7 +165,13 @@ export const proposalsService = {
     const inserted = await ctx.db.transaction(async (tx) => {
       await passSourcesRepo.upsertMany(
         tx,
-        candidates.map((c) => ({ projectId, kind: c.kind, entityId: c.entityId, textHash: c.textHash })),
+        candidates.map((c) => ({
+          projectId,
+          pass: "decision",
+          kind: c.kind,
+          entityId: c.entityId,
+          textHash: c.textHash,
+        })),
       );
       return proposalsRepo.insertMany(
         tx,

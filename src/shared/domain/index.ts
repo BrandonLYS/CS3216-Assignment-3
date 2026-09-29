@@ -195,6 +195,12 @@ export const PROPOSAL_STATUSES = ["pending", "accepted", "rejected"] as const;
 export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 export const PROPOSAL_EXTRACTORS = ["model", "heuristic"] as const;
 export type ProposalExtractor = (typeof PROPOSAL_EXTRACTORS)[number];
+/** What an item Proposal would become when accepted (ADR 0015). */
+export const ITEM_PROPOSAL_KINDS = ["task", "milestone"] as const;
+export type ItemProposalKind = (typeof ITEM_PROPOSAL_KINDS)[number];
+/** Which extractor call has read a Source; each keeps its own bookkeeping so one failing never blocks the other. */
+export const PROPOSAL_PASSES = ["decision", "item"] as const;
+export type ProposalPass = (typeof PROPOSAL_PASSES)[number];
 
 // ---------------------------------------------------------------------------
 // Messaging (issue #61, ADR 0009). A Room holds Chat Messages between the PM

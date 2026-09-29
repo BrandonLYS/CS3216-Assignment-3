@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/server/db/client";
-import type { ProposalStatus, SourceKind } from "@/shared/domain";
+import type { ProposalPass, ProposalStatus, SourceKind } from "@/shared/domain";
 import { decisionProposals, proposalPassSources, type NewProposalRow, type ProposalRow } from "./schema";
 
 export const proposalsRepo = {
@@ -69,13 +69,21 @@ export const passSourcesRepo = {
   listForProject: (db: DbOrTx, projectId: string) =>
     db.select().from(proposalPassSources).where(eq(proposalPassSources.projectId, projectId)),
 
-  upsertMany: (db: DbOrTx, rows: Array<{ projectId: string; kind: SourceKind; entityId: string; textHash: string }>) =>
+  upsertMany: (
+    db: DbOrTx,
+    rows: Array<{ projectId: string; pass: ProposalPass; kind: SourceKind; entityId: string; textHash: string }>,
+  ) =>
     rows.length
       ? db
           .insert(proposalPassSources)
           .values(rows)
           .onConflictDoUpdate({
-            target: [proposalPassSources.projectId, proposalPassSources.kind, proposalPassSources.entityId],
+            target: [
+              proposalPassSources.projectId,
+              proposalPassSources.pass,
+              proposalPassSources.kind,
+              proposalPassSources.entityId,
+            ],
             set: { textHash: sql`excluded.text_hash`, passedAt: new Date() },
           })
       : Promise.resolve(),
