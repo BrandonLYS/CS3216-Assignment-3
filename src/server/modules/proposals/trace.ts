@@ -136,31 +136,46 @@ export interface KnownItem {
 
 const ITEM_LIMITS = { title: 200, name: 160, description: 4000 } as const;
 
-export const itemFingerprintOf = (kind: ItemProposalKind, primary: ProposedSource) =>
-  createHash("sha1")
-    .update(`${kind}|${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}`)
-    .digest("hex");
-
+/**
+ * Accent-folded, punctuation-free words, so "Café launch plan!" and "cafe launch plan" compare
+ * equal.
+ */
 const words = (s: string) =>
-  norm(s)
+  norm(s.normalize("NFKD").replace(/\p{M}/gu, ""))
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
 
 /**
- * Same item: equal titles once punctuation is stripped, or one inside the other when the shorter
- * has at least three words. `byName` alone is too loose here: a one-word title would match any
- * unique Task that contains it.
+ * Idempotency key: item kind, primary Source, its excerpt and the title. The title is in the key
+ * because one sentence often commits to two pieces of work ("Alice will draft the spec and Bob
+ * will review it"); re-raising a restated title is stopped by `isDuplicateTitle` instead.
+ */
+export const itemFingerprintOf = (kind: ItemProposalKind, primary: ProposedSource, title: string) =>
+  createHash("sha1")
+    .update(`${kind}|${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}|${words(title).join(" ")}`)
+    .digest("hex");
+
+/**
+ * Same item: equal words once accents and punctuation are gone, or one title inside the other
+ * when the shorter covers at least 80% of the longer. Containment alone is too loose: "Set up CI
+ * pipeline" is not "Set up CI pipeline for the mobile app", and "Do not review design doc" is not
+ * "Review design doc".
  */
 export function isDuplicateTitle(a: string, b: string) {
   const [x, y] = [words(a), words(b)];
-  const [short, long] = x.length <= y.length ? [x.join(" "), y.join(" ")] : [y.join(" "), x.join(" ")];
-  if (!short) return false;
-  if (short === long) return true;
-  return Math.min(x.length, y.length) >= 3 && ` ${long} `.includes(` ${short} `);
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  if (!short.length) return false;
+  if (short.length / long.length < 0.8) return false;
+  return ` ${long.join(" ")} `.includes(` ${short.join(" ")} `);
 }
 
-const isoOrNull = (v: string | null | undefined) => (v && ISO_DATE.test(v) ? v : null);
+/** A real calendar date in ISO form; "2026-02-30" has the shape but no day. */
+const isoOrNull = (v: string | null | undefined) => {
+  if (!v || !ISO_DATE.test(v)) return null;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
+};
 
 /** Resolve a name to `[id, canonical name]`; an unresolved name stays as the extractor wrote it. */
 const resolve = <T extends { id: string }>(rows: T[], name: string | null, key: (r: T) => string) => {
@@ -171,8 +186,9 @@ const resolve = <T extends { id: string }>(rows: T[], name: string | null, key: 
 
 /**
  * Keep traceable Task and Milestone Proposals (issue #114). An item is discarded when a Source does
- * not trace, it has no title, a Milestone has no ISO date, or it duplicates an existing item or a
- * pending item Proposal of the same kind. Unresolved names keep their snapshot with a null id.
+ * not trace, it has no title, a Milestone has no real ISO date, or it duplicates an existing item,
+ * an item Proposal already raised or one kept earlier in the same pass. Unresolved names keep their
+ * snapshot with a null id.
  */
 export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceRefs, pending: KnownItem[] = []) {
   const known: KnownItem[] = [
@@ -195,8 +211,11 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
       discarded++;
       return;
     }
-    const fingerprint = itemFingerprintOf(kind, traced[0]!);
-    if (seen.has(fingerprint)) return;
+    const fingerprint = itemFingerprintOf(kind, traced[0]!, title!);
+    if (seen.has(fingerprint)) {
+      discarded++;
+      return;
+    }
     seen.add(fingerprint);
     known.push({ kind, title: title! });
     kept.push({ kind, fingerprint, fields, sources: traced });

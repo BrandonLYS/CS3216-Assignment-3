@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RawProposal } from "./extract";
 import type { RawItems, RawMilestone, RawTask } from "./extract-items";
-import { attachPassages, fingerprintOf, traceAssumption, traceItems, traceProposals } from "./trace";
+import { attachPassages, fingerprintOf, isDuplicateTitle, traceAssumption, traceItems, traceProposals } from "./trace";
 
 const sources = [
   { kind: "evidence" as const, entityId: "e1", title: "Notes", text: "We   decided to\nswitch to interviews. Done." },
@@ -258,46 +258,78 @@ describe("traceItems", () => {
     expect(discarded).toBe(2);
   });
 
-  it("discards duplicates of existing items and pending item Proposals, but not a short title inside a longer one", () => {
+  it("discards restatements of known items but keeps a longer title that only contains one", () => {
     const { kept, discarded } = traceItems(
       {
         tasks: [
           task({ title: "Recruit interviewees!" }),
           task({ title: "Recruit", sources: [{ kind: "evidence", entityId: "e1", excerpt: "Action item" }] }),
           task({
-            title: "Draft the interview guide for the pilot",
+            title: "Draft the interview guide.",
             sources: [{ kind: "evidence", entityId: "e1", excerpt: "draft the interview guide" }],
           }),
+          task({
+            title: "Draft the interview guide for the pilot",
+            sources: [{ kind: "evidence", entityId: "e1", excerpt: "Priya to draft" }],
+          }),
+          task({
+            title: "Do not draft the interview guide",
+            sources: [{ kind: "evidence", entityId: "e1", excerpt: "Action item: Priya" }],
+          }),
         ],
-        milestones: [milestone({ name: "UAT begins" })],
+        milestones: [milestone({ name: "Pilot réadout" })],
       },
       itemSources,
       refs,
-      [{ kind: "task", title: "Draft the interview guide" }],
+      [
+        { kind: "task", title: "Draft the interview guide" },
+        { kind: "milestone", title: "Pilot readout" },
+      ],
     );
-    expect(kept.map((k) => (k.fields as { title: string }).title)).toEqual(["Recruit"]);
+    expect(kept.map((k) => (k.fields as { title: string }).title)).toEqual([
+      "Recruit",
+      "Draft the interview guide for the pilot",
+      "Do not draft the interview guide",
+    ]);
     expect(discarded).toBe(3);
   });
 
-  it("fingerprints by item kind and excerpt, stable across runs", () => {
-    const shared = [{ kind: "evidence" as const, entityId: "e1", excerpt: "Pilot readout on 2026-10-20" }];
-    const once = run({
-      tasks: [task({ title: "Prepare the readout", sources: shared })],
-      milestones: [milestone({ sources: shared })],
-    }).kept;
-    const twice = run({
-      tasks: [task({ title: "Prepare the pilot readout deck", sources: shared })],
-      milestones: [milestone({ sources: shared })],
-    }).kept;
-    expect(once[0]!.fingerprint).not.toBe(once[1]!.fingerprint);
-    expect(twice.map((k) => k.fingerprint)).toEqual(once.map((k) => k.fingerprint));
+  it("treats near-identical titles as the same item", () => {
+    expect(isDuplicateTitle("Set up the CI pipeline", "Set up the CI pipeline now")).toBe(true);
+    expect(isDuplicateTitle("Set up CI pipeline", "Set up CI pipeline for the mobile app")).toBe(false);
+    expect(isDuplicateTitle("Review design doc", "Do not review design doc")).toBe(false);
+    expect(isDuplicateTitle("Café launch plan", "cafe launch plan")).toBe(true);
+    expect(isDuplicateTitle("!!!", "!!!")).toBe(false);
   });
 
-  it("keeps the first of two items citing the same excerpt or restating the same title", () => {
-    expect(run({ tasks: [task(), task({ title: "Other wording" })] }).kept).toHaveLength(1);
-    const sameTitle = run({
-      tasks: [task(), task({ sources: [{ kind: "evidence", entityId: "e1", excerpt: "Action item: Priya" }] })],
+  it("rejects dates that do not exist on the calendar", () => {
+    const { kept, discarded } = run({
+      tasks: [task({ dueDate: "2026-02-30" })],
+      milestones: [milestone({ dueDate: "2026-13-01" })],
     });
-    expect(sameTitle.kept).toHaveLength(1);
+    expect(kept.map((k) => k.fields)).toMatchObject([{ dueDate: null }]);
+    expect(discarded).toBe(1);
+  });
+
+  it("fingerprints by item kind, excerpt and title, stable across runs", () => {
+    const shared = [{ kind: "evidence" as const, entityId: "e1", excerpt: "Pilot readout on 2026-10-20" }];
+    const items = {
+      tasks: [task({ title: "Prepare the readout", sources: shared })],
+      milestones: [milestone({ sources: shared })],
+    };
+    const once = run(items).kept;
+    expect(once).toHaveLength(2);
+    expect(once[0]!.fingerprint).not.toBe(once[1]!.fingerprint);
+    expect(run(items).kept.map((k) => k.fingerprint)).toEqual(once.map((k) => k.fingerprint));
+  });
+
+  it("keeps two pieces of work cited by one sentence, and counts a repeat as discarded", () => {
+    const sentence = [{ kind: "evidence" as const, entityId: "e1", excerpt: "Priya to draft the interview guide" }];
+    const both = run({
+      tasks: [task({ sources: sentence }), task({ title: "Review the interview guide", sources: sentence })],
+    });
+    expect(both.kept).toHaveLength(2);
+    const repeated = run({ tasks: [task(), task({ title: "Draft the interview guide!" })] });
+    expect(repeated).toMatchObject({ kept: [{}], discarded: 1 });
   });
 });
