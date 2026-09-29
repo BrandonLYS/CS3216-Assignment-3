@@ -58,14 +58,15 @@ const MILESTONE_LINE = new RegExp(
 );
 const WILL = new RegExp(`^(.+?) will (.+?)(?: by (${ISO}))?[.!]?$`);
 const BY_DATE = new RegExp(` by (${ISO})[.!]?$`);
-/** Where a second commitment may start inside one sentence: "..., and Marcus will ...". */
-const AND = /,?\s+and\s+/g;
+/** Where a second commitment may start inside one sentence: "..., and (then) Marcus will ...". */
+const AND = /,?\s+and\s+(?:then\s+)?/g;
 /** "will not attend", "will be on leave", "will have left": a state or an absence, not work. */
 const NOT_WORK = /^(?:not|never|be|have)\b/i;
 const EMPTY_ACTION = /^(?:none|n\/?a|tbd|nil|nothing|-+)[.!]?$/i;
 /**
- * Lines past this are skipped. A pasted line of thousands of characters is not an action item,
- * and the cap bounds the lazy patterns above, whose cost grows with the square of the line.
+ * Lines and sentences past this are not matched. A pasted run of thousands of characters is not
+ * an action item, and the cap bounds the lazy patterns above, whose cost grows with the square of
+ * the text. A long line (a transcript turn) is still split into sentences, each capped on its own.
  */
 const MAX_LINE = 500;
 
@@ -105,7 +106,8 @@ const emptyTask = { description: null, assigneeName: null, milestoneName: null, 
 
 /**
  * Deterministic fallback, so e2e can assert exact item Proposals without a model key. Reads each
- * line, then each sentence, skipping anything with a decision verb (that is the Decision pass):
+ * line, then each sentence, skipping any line or sentence with a decision verb (that is the
+ * Decision pass):
  * `Action item: ...` / `TODO: ...` is a Task; `<known Person> will ... [by YYYY-MM-DD].` is an
  * assigned Task, one per Person when a sentence names several, and never "will not" or "will be";
  * `Milestone: <name> on YYYY-MM-DD` is a Milestone.
@@ -116,8 +118,9 @@ export const heuristicExtractItems: ExtractItems = async ({ sources, context }) 
     const cite = (excerpt: string) => [{ kind: s.kind, entityId: s.entityId, excerpt }];
     for (const raw of s.text.split("\n")) {
       const line = raw.trim();
-      if (!line || line.length > MAX_LINE || DECISION_VERB.test(line)) continue;
-      const milestone = MILESTONE_LINE.exec(line);
+      if (!line) continue;
+      const short = line.length <= MAX_LINE && !DECISION_VERB.test(line);
+      const milestone = short ? MILESTONE_LINE.exec(line) : null;
       if (milestone) {
         out.milestones.push({
           name: titleCase(milestone[1]!),
@@ -128,7 +131,7 @@ export const heuristicExtractItems: ExtractItems = async ({ sources, context }) 
         });
         continue;
       }
-      const action = ACTION_LINE.exec(line);
+      const action = short ? ACTION_LINE.exec(line) : null;
       if (action) {
         if (EMPTY_ACTION.test(action[1]!.trim())) continue;
         const due = BY_DATE.exec(action[1]!);
@@ -140,7 +143,8 @@ export const heuristicExtractItems: ExtractItems = async ({ sources, context }) 
         });
         continue;
       }
-      for (const clause of sentencesOf(line).flatMap((sentence) => clausesOf(sentence, context.people))) {
+      const sentences = sentencesOf(line).filter((s) => s.length <= MAX_LINE && !DECISION_VERB.test(s));
+      for (const clause of sentences.flatMap((sentence) => clausesOf(sentence, context.people))) {
         const will = WILL.exec(clause);
         if (!will || !isKnownPerson(will[1]!, context.people) || NOT_WORK.test(will[2]!)) continue;
         out.tasks.push({

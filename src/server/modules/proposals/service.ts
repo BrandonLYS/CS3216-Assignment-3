@@ -90,6 +90,8 @@ export const proposalsService = {
     const picked = await pickExtractors(ctx);
     const extract = opts.extract ?? picked?.extract;
     // An injected Decision extractor is a test or script: keep the item side deterministic too.
+    // Injected extractors are recorded as "heuristic" whatever they wrap, the same convention as
+    // `opts.extract`, so a script's rows never pass for the production model path.
     const extractItems = opts.extractItems ?? (opts.extract ? heuristicExtractItems : picked?.extractItems);
     const extractorName: ProposalExtractor = opts.extract ? "heuristic" : (picked?.name ?? "heuristic");
     const itemExtractorName: ProposalExtractor =

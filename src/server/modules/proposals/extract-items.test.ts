@@ -69,6 +69,30 @@ describe("heuristicExtractItems", () => {
     ]);
   });
 
+  it("skips only the decision sentence, not the commitment beside it on the same line", async () => {
+    const { tasks } = await run("We decided to ship Friday. Priya will book the venue.");
+    expect(tasks.map((t) => [t.title, t.assigneeName, t.sources[0]!.excerpt])).toEqual([
+      ["Book the venue", "Priya", "Priya will book the venue."],
+    ]);
+  });
+
+  it("reads commitments inside a long transcript turn, sentence by sentence", async () => {
+    const filler = "We walked through the survey results in detail. ".repeat(12).trim();
+    expect(filler.length).toBeGreaterThan(500);
+    const { tasks } = await run(`Priya: ${filler} Marcus will send the recap by 2026-10-03.`);
+    expect(tasks.map((t) => [t.title, t.assigneeName, t.dueDate])).toEqual([
+      ["Send the recap", "Marcus", "2026-10-03"],
+    ]);
+  });
+
+  it("splits 'and then <known Person> will' into a second Task", async () => {
+    const { tasks } = await run("Priya will draft the spec and then Marcus will review it.");
+    expect(tasks.map((t) => [t.title, t.assigneeName])).toEqual([
+      ["Draft the spec", "Priya"],
+      ["Review it", "Marcus"],
+    ]);
+  });
+
   it("ignores absences, states and empty action items", async () => {
     const { tasks } = await run(
       "Priya will not be able to attend the review.\nMarcus will be on leave by 2026-10-01.\nPriya won't join.\nAction: none\nTODO: n/a",

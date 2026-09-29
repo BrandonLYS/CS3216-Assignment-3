@@ -22,7 +22,14 @@ An adversarial reviewer found no blockers and six should-fix issues, four proven
 - A 100k-character pasted line blocked the heuristic for seconds: lines over 500 characters are skipped and the date suffix pattern is linear.
 - The heuristic turned "will not attend", "will be on leave" and "Action: none" into Tasks, and two People's commitments in one sentence into one: it now skips those and splits on "and <known Person> will".
 
-Accepted as known limits: two concurrent model passes can each raise the same work under different excerpts (as for Decisions); the first item pass after deploy sends all existing Sources in one call; the M12 batched-versus-per-source comparison in `scripts/eval.mts` now includes the item call on the batched side only, as its comment says.
+A second adversarial review found three heuristic gaps and two stale comments, all fixed:
+
+- A decision verb anywhere on a line hid the commitments beside it ("We decided to ship Friday. Priya will book the venue."): the check now applies per sentence.
+- A transcript turn over 500 characters was skipped whole: long lines are now split into sentences and each sentence is capped on its own.
+- "and then Marcus will" did not split into a second Task.
+- The `item_proposals.fingerprint` comment omitted the title, and the injected-extractor attribution is now commented.
+
+Accepted as known limits: two concurrent model passes can each raise the same work under different excerpts (as for Decisions); the first item pass after deploy sends all existing Sources in one call; the M12 batched-versus-per-source comparison in `scripts/eval.mts` now includes the item call on the batched side only, as its comment says; the duplicate check compares against the items and Proposals loaded before the extractor call, so one created during the call is not compared.
 
 ## Verification
 

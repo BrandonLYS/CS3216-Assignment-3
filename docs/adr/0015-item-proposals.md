@@ -46,14 +46,16 @@ Every reader must tolerate an `itemId` that points at nothing.
 An item Proposal survives only when every excerpt it cites is verbatim in a Source of the Project, the same traceability rule as Decisions.
 It has a title; a Milestone has a real calendar date in ISO form, because a Milestone is a dated checkpoint; other dates (including "2026-02-30") are dropped, and a start date after the due date is dropped.
 It is not a duplicate of an existing Task or Milestone, of any item Proposal of the same kind already raised (pending, accepted or rejected), or of one kept earlier in the same pass.
+The existing items and Proposals are those the pass loaded before its extractor call; one created while the call runs is not compared, and accept re-validates what remains.
 Duplicate means equal words once accents and punctuation are gone, or one title inside the other when the shorter covers at least 80% of the longer.
 Plain containment is too loose: "Set up CI pipeline for the mobile app" is new work beside "Set up CI pipeline", and "Do not review design doc" is not "Review design doc".
 The fingerprint is the item kind, the primary Source, its excerpt and the title.
 The title is in it because one sentence often commits to two pieces of work ("Alice will draft the spec and Bob will review it"), which a Decision-style excerpt key would collapse into one; the duplicate rule, not the fingerprint, stops a restated title being raised again.
 
 A deterministic heuristic extractor mirrors the model so e2e runs without a key, and it is also the production path for a User with no model configured: `Action item:` / `TODO:` lines, `<known Person> will ... [by YYYY-MM-DD].`, and `Milestone: <name> on YYYY-MM-DD`.
-It only reads a "will" clause whose subject is a known Person, which keeps "Results will improve" and "We will revisit" out, splits a sentence where a second known Person commits, and skips "will not", "will be" and empty action items.
-Lines longer than 500 characters are skipped, which bounds the cost of its lazy patterns on pasted text.
+It only reads a "will" clause whose subject is a known Person, which keeps "Results will improve" and "We will revisit" out, splits a sentence where a second known Person commits ("and Marcus will", "and then Marcus will"), and skips "will not", "will be" and empty action items.
+A decision verb skips only the line or sentence it is in, so a commitment beside a Decision on the same line is still read.
+Lines and sentences longer than 500 characters are not matched, which bounds the cost of its lazy patterns on pasted text; a long transcript turn is still split into sentences and each is read on its own.
 
 ## Consequences
 

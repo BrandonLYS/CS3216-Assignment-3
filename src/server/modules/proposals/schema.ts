@@ -105,7 +105,7 @@ export const itemProposals = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     kind: itemProposalKindEnum("kind").notNull(),
-    /** sha1 of the item kind, the primary Source and its excerpt; the idempotency key. */
+    /** sha1 of the item kind, the primary Source, its excerpt and the title; the idempotency key. */
     fingerprint: text("fingerprint").notNull(),
     status: proposalStatusEnum("status").notNull().default("pending"),
     fields: jsonb("fields").$type<ProposedTaskFields | ProposedMilestoneFields>().notNull(),
