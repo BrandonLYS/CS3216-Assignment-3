@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { deleteRenderAction, renderStatesAction } from "@/server/modules/renders/actions";
 import type { RenderRow } from "@/server/modules/renders/schema";
-import { RENDER_MAX_PER_PROJECT, RENDER_POLL_GIVE_UP_MS, RENDER_POLL_MS } from "@/shared/domain";
+import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT, RENDER_POLL_GIVE_UP_MS, RENDER_POLL_MS } from "@/shared/domain";
 import { relative } from "@/shared/lib/dates";
 import { ActionForm, Button, Dialog, EmptyState } from "@/shared/ui";
 import { NewRenderForm, type Drafting } from "./new-render-form";
@@ -142,7 +142,7 @@ export function RendersView({
         open={adding}
         onClose={() => setAdding(false)}
         title="New concept render"
-        description="Describe the deliverable, or draft a description from up to 3 pieces of Evidence. Only the description below is sent to the image service."
+        description={`Describe the deliverable, or draft a description from up to ${RENDER_EVIDENCE_MAX} pieces of Evidence. Only the description below is sent to the image service.`}
         className="max-w-xl"
       >
         {/* Mounted per opening, so a cancelled draft does not come back next time. */}
