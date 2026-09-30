@@ -246,3 +246,6 @@ export const rendersService = {
     return { render: row, bytes: await getStorage().get(row.storageKey) };
   },
 };
+
+/** A row of the Evidence picker: never the text itself. */
+export type DraftableEvidence = Awaited<ReturnType<typeof rendersService.draftSources>>[number];
