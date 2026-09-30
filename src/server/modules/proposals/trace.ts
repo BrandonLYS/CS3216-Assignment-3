@@ -140,7 +140,7 @@ const ITEM_LIMITS = { title: 200, name: 160, description: 4000 } as const;
  * Accent-folded, punctuation-free words, so "Café launch plan!" and "cafe launch plan" compare
  * equal.
  */
-const words = (s: string) =>
+export const titleWords = (s: string) =>
   norm(s.normalize("NFKD").replace(/\p{M}/gu, ""))
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
@@ -153,7 +153,7 @@ const words = (s: string) =>
  */
 export const itemFingerprintOf = (kind: ItemProposalKind, primary: ProposedSource, title: string) =>
   createHash("sha1")
-    .update(`${kind}|${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}|${words(title).join(" ")}`)
+    .update(`${kind}|${primary.kind}:${primary.entityId}|${norm(primary.excerpt)}|${titleWords(title).join(" ")}`)
     .digest("hex");
 
 /**
@@ -163,7 +163,7 @@ export const itemFingerprintOf = (kind: ItemProposalKind, primary: ProposedSourc
  * "Review design doc".
  */
 export function isDuplicateTitle(a: string, b: string) {
-  const [x, y] = [words(a), words(b)];
+  const [x, y] = [titleWords(a), titleWords(b)];
   const [short, long] = x.length <= y.length ? [x, y] : [y, x];
   if (!short.length) return false;
   if (short.length / long.length < 0.8) return false;

@@ -6,7 +6,9 @@
  * exists in the Project.
  */
 import { internalHref } from "@/widgets/assistant/linked-text";
-import type { TracedProposal } from "@/server/modules/proposals/trace";
+import { asProposedItem, itemTitleOf } from "@/server/modules/proposals/proposed-item";
+import { titleWords, type TracedItem, type TracedProposal } from "@/server/modules/proposals/trace";
+import type { ItemProposalKind } from "@/shared/domain";
 
 const norm = (s: string) => s.replace(/\s+/g, " ").toLowerCase();
 
@@ -71,6 +73,102 @@ export function gradeExtraction(
     pass: rawCount === 0 || kept.length > 0 || expect.max === 0,
     detail: `raw ${rawCount}, kept ${kept.length}`,
   });
+  return { checks, matched, missed };
+}
+
+/* ------------------------------------------------------------------ items */
+
+export interface ExpectedItem {
+  kind: ItemProposalKind;
+  label: string;
+  /** Each group is a list of accepted spellings; every group must appear in the kept title. */
+  title: string[][];
+  /** Canonical Person name, or null when the text names nobody. */
+  owner: string | null;
+  dueDate: string | null;
+  /** Tasks only; null when omitted. */
+  startDate?: string | null;
+  /** Tasks only; checked only when set. */
+  milestone?: string;
+}
+
+export interface ItemExpectation {
+  items: ExpectedItem[];
+  forbid?: string[];
+}
+
+/** Whole-word containment on the words trace compares titles by, so "ci" is not found in "pricing". */
+const padded = (s: string) => ` ${titleWords(s).join(" ")} `;
+const containsWords = (text: string, term: string) =>
+  titleWords(term).length > 0 && padded(text).includes(padded(term));
+
+const titleOfItem = (i: TracedItem) => itemTitleOf(asProposedItem(i));
+
+/** A named owner or Milestone counts only when trace resolved it: canonical name and a non-null id. */
+function nameMismatch(field: string, want: string | null, name: string | null, id: string | null) {
+  if (want === null) return name || id ? `${field} want none got ${name ?? id}` : null;
+  if (name !== want || !id) return `${field} want ${want} got ${name ?? "none"}${name && !id ? " (unresolved)" : ""}`;
+  return null;
+}
+
+function fieldMismatches(want: ExpectedItem, got: TracedItem): string[] {
+  const out: Array<string | null> = [];
+  const date = (field: string, w: string | null, g: string | null) => (w === g ? null : `${field} want ${w} got ${g}`);
+  const item = asProposedItem(got);
+  if (item.kind === "task") {
+    const f = item.fields;
+    out.push(
+      nameMismatch("owner", want.owner, f.assigneeName, f.assigneeId),
+      date("dueDate", want.dueDate, f.dueDate),
+      date("startDate", want.startDate ?? null, f.startDate),
+      want.milestone === undefined ? null : nameMismatch("milestone", want.milestone, f.milestoneName, f.milestoneId),
+    );
+  } else {
+    const f = item.fields;
+    out.push(nameMismatch("owner", want.owner, f.ownerName, f.ownerId), date("dueDate", want.dueDate, f.dueDate));
+  }
+  return out.filter((m): m is string => m !== null).map((m) => `${want.label}: ${m}`);
+}
+
+export function gradeItems(
+  expect: ItemExpectation,
+  kept: TracedItem[],
+  rawCount: number,
+): { checks: Check[]; matched: string[]; missed: string[] } {
+  const unmatched = [...kept];
+  const matched: string[] = [];
+  const missed: string[] = [];
+  const mismatches: string[] = [];
+  for (const want of expect.items) {
+    const i = unmatched.findIndex(
+      (k) =>
+        k.kind === want.kind && want.title.every((group) => group.some((term) => containsWords(titleOfItem(k), term))),
+    );
+    if (i < 0) {
+      missed.push(want.label);
+      continue;
+    }
+    const [got] = unmatched.splice(i, 1);
+    matched.push(want.label);
+    mismatches.push(...fieldMismatches(want, got!));
+  }
+  const texts = kept.map((k) => norm([titleOfItem(k), k.fields.description].filter(Boolean).join(" \u00b7 ")));
+  const forbidden = (expect.forbid ?? []).filter((term) => texts.some((t) => t.includes(norm(term))));
+  const checks: Check[] = [
+    { name: "expected_items_found", pass: missed.length === 0, detail: missed.join("; ") || undefined },
+    {
+      name: "no_extra_items",
+      pass: kept.length === expect.items.length,
+      detail: `kept ${kept.length}, expected ${expect.items.length}`,
+    },
+    { name: "fields_exact", pass: mismatches.length === 0, detail: mismatches.join("; ") || undefined },
+    { name: "no_forbidden_content", pass: forbidden.length === 0, detail: forbidden.join("; ") || undefined },
+    {
+      name: "citations_survived_tracing",
+      pass: rawCount === 0 || kept.length > 0 || expect.items.length === 0,
+      detail: `raw ${rawCount}, kept ${kept.length}`,
+    },
+  ];
   return { checks, matched, missed };
 }
 
