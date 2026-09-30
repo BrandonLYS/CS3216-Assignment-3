@@ -16,7 +16,7 @@ export async function createRenderAction(fd: FormData) {
   });
   if (res.ok) {
     revalidateProject(res.data.projectId);
-    await captureCurrent("render_requested", { render_id: res.data.id });
+    await captureCurrent("render_requested", { render_id: res.data.id, evidence_count: res.data.evidence.length });
   }
   return res;
 }

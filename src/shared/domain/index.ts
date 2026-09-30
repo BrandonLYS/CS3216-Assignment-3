@@ -236,6 +236,10 @@ export type RenderState = (typeof RENDER_STATES)[number];
 /** Per-Project ceiling. A generated image costs money and nobody needs eleven of them. */
 export const RENDER_MAX_PER_PROJECT = 10;
 export const RENDER_PROMPT_MAX = 1000;
+/** Evidence a Render description may be drafted from (ADR 0016): enough to combine, few enough to read. */
+export const RENDER_EVIDENCE_MAX = 3;
+/** The PM's own words added to a draft request. */
+export const RENDER_DRAFT_NOTES_MAX = 500;
 
 /**
  * A pending Render is waited on the same way a Chat Message is (ADR 0011): the page asks

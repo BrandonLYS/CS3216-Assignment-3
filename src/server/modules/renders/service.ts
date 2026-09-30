@@ -4,9 +4,11 @@ import { compactPatch, diffFields } from "@/server/core/diff";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
 import type { DbOrTx } from "@/server/db/client";
+import { evidenceRepo } from "@/server/modules/evidence/repository";
+import type { EvidenceRow } from "@/server/modules/evidence/schema";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { getStorage } from "@/server/storage";
-import { RENDER_MAX_PER_PROJECT } from "@/shared/domain";
+import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT } from "@/shared/domain";
 import {
   generateImage,
   isRenderConfigured,
@@ -23,6 +25,25 @@ import type { CreateRenderInput } from "./validation";
 const labelOf = (prompt: string) => (prompt.length > 60 ? `${prompt.slice(0, 57).trimEnd()}...` : prompt);
 
 const storageKeyFor = (projectId: string, renderId: string) => `renders/${projectId}/${renderId}/image`;
+
+/**
+ * The Evidence a Render cites, in the order given. The schema caps the count too, but the
+ * service does not trust its callers. A missing or foreign id reads as not found, so an id
+ * from someone else's Project is not confirmed to exist.
+ */
+async function loadEvidence(db: DbOrTx, projectId: string, ids: string[]): Promise<EvidenceRow[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length > RENDER_EVIDENCE_MAX)
+    throw new ValidationError(`Choose at most ${RENDER_EVIDENCE_MAX} pieces of Evidence`, {
+      evidenceIds: ["Too many"],
+    });
+  const byId = new Map((await evidenceRepo.findByIds(db, unique)).map((e) => [e.id, e]));
+  return unique.map((id) => {
+    const row = byId.get(id);
+    if (!row || row.projectId !== projectId) throw new NotFoundError("Evidence");
+    return row;
+  });
+}
 
 async function getOwned(db: DbOrTx, userId: string, id: string) {
   const row = await rendersRepo.findById(db, id);
@@ -53,15 +74,17 @@ export const rendersService = {
    * Generation takes tens of seconds, which is far too long to hold a server action open,
    * so the row is the PM's receipt and the tab polls it.
    *
-   * `input.prompt` is the PM's own words. Project data is deliberately never mixed in: the
-   * prompt leaves our server for a third party, and what leaves is only what was typed for
-   * that purpose.
+   * `input.prompt` is the description the PM approved, typed or drafted from Evidence and
+   * edited (ADR 0016). Nothing else is mixed in: the prompt leaves our server for a third
+   * party, and what leaves is only what a human approved for that purpose. `evidenceIds`
+   * are recorded as provenance only and never read into the prompt.
    */
   request: async (ctx: Ctx, input: CreateRenderInput) => {
     await assertOwnsProject(ctx.db, ctx.userId, input.projectId);
     if (!isRenderConfigured()) throw new ConflictError("Image previews are not configured.");
     return mutate(ctx, async (tx, rec) => {
       await assertOwnsProject(tx, ctx.userId, input.projectId);
+      const cited = await loadEvidence(tx, input.projectId, input.evidenceIds ?? []);
       // Counted inside the transaction so two quick clicks cannot both pass the cap.
       const existing = await rendersRepo.countForProject(tx, input.projectId);
       if (existing >= RENDER_MAX_PER_PROJECT) {
@@ -78,6 +101,7 @@ export const rendersService = {
         width: RENDER_WIDTH,
         height: RENDER_HEIGHT,
         state: "pending",
+        evidence: cited.map((e) => ({ evidenceId: e.id, title: e.title })),
       });
       rec.created("render", row.projectId, row.id, labelOf(row.prompt));
       return row;

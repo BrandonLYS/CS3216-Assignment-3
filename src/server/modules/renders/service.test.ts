@@ -3,11 +3,13 @@ import type { Ctx } from "@/server/core/context";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { eventBus, type DomainEvent } from "@/server/events/bus";
 import { activityRepo } from "@/server/modules/activity/service";
+import { evidenceService } from "@/server/modules/evidence/service";
 import type { ProjectRow } from "@/server/modules/projects/schema";
 import { getStorage } from "@/server/storage";
-import { RENDER_MAX_PER_PROJECT } from "@/shared/domain";
+import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT } from "@/shared/domain";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { rendersService } from "./service";
+import { createRenderSchema } from "./validation";
 
 let ctx: Ctx;
 let project: ProjectRow;
@@ -93,6 +95,66 @@ describe("rendersService.request", () => {
       ValidationError,
     );
     expect(await rendersService.list(ctx, projectId)).toHaveLength(RENDER_MAX_PER_PROJECT);
+  });
+});
+
+describe("rendersService.request with Evidence", () => {
+  const addEvidence = (pid: string, title: string, body = `${title} notes`) =>
+    evidenceService.create(ctx, { projectId: pid, title, kind: "other", body });
+
+  it("snapshots the Evidence it was drafted from, in the order given and deduped", async () => {
+    const a = await addEvidence(projectId, "Site walk");
+    const b = await addEvidence(projectId, "Client brief");
+    const row = await rendersService.request(ctx, {
+      projectId,
+      prompt: "A timber pavilion",
+      evidenceIds: [b.id, a.id, b.id],
+    });
+    expect(row.evidence).toEqual([
+      { evidenceId: b.id, title: "Client brief" },
+      { evidenceId: a.id, title: "Site walk" },
+    ]);
+  });
+
+  it("a hand-typed Render cites no Evidence", async () => {
+    const row = await rendersService.request(ctx, { projectId, prompt: "Typed by hand" });
+    expect(row.evidence).toEqual([]);
+  });
+
+  it(`refuses more than ${RENDER_EVIDENCE_MAX} pieces of Evidence in the schema and the service`, async () => {
+    const ids: string[] = [];
+    for (let i = 0; i <= RENDER_EVIDENCE_MAX; i++) ids.push((await addEvidence(projectId, `Note ${i}`)).id);
+    expect(createRenderSchema.safeParse({ projectId, prompt: "Too many", evidenceIds: ids }).success).toBe(false);
+    await expect(
+      rendersService.request(ctx, { projectId, prompt: "Too many", evidenceIds: ids }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(await rendersService.list(ctx, projectId)).toHaveLength(0);
+  });
+
+  it("refuses Evidence from another Project, the owner's or a stranger's, and writes nothing", async () => {
+    const other = await freshProject();
+    const mineElsewhere = await addEvidence(other.id, "Other project note");
+    const stranger = await makeCtx();
+    const strangerProject = await makeProject(stranger, "SX");
+    const theirs = await evidenceService.create(stranger, {
+      projectId: strangerProject.id,
+      title: "Not yours",
+      kind: "other",
+      body: "Secret",
+    });
+    for (const id of [mineElsewhere.id, theirs.id, "missing-id"]) {
+      await expect(
+        rendersService.request(ctx, { projectId, prompt: "Borrowed", evidenceIds: [id] }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    }
+    expect(await rendersService.list(ctx, projectId)).toHaveLength(0);
+  });
+
+  it("keeps the snapshot after the Evidence is deleted", async () => {
+    const e = await addEvidence(projectId, "Deleted later");
+    const row = await rendersService.request(ctx, { projectId, prompt: "Outlives it", evidenceIds: [e.id] });
+    await evidenceService.delete(ctx, e.id);
+    expect((await rendersService.get(ctx, row.id)).evidence).toEqual([{ evidenceId: e.id, title: "Deleted later" }]);
   });
 });
 
