@@ -355,7 +355,8 @@ The heuristic fallback reads `Action item:` / `TODO:` lines, `<known Person> wil
 Candidates pass the same verbatim-excerpt check as Decisions.
 Names of People and Milestones are resolved to ids where they match, and kept as written where they do not.
 A Milestone without an ISO date is discarded, and so is any item that duplicates an existing Task or Milestone or an item Proposal already raised.
-Survivors are stored in `item_proposals` with `pending` status; nothing is written to `tasks` or `milestones` until the PM accepts (#115).
+Survivors are stored in `item_proposals` with `pending` status; nothing is written to `tasks` or `milestones` until the PM accepts .
+The PM reviews them on the Project Overview beside Decision Proposals (#115): Accept creates the Task or Milestone through its service under `via: "assistant"` and links each cited Evidence in the same transaction; Edit and accept opens the Task or Milestone dialog prefilled; Reject keeps the row so the item is not raised again.
 
 Sources: [item extractor](../src/server/modules/proposals/extract-items.ts), [proposal trace logic](../src/server/modules/proposals/trace.ts), [ADR 0015](adr/0015-item-proposals.md).
 

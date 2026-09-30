@@ -57,10 +57,24 @@ It only reads a "will" clause whose subject is a known Person, which keeps "Resu
 A decision verb skips only the line or sentence it is in, so a commitment beside a Decision on the same line is still read.
 Lines and sentences longer than 500 characters are not matched, which bounds the cost of its lazy patterns on pasted text; a long transcript turn is still split into sentences and each is read on its own.
 
+## Accepting (#115)
+
+Accepting creates the Task or Milestone through `tasksService.create` / `milestonesService.create` under `via: "assistant"`, and three things must commit or roll back with it: one `evidence_links` row per cited Evidence, their Activity Events, and the Proposal turning `accepted`.
+`mutate` opens its own transaction and publishes after it commits, so a second `mutate` for the links would be a second transaction.
+Both creates therefore take an `afterCreate(tx, rec, row)` hook that runs inside their own `mutate`, under the same `Recorder`.
+`decisionsService.create` instead takes a `proposalId` and marks the Proposal itself; doing the same here would make the Task and Milestone modules import the proposals repository and learn Evidence linking, while the hook keeps them unaware of Proposals.
+The hook marks the Proposal accepted only while it is still `pending` and throws otherwise, so a repeated click or a racing accept or reject rolls its item back.
+
+What one click creates is computed when the Overview lists the Proposal and again at accept (`acceptInputOf` in `src/server/modules/proposals/accept.ts`).
+An id resolved at pass time is kept only if it still exists in the Project, and a missing one is resolved again by its name, which is how a Task links to a Milestone Proposal accepted before it.
+The result is parsed by the create schema; a payload it refuses can still be edited and accepted, or rejected.
+Only Evidence Sources become links, and only those whose Evidence still exists; Comment Sources stay on the Proposal.
+Whether the PM edited before accepting is measured against that computed input, not against which path posted it, as for Decisions.
+
 ## Consequences
 
 - `ITEM_PROPOSAL_KINDS` and `PROPOSAL_PASSES` are fixed vocabularies with Drizzle enums (migration `0025_item_proposals`).
-- `runPass` keeps its Decision outcome at the top level and reports the item side under `items`; `proposalId` still points at Decision Proposals until #115 gives items a review surface.
-- Analytics: `item_proposal_generated` (counts per kind, silent when nothing was created) and `item_proposal_rejected`, never titles, excerpts or text.
+- `runPass` keeps its Decision outcome at the top level and reports the item side under `items`; `proposalId` points at Decision Proposals only, because item Proposals are reviewed on the Overview.
+- Analytics: `item_proposal_generated` (counts per kind, silent when nothing was created), `item_proposal_accepted` (with `kind` and `edited_before_accept`) and `item_proposal_rejected`, never titles, excerpts or text.
 - The Assistant has no tools over item Proposals; review stays a human click, as for Decisions (ADR 0008).
 - Nothing is written to `tasks` or `milestones` until the PM accepts.

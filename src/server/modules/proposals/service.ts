@@ -1,21 +1,30 @@
 import { createHash } from "node:crypto";
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import type { Ctx } from "@/server/core/context";
-import { ConflictError, NotFoundError } from "@/server/core/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/server/core/errors";
+import type { Recorder } from "@/server/core/mutation";
 import { conversationsRepo, messagesRepo } from "@/server/modules/assistant/repository";
 import { commentsRepo } from "@/server/modules/comments/repository";
 import { decisionsService } from "@/server/modules/decisions/service";
 import type { CreateDecisionInput } from "@/server/modules/decisions/validation";
 import { transcriptText } from "@/server/modules/evidence/passages";
 import { evidenceRepo, passagesRepo } from "@/server/modules/evidence/repository";
-import { evidenceText } from "@/server/modules/evidence/service";
+import { evidenceText, linkEvidenceIn } from "@/server/modules/evidence/service";
 import { milestonesRepo } from "@/server/modules/milestones/repository";
+import type { MilestoneRow } from "@/server/modules/milestones/schema";
+import { milestonesService } from "@/server/modules/milestones/service";
 import { peopleRepo } from "@/server/modules/people/repository";
 import { assertOwnsProject } from "@/server/modules/projects/service";
+import { statusesService } from "@/server/modules/statuses/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
-import type { DbOrTx } from "@/server/db/client";
+import type { TaskRow } from "@/server/modules/tasks/schema";
+import { tasksService } from "@/server/modules/tasks/service";
+import type { DbOrTx, Tx } from "@/server/db/client";
 import type { ProposalExtractor, ProposalPass } from "@/shared/domain";
+import { acceptInputOf, draftInputOf, type AcceptRefs, type ItemAcceptInput } from "./accept";
 import {
+  itemEditedBeforeAccept,
+  itemProposalAccepted,
   itemProposalGenerated,
   itemProposalRejected,
   proposalGenerated,
@@ -48,6 +57,35 @@ export type ItemPassOutcome =
 export type PassOutcome = DecisionPassOutcome & { items: ItemPassOutcome };
 
 type Candidate = ExtractSource & { textHash: string };
+
+/** A pending item Proposal with what a one-click accept would create, or null when that is invalid as stored. */
+export type ReviewableItem = ItemProposalRow & {
+  acceptInput: ItemAcceptInput | null;
+  /** The same input unvalidated, which the review dialog prefills even when `acceptInput` is null. */
+  draftInput: ItemAcceptInput;
+};
+
+export type AcceptedItem = { kind: "task"; item: TaskRow } | { kind: "milestone"; item: MilestoneRow };
+
+const acceptRefs = async (db: DbOrTx, projectId: string): Promise<AcceptRefs> => {
+  const [people, milestones] = await Promise.all([
+    peopleRepo.listByProject(db, projectId),
+    milestonesRepo.listByProject(db, projectId),
+  ]);
+  return {
+    people: people.map((p) => ({ id: p.id, name: p.name })),
+    milestones: milestones.map((m) => ({ id: m.milestone.id, name: m.milestone.name })),
+  };
+};
+
+const acceptInputOrNull = (projectId: string, row: ItemProposalRow, refs: AcceptRefs) => {
+  try {
+    return acceptInputOf(projectId, row, refs);
+  } catch (e) {
+    if (e instanceof ValidationError) return null;
+    throw e;
+  }
+};
 
 const hashOf = (text: string) => createHash("sha1").update(text).digest("hex");
 
@@ -274,10 +312,71 @@ export const proposalsService = {
     return { ...decisionOutcome, items };
   },
 
-  /** Pending Task and Milestone Proposals (#114); review and accept arrive with #115. */
-  listPendingItems: async (ctx: Ctx, projectId: string) => {
+  /**
+   * Pending Task and Milestone Proposals (#114), each with the input a one-click accept submits
+   * (#115), so the card shows what would be created and the dialog prefills exactly that.
+   */
+  listPendingItems: async (ctx: Ctx, projectId: string): Promise<ReviewableItem[]> => {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
-    return itemProposalsRepo.listByProject(ctx.db, projectId, "pending");
+    const [rows, refs] = await Promise.all([
+      itemProposalsRepo.listByProject(ctx.db, projectId, "pending"),
+      acceptRefs(ctx.db, projectId),
+    ]);
+    // A payload the create schema refuses is still listed, so the PM can edit or reject it.
+    return rows.map((r) => ({
+      ...r,
+      acceptInput: acceptInputOrNull(projectId, r, refs),
+      draftInput: draftInputOf(projectId, r, refs),
+    }));
+  },
+
+  /**
+   * Accept an item Proposal (#115, ADR 0015): the Task or Milestone is created through its own
+   * service under `via: "assistant"`, and inside that create's transaction every cited Evidence
+   * that still exists is linked and the Proposal is marked accepted, conditional on `pending`, so
+   * a repeated or racing accept rolls its item back. `input` is what the PM edited in the dialog.
+   */
+  acceptItem: async (ctx: Ctx, { id, input }: { id: string; input?: ItemAcceptInput }): Promise<AcceptedItem> => {
+    const p = await itemProposalsRepo.findById(ctx.db, id);
+    if (!p) throw new NotFoundError("Proposal");
+    await assertOwnsProject(ctx.db, ctx.userId, p.projectId);
+    if (p.status !== "pending") throw new ConflictError("That proposal was already resolved");
+    const refs = await acceptRefs(ctx.db, p.projectId);
+    // A stored payload the create schema refuses can still be accepted once the PM has edited it.
+    const base = input ? acceptInputOrNull(p.projectId, p, refs) : acceptInputOf(p.projectId, p, refs);
+    const accepted = input ?? base!;
+    // `tasksService.create` checks ownership of `input.projectId` only, so another owned Project would pass.
+    if (accepted.input.projectId !== p.projectId) throw new NotFoundError("Proposal");
+    if (accepted.kind !== p.kind) throw new ConflictError(`That proposal is a ${p.kind}`);
+    // The dialog always posts a Status; the edited check compares it with the default a one-click
+    // accept gets. Resolved before the create, so a failure here writes nothing.
+    const defaultStatusId = accepted.input.statusId
+      ? (await statusesService.resolveForNewItem(ctx.db, p.projectId, p.kind, undefined)).id
+      : null;
+
+    const evidenceIds = [...new Set(p.sources.filter((s) => s.kind === "evidence").map((s) => s.entityId))];
+    const confirm = async (tx: Tx, rec: Recorder, itemId: string) => {
+      const existing = (await evidenceRepo.findByIds(tx, evidenceIds)).filter((e) => e.projectId === p.projectId);
+      for (const e of existing)
+        await linkEvidenceIn(tx, rec, {
+          projectId: p.projectId,
+          evidenceId: e.id,
+          entityType: p.kind,
+          entityId: itemId,
+        });
+      const marked = await itemProposalsRepo.markAccepted(tx, p.id, itemId);
+      if (!marked.length) throw new ConflictError("That proposal was already resolved");
+    };
+    const via: Ctx = { ...ctx, via: "assistant" };
+    const out: AcceptedItem =
+      accepted.kind === "task"
+        ? { kind: "task", item: await tasksService.create(via, accepted.input, (tx, rec, t) => confirm(tx, rec, t.id)) }
+        : {
+            kind: "milestone",
+            item: await milestonesService.create(via, accepted.input, (tx, rec, m) => confirm(tx, rec, m.id)),
+          };
+    await itemProposalAccepted(ctx, p, !base || itemEditedBeforeAccept(base, accepted, defaultStatusId));
+    return out;
   },
 
   /** Kept, not deleted: a rejected item's fingerprint and title stop later passes raising it again. */

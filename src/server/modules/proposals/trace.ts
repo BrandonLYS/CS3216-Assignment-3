@@ -49,7 +49,7 @@ export function traceSources(raw: RawProposal["sources"], sources: ExtractSource
 }
 
 /** Exact normalised match, else a unique containing match; ambiguous names resolve to nothing. */
-const byName = <T extends { id: string }>(rows: T[], name: string | null | undefined, key: (r: T) => string) => {
+export const byName = <T extends { id: string }>(rows: T[], name: string | null | undefined, key: (r: T) => string) => {
   if (!name) return undefined;
   const n = norm(name);
   const exact = rows.find((r) => norm(key(r)) === n);
