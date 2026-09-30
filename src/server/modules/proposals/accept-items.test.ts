@@ -195,6 +195,8 @@ describe("proposalsService.acceptItem (#115)", () => {
       .where(eq(itemProposals.id, task.id));
     const [broken] = (await proposalsService.listPendingItems(ctx, pid)).filter((p) => p.id === task.id);
     expect(broken!.acceptInput).toBeNull();
+    // The dialog still prefills everything else the Proposal had.
+    expect(broken!.draftInput).toMatchObject({ kind: "task", input: { title: "   ", dueDate: "2026-10-10" } });
     await expect(proposalsService.acceptItem(ctx, { id: task.id })).rejects.toBeInstanceOf(ValidationError);
     const created = await proposalsService.acceptItem(ctx, {
       id: task.id,

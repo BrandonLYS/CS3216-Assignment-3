@@ -4,8 +4,6 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
 import { acceptItemProposalAction, rejectItemProposalAction } from "@/server/modules/proposals/actions";
-import type { ItemAcceptInput } from "@/server/modules/proposals/accept";
-import type { ProposedMilestoneFields, ProposedTaskFields } from "@/server/modules/proposals/schema";
 import type { ReviewableItem } from "@/server/modules/proposals/service";
 import { Button } from "@/shared/ui";
 import { MilestoneDialog } from "@/features/milestone/milestone-dialog";
@@ -27,7 +25,8 @@ export function ItemProposalActions({ item, refs }: { item: ReviewableItem; refs
     router.refresh();
   };
   const accept = item.acceptInput;
-  const defaults = dialogDefaults(item, refs.project.id);
+  // Prefilled even when the stored payload is invalid, so the PM fixes it in the dialog.
+  const defaults = item.draftInput;
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -78,21 +77,4 @@ export function ItemProposalActions({ item, refs }: { item: ReviewableItem; refs
       )}
     </div>
   );
-}
-
-/**
- * What the dialog prefills: the one-click input, or, for a payload the create schema refuses,
- * whatever the Proposal has, so the PM can fix it there.
- */
-function dialogDefaults(item: ReviewableItem, projectId: string): ItemAcceptInput {
-  if (item.acceptInput) return item.acceptInput;
-  if (item.kind === "task") {
-    const f = item.fields as ProposedTaskFields;
-    return {
-      kind: "task",
-      input: { projectId, title: f.title, description: f.description, priority: "none", dueDate: f.dueDate },
-    };
-  }
-  const f = item.fields as ProposedMilestoneFields;
-  return { kind: "milestone", input: { projectId, name: f.name, description: f.description, dueDate: f.dueDate } };
 }

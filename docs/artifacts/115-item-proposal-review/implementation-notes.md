@@ -27,3 +27,12 @@ A two-axis review (standards and spec) found no hard violations; these were fixe
 - `ProposalCards` took `items` and `refs` separately, so items without refs rendered nothing; they are now one prop.
 
 Kept as designed: `item_proposal_rejected` carries `kind` and no edited flag, as `proposal_rejected` does for Decisions (see the plan).
+
+## Adversarial review of PR #119
+
+A fresh-context adversarial reviewer found no blockers:
+
+- `src/server/auth/session.test.ts`, an untracked local file unrelated to #115, had been committed by accident and failed `npm test`; it is removed from the branch and kept locally.
+- For a payload the create schema refuses, the dialog prefilled only the title, description and dates and dropped the resolved Owner, Milestone and start date; `listPendingItems` now also returns the unvalidated `draftInput` the dialog prefills from.
+
+Accepted as a known limit: `edited_before_accept` compares against the one-click input computed at accept time, so if a named Milestone is accepted in another tab between opening and saving an untouched Task dialog, the save counts as edited.

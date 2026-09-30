@@ -21,7 +21,7 @@ import type { TaskRow } from "@/server/modules/tasks/schema";
 import { tasksService } from "@/server/modules/tasks/service";
 import type { DbOrTx, Tx } from "@/server/db/client";
 import type { ProposalExtractor, ProposalPass } from "@/shared/domain";
-import { acceptInputOf, type AcceptRefs, type ItemAcceptInput } from "./accept";
+import { acceptInputOf, draftInputOf, type AcceptRefs, type ItemAcceptInput } from "./accept";
 import {
   itemEditedBeforeAccept,
   itemProposalAccepted,
@@ -59,7 +59,11 @@ export type PassOutcome = DecisionPassOutcome & { items: ItemPassOutcome };
 type Candidate = ExtractSource & { textHash: string };
 
 /** A pending item Proposal with what a one-click accept would create, or null when that is invalid as stored. */
-export type ReviewableItem = ItemProposalRow & { acceptInput: ItemAcceptInput | null };
+export type ReviewableItem = ItemProposalRow & {
+  acceptInput: ItemAcceptInput | null;
+  /** The same input unvalidated, which the review dialog prefills even when `acceptInput` is null. */
+  draftInput: ItemAcceptInput;
+};
 
 export type AcceptedItem = { kind: "task"; item: TaskRow } | { kind: "milestone"; item: MilestoneRow };
 
@@ -319,7 +323,11 @@ export const proposalsService = {
       acceptRefs(ctx.db, projectId),
     ]);
     // A payload the create schema refuses is still listed, so the PM can edit or reject it.
-    return rows.map((r) => ({ ...r, acceptInput: acceptInputOrNull(projectId, r, refs) }));
+    return rows.map((r) => ({
+      ...r,
+      acceptInput: acceptInputOrNull(projectId, r, refs),
+      draftInput: draftInputOf(projectId, r, refs),
+    }));
   },
 
   /**

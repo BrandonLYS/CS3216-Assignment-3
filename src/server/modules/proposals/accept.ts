@@ -25,12 +25,11 @@ function parsed<S extends z.ZodType>(schema: S, value: z.input<S>): z.infer<S> {
 }
 
 /**
- * The exact create input a one-click accept submits (issue #115), and what the review dialog
- * prefills. Ids resolved at pass time are re-checked, so a Person or Milestone deleted since is
- * dropped, and a name that was unresolved then (a Milestone that was itself still a Proposal) is
- * resolved again now. Re-validated by the create schema: the stored payload is never trusted.
+ * The create input a Proposal stands for, with names and ids resolved against the Project as it
+ * is now but not yet validated: what the review dialog prefills, even for a payload the create
+ * schema would refuse, so the PM fixes one field rather than re-entering the rest.
  */
-export function acceptInputOf(
+export function draftInputOf(
   projectId: string,
   item: Pick<ItemProposalRow, "kind" | "fields">,
   refs: AcceptRefs,
@@ -39,27 +38,44 @@ export function acceptInputOf(
     const f = item.fields as ProposedMilestoneFields;
     return {
       kind: "milestone",
-      input: parsed(createMilestoneSchema, {
+      input: {
         projectId,
         name: f.name,
         description: f.description,
         dueDate: f.dueDate,
         ownerId: resolve(refs.people, f.ownerId, f.ownerName),
-      }),
+      },
     };
   }
   const f = item.fields as ProposedTaskFields;
-  const startDate = f.startDate && f.dueDate && f.startDate > f.dueDate ? null : f.startDate;
   return {
     kind: "task",
-    input: parsed(createTaskSchema, {
+    input: {
       projectId,
       title: f.title,
       description: f.description,
+      priority: "none",
       assigneeId: resolve(refs.people, f.assigneeId, f.assigneeName),
       milestoneId: resolve(refs.milestones, f.milestoneId, f.milestoneName),
-      startDate,
+      startDate: f.startDate && f.dueDate && f.startDate > f.dueDate ? null : f.startDate,
       dueDate: f.dueDate,
-    }),
+    },
   };
+}
+
+/**
+ * The exact create input a one-click accept submits (issue #115). Ids resolved at pass time are
+ * re-checked, so a Person or Milestone deleted since is dropped, and a name that was unresolved
+ * then (a Milestone that was itself still a Proposal) is resolved again now. Re-validated by the
+ * create schema: the stored payload is never trusted.
+ */
+export function acceptInputOf(
+  projectId: string,
+  item: Pick<ItemProposalRow, "kind" | "fields">,
+  refs: AcceptRefs,
+): ItemAcceptInput {
+  const draft = draftInputOf(projectId, item, refs);
+  return draft.kind === "milestone"
+    ? { kind: "milestone", input: parsed(createMilestoneSchema, draft.input) }
+    : { kind: "task", input: parsed(createTaskSchema, draft.input) };
 }
