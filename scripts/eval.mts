@@ -1,21 +1,23 @@
 /**
- * Evaluation harness for the Assistant's two model-backed behaviours: Proposal extraction and
- * "why did we" answering. Not part of the app.
+ * Evaluation harness for the Assistant's model-backed behaviours: Decision Proposal extraction,
+ * Task and Milestone Proposal extraction (#116) and "why did we" answering. Not part of the app.
  *
- * It drives the production extractor prompt (`modelExtract`), the production traceability filter
- * (`traceProposals`), the production tool registry with Project scope binding, the production
- * Project system prompt and the production `getModelForUser`, against the isolated database seeded
- * by `evals/fixture.ts`. Grading is deterministic (`evals/grade.ts`); citations are judged by the
- * same `internalHref` the dock renders with.
+ * It drives the production extractor prompts (`modelExtract`, `modelExtractItems`), the production
+ * traceability filters (`traceProposals`, `traceItems`), the production tool registry with Project
+ * scope binding, the production Project system prompt and the production `getModelForUser`, against
+ * the isolated database seeded by `evals/fixture.ts`. Grading is deterministic (`evals/grade.ts`);
+ * citations are judged by the same `internalHref` the dock renders with.
  *
- * Credentials come from the environment only; nothing secret is written to the artifacts.
+ * Credentials come from the environment only; nothing secret is written to the artifacts. The
+ * database must be local (`evals/local-db.ts`): `.env` may point `DATABASE_URL` elsewhere.
  *
  * Usage:
  *   DATABASE_URL=... OPENAI_API_KEY=... OPENAI_BASE_URL=https://openrouter.ai/api/v1 \
  *   npx tsx scripts/eval.mts --out artifacts/<dir> --models openai/gpt-4o-mini,google/gemini-2.5-flash
  *
- * Flags: --suite extraction|why|both  --models a,b  --out dir  --max-steps n  --temperature n|default
- *        --skip-index  --label text  --results-name prefix
+ * Flags: --suite extraction|items|why|both|pass (comma-separated; both = extraction,why; pass alone)
+ *        --models a,b  --out dir  --max-steps n  --temperature n|default  --extractor heuristic
+ *        --skip-index  --label text  --results-name prefix  --only id,...
  * Without --temperature, extraction samples at production's EXTRACT_TEMPERATURE and the answer
  * loop at the provider default, as they ship; `--temperature default` leaves both unset.
  */
@@ -45,17 +47,21 @@ import { risksRepo } from "@/server/modules/risks/repository";
 import { embeddingModelId } from "@/server/modules/search/embed";
 import { searchService } from "@/server/modules/search/service";
 import { tasksRepo } from "@/server/modules/tasks/repository";
-import { traceProposals, type TracedProposal } from "@/server/modules/proposals/trace";
+import { heuristicExtractItems, modelExtractItems } from "@/server/modules/proposals/extract-items";
+import { traceItems, traceProposals, type TracedProposal } from "@/server/modules/proposals/trace";
 import {
   citations,
   gradeExtraction,
+  gradeItems,
   gradeWhy,
   passed,
   type Check,
   type EntityIds,
   type ExtractionExpectation,
+  type ItemExpectation,
   type WhyExpectation,
 } from "../evals/grade";
+import { assertLocalDatabase } from "../evals/local-db";
 import { installUsageProbe, loadPricing, totals, type Call } from "../evals/usage";
 
 const arg = (name: string, fallback?: string) => {
@@ -66,6 +72,11 @@ const flag = (name: string) => process.argv.includes(`--${name}`);
 
 const OUT = arg("out", "artifacts/eval-local")!;
 const SUITE = arg("suite", "both")!;
+const SUITES = new Set(
+  SUITE.split(",")
+    .map((s) => s.trim())
+    .flatMap((s) => (s === "both" ? ["extraction", "why"] : [s])),
+);
 const MODELS = arg("models", "openai/gpt-4o-mini")!
   .split(",")
   .map((m) => m.trim());
@@ -101,6 +112,14 @@ interface ExtractionCase {
   sources: Array<Omit<ExtractSource, "text"> & { text: string }>;
   refs?: { people: string[]; milestones: string[]; tasks: string[] };
   expect: ExtractionExpectation;
+}
+
+interface ItemCase {
+  id: string;
+  tags: string[];
+  sources: ExtractSource[];
+  refs?: { people: string[]; milestones: string[]; tasks: string[] };
+  expect: ItemExpectation;
 }
 
 interface WhyCase {
@@ -200,6 +219,61 @@ async function runExtraction(ctx: Ctx, model: string, take: () => Call[]) {
     const last = results[results.length - 1]!;
     console.log(`[extract:${model}] ${c.id} ${last.pass ? "pass" : "FAIL"} ${last.ms}ms`);
     await write(resultsFile("extraction", model), results);
+  }
+  return results;
+}
+
+/** Task and Milestone extraction (#116): the production item prompt, then `traceItems` with no earlier item Proposals. */
+async function runItems(ctx: Ctx, model: string, take: () => Call[]) {
+  const file = await readJson<{ refs: ItemCase["refs"]; cases: ItemCase[] }>("evals/cases/items.json");
+  const results = [];
+  for (const c of selected(file.cases)) {
+    const refs = refsOf(c.refs ?? file.refs!);
+    const started = Date.now();
+    take();
+    try {
+      const extract =
+        arg("extractor") === "heuristic" ? heuristicExtractItems : modelExtractItems(ctx, { temperature: TEMPERATURE });
+      const raw = await extract({
+        sources: c.sources,
+        context: {
+          people: refs.people.map((p) => p.name),
+          milestones: refs.milestones.map((m) => m.name),
+          tasks: refs.tasks.map((t) => t.title),
+          conversation: "",
+        },
+      });
+      const rawCount = raw.tasks.length + raw.milestones.length;
+      const { kept, discarded } = traceItems(raw, c.sources, refs);
+      const graded = gradeItems(c.expect, kept, rawCount);
+      results.push({
+        model,
+        id: c.id,
+        tags: c.tags,
+        ms: Date.now() - started,
+        usage: totals(take()),
+        pass: passed(graded.checks),
+        checks: graded.checks,
+        matched: graded.matched,
+        missed: graded.missed,
+        rawCount,
+        discarded,
+        kept: kept.map((k) => ({ kind: k.kind, fields: k.fields, sources: k.sources })),
+      });
+    } catch (e) {
+      results.push({
+        model,
+        id: c.id,
+        tags: c.tags,
+        ms: Date.now() - started,
+        usage: totals(take()),
+        pass: false,
+        checks: [{ name: "call_succeeded", pass: false, detail: String(e) } satisfies Check],
+      });
+    }
+    const last = results[results.length - 1]!;
+    console.log(`[items:${model}] ${c.id} ${last.pass ? "pass" : "FAIL"} ${last.ms}ms`);
+    await write(resultsFile("items", model), results);
   }
   return results;
 }
@@ -327,7 +401,16 @@ async function runPassExperiment(ctx: Ctx, fixture: Fixture, model: string, take
 
 const rate = (rows: Array<{ pass: boolean }>) => (rows.length ? rows.filter((r) => r.pass).length / rows.length : 0);
 
+const suiteSummary = (rows: Array<{ pass: boolean; ms: number; usage?: { costUsd: number } }>) => ({
+  cases: rows.length,
+  passRate: rate(rows),
+  medianMs: median(rows.map((r) => r.ms)),
+  usd: rows.reduce((a, r) => a + (r.usage?.costUsd ?? 0), 0),
+});
+
 async function main() {
+  // Before the first query: the imported client connects lazily.
+  assertLocalDatabase();
   await mkdir(OUT, { recursive: true });
   const fixture = await readJson<Fixture>("evals/fixture.local.json");
   const ctx: Ctx = { db, userId: fixture.userId, via: "assistant" };
@@ -335,7 +418,7 @@ async function main() {
   const pricing = await loadPricing(baseUrl);
   const probe = installUsageProbe(pricing);
 
-  if (!flag("skip-index")) {
+  if (!flag("skip-index") && SUITES.has("why")) {
     const rows = await evidenceRepo.listByProject(db, fixture.projectId);
     for (const row of rows) await searchService.syncEvidence(row);
     console.log(`[index] embedded ${rows.length} Evidence items with ${embeddingModelId()}`);
@@ -348,27 +431,19 @@ async function main() {
 
   for (const model of MODELS) {
     process.env.AI_MODEL = model;
-    if (SUITE === "pass") {
+    if (SUITES.has("pass")) {
       runs[model] = { pass: await runPassExperiment(ctx, fixture, model, probe.take) };
       continue;
     }
-    const extraction = SUITE === "why" ? [] : await runExtraction(ctx, model, probe.take);
-    const why = SUITE === "extraction" ? [] : await runWhy(ctx, fixture, model, ids, probe.take);
-    runs[model] = { extraction, why };
-    const all = [...extraction, ...why];
+    const extraction = SUITES.has("extraction") ? await runExtraction(ctx, model, probe.take) : [];
+    const items = SUITES.has("items") ? await runItems(ctx, model, probe.take) : [];
+    const why = SUITES.has("why") ? await runWhy(ctx, fixture, model, ids, probe.take) : [];
+    runs[model] = SUITES.has("items") ? { extraction, items, why } : { extraction, why };
+    const all = [...extraction, ...items, ...why];
     summary[model] = {
-      extraction: {
-        cases: extraction.length,
-        passRate: rate(extraction),
-        medianMs: median(extraction.map((r) => r.ms)),
-        usd: extraction.reduce((a, r) => a + (r.usage?.costUsd ?? 0), 0),
-      },
-      why: {
-        cases: why.length,
-        passRate: rate(why),
-        medianMs: median(why.map((r) => r.ms)),
-        usd: why.reduce((a, r) => a + (r.usage?.costUsd ?? 0), 0),
-      },
+      extraction: suiteSummary(extraction),
+      ...(SUITES.has("items") ? { items: suiteSummary(items) } : {}),
+      why: suiteSummary(why),
       overallPassRate: rate(all),
       totalUsd: all.reduce((a, r) => a + (r.usage?.costUsd ?? 0), 0),
     };
