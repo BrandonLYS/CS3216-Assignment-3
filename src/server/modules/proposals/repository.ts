@@ -100,6 +100,14 @@ export const itemProposalsRepo = {
           .returning()
       : Promise.resolve([] as ItemProposalRow[]),
 
+  /** Called inside the transaction that creates the item (#115); only a pending Proposal is accepted. */
+  markAccepted: async (db: DbOrTx, id: string, itemId: string): Promise<ItemProposalRow[]> =>
+    db
+      .update(itemProposals)
+      .set({ status: "accepted", itemId, resolvedAt: new Date() })
+      .where(and(eq(itemProposals.id, id), eq(itemProposals.status, "pending")))
+      .returning(),
+
   /** Only a pending item Proposal can be rejected; a repeat returns no row. */
   markRejected: (db: DbOrTx, id: string) =>
     db
