@@ -333,11 +333,18 @@ export const proposalsService = {
     if (!p) throw new NotFoundError("Proposal");
     await assertOwnsProject(ctx.db, ctx.userId, p.projectId);
     if (p.status !== "pending") throw new ConflictError("That proposal was already resolved");
-    const base = acceptInputOf(p.projectId, p, await acceptRefs(ctx.db, p.projectId));
-    const accepted = input ?? base;
+    const refs = await acceptRefs(ctx.db, p.projectId);
+    // A stored payload the create schema refuses can still be accepted once the PM has edited it.
+    const base = input ? acceptInputOrNull(p.projectId, p, refs) : acceptInputOf(p.projectId, p, refs);
+    const accepted = input ?? base!;
     // `tasksService.create` checks ownership of `input.projectId` only, so another owned Project would pass.
     if (accepted.input.projectId !== p.projectId) throw new NotFoundError("Proposal");
     if (accepted.kind !== p.kind) throw new ConflictError(`That proposal is a ${p.kind}`);
+    // The dialog always posts a Status; the edited check compares it with the default a one-click
+    // accept gets. Resolved before the create, so a failure here writes nothing.
+    const defaultStatusId = accepted.input.statusId
+      ? (await statusesService.resolveForNewItem(ctx.db, p.projectId, p.kind, undefined)).id
+      : null;
 
     const evidenceIds = [...new Set(p.sources.filter((s) => s.kind === "evidence").map((s) => s.entityId))];
     const confirm = async (tx: Tx, rec: Recorder, itemId: string) => {
@@ -360,11 +367,7 @@ export const proposalsService = {
             kind: "milestone",
             item: await milestonesService.create(via, accepted.input, (tx, rec, m) => confirm(tx, rec, m.id)),
           };
-    const defaultStatusId = accepted.input.statusId
-      ? ((await statusesService.resolveForNewItem(ctx.db, p.projectId, p.kind, undefined).catch(() => null))?.id ??
-        null)
-      : null;
-    await itemProposalAccepted(ctx, p, itemEditedBeforeAccept(base, accepted, defaultStatusId));
+    await itemProposalAccepted(ctx, p, !base || itemEditedBeforeAccept(base, accepted, defaultStatusId));
     return out;
   },
 

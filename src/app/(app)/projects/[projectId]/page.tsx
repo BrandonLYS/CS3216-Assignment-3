@@ -110,8 +110,7 @@ export default async function ProjectOverviewPage({ params }: PageProps<"/projec
               <ImpactAlerts alerts={alerts} projectId={projectId} />
               <ProposalCards
                 proposals={proposals}
-                items={items}
-                refs={refs}
+                items={refs && { list: items, refs }}
                 projectId={projectId}
                 sourceLabels={sourceLabels}
               />

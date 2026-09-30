@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/server/core/errors";
+import { eq } from "drizzle-orm";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { activityRepo } from "@/server/modules/activity/service";
 import { commentsService } from "@/server/modules/comments/service";
 import { evidenceLinksRepo } from "@/server/modules/evidence/repository";
@@ -12,6 +13,7 @@ import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { heuristicExtract } from "./extract";
 import type { ExtractItems } from "./extract-items";
 import { itemProposalsRepo } from "./repository";
+import { itemProposals } from "./schema";
 import { proposalsService } from "./service";
 
 let ctx: Ctx;
@@ -183,6 +185,22 @@ describe("proposalsService.acceptItem (#115)", () => {
     });
     expect(created.item).toMatchObject({ title: "Book lab B", assigneeId: priya.id });
     expect(await tasksService.list(ctx, other)).toHaveLength(0);
+  });
+
+  it("lists a payload the create schema refuses, refuses it on one click and accepts it once edited", async () => {
+    const { pid, task } = await setup("IBD");
+    await ctx.db
+      .update(itemProposals)
+      .set({ fields: { ...task.fields, title: "   " } })
+      .where(eq(itemProposals.id, task.id));
+    const [broken] = (await proposalsService.listPendingItems(ctx, pid)).filter((p) => p.id === task.id);
+    expect(broken!.acceptInput).toBeNull();
+    await expect(proposalsService.acceptItem(ctx, { id: task.id })).rejects.toBeInstanceOf(ValidationError);
+    const created = await proposalsService.acceptItem(ctx, {
+      id: task.id,
+      input: { kind: "task", input: { projectId: pid, title: "Book the lab", priority: "none" } },
+    });
+    expect(created.item).toMatchObject({ title: "Book the lab" });
   });
 
   it("refuses an edited input of the other kind", async () => {

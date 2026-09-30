@@ -16,3 +16,14 @@ What was built follows `plan.md`; this file records where it deviated and what w
 - `npx vitest run src/server/modules/proposals` covers `acceptInputOf` (pure), the accept service against the test database (default Status, Evidence links, Activity Events via the Assistant, deferred Milestone re-resolution, parallel accepts, a reject racing the accept rolling the Task back, edited input, a foreign Project refused, deleted Evidence skipped, Comment Sources not linked, a rejected item not raised again, a stranger refused) and the `item_proposal_accepted` payload and edit rule.
 - `e2e/item-proposals.spec.ts` under `PROPOSALS_EXTRACTOR=heuristic`: exactly one Task and one Milestone Proposal from one Evidence item, one-click accept of the Milestone, edit and accept of the Task with a new title, both items on their pages, attributed "via Assistant", and linked to the Evidence; green in four consecutive runs.
 - UI proof: `artifacts/before-item-proposal-review.png` (pending item Proposals had no surface), `artifacts/after-item-proposal-cards.png`, `artifacts/after-item-proposal-task-dialog.png`, `artifacts/after-item-proposal-milestone-dialog.png`.
+
+## Code review
+
+A two-axis review (standards and spec) found no hard violations; these were fixed:
+
+- Edit and accept on a payload the create schema refuses always failed, because the accept computed the one-click input first; it now accepts the edited input and records it as edited.
+- The default Status for the edited check was resolved after commit with a swallowed failure, which could report an untouched dialog save as edited; it is now resolved before the create.
+- The one-click accept and reject state was duplicated between the Decision and item cards; both use `useProposalTransition`.
+- `ProposalCards` took `items` and `refs` separately, so items without refs rendered nothing; they are now one prop.
+
+Kept as designed: `item_proposal_rejected` carries `kind` and no edited flag, as `proposal_rejected` does for Decisions (see the plan).

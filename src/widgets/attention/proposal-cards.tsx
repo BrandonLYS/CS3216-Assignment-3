@@ -18,20 +18,18 @@ import { ProposalSources } from "./proposal-sources";
  */
 export function ProposalCards({
   proposals,
-  items = [],
-  refs = null,
+  items,
   projectId,
   sourceLabels,
 }: {
   proposals: ProposalRow[];
-  /** Pending Task and Milestone Proposals; `refs` is loaded whenever there are any. */
-  items?: ReviewableItem[];
-  refs?: ProjectRefs | null;
+  /** Pending Task and Milestone Proposals, with the reference data their dialogs need; null when none. */
+  items?: { list: ReviewableItem[]; refs: ProjectRefs } | null;
   projectId: string;
   /** `kind:entityId` to display label (Evidence title / Comment preview). */
   sourceLabels: Map<string, string>;
 }) {
-  if (!proposals.length && !items.length) return null;
+  if (!proposals.length && !items?.list.length) return null;
   return (
     <section className="flex flex-col gap-3" data-testid="proposal-cards">
       {proposals.map((p) => (
@@ -79,8 +77,9 @@ export function ProposalCards({
           </div>
         </Panel>
       ))}
-      {refs &&
-        items.map((item) => <ItemProposalCard key={item.id} item={item} refs={refs} sourceLabels={sourceLabels} />)}
+      {items?.list.map((item) => (
+        <ItemProposalCard key={item.id} item={item} refs={items.refs} sourceLabels={sourceLabels} />
+      ))}
     </section>
   );
 }
