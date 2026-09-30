@@ -7,10 +7,16 @@ import { evidenceRepo } from "@/server/modules/evidence/repository";
 import { evidenceService } from "@/server/modules/evidence/service";
 import type { ProjectRow } from "@/server/modules/projects/schema";
 import { getStorage } from "@/server/storage";
-import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT, RENDER_PROMPT_MAX } from "@/shared/domain";
+import {
+  RENDER_DRAFT_NOTES_MAX,
+  RENDER_EVIDENCE_MAX,
+  RENDER_MAX_PER_PROJECT,
+  RENDER_PROMPT_MAX,
+} from "@/shared/domain";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
 import { DRAFT_EVIDENCE_CHARS, type Draft } from "./draft";
 import { promptSentFor } from "./provider";
+import { rendersRepo } from "./repository";
 import { rendersService } from "./service";
 import { createRenderSchema, draftRenderSchema } from "./validation";
 
@@ -97,6 +103,25 @@ describe("rendersService.request", () => {
     await expect(rendersService.request(ctx, { projectId, prompt: "One too many" })).rejects.toBeInstanceOf(
       ValidationError,
     );
+    expect(await rendersService.list(ctx, projectId)).toHaveLength(RENDER_MAX_PER_PROJECT);
+  });
+
+  it("holds the cap when the last requests arrive together", async () => {
+    for (let i = 0; i < RENDER_MAX_PER_PROJECT - 1; i++) {
+      await rendersService.request(ctx, { projectId, prompt: `Render ${i}` });
+    }
+    // Widen the gap between counting and inserting, so unlocked requests would all see room.
+    const count = rendersRepo.countForProject;
+    const slow = vi.spyOn(rendersRepo, "countForProject").mockImplementation(async (db, id) => {
+      const n = await count(db, id);
+      await new Promise((r) => setTimeout(r, 50));
+      return n;
+    });
+    const results = await Promise.allSettled(
+      [1, 2, 3].map((i) => rendersService.request(ctx, { projectId, prompt: `Race ${i}` })),
+    );
+    slow.mockRestore();
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(await rendersService.list(ctx, projectId)).toHaveLength(RENDER_MAX_PER_PROJECT);
   });
 });
@@ -188,6 +213,19 @@ describe("rendersService.draft", () => {
     );
     expect(prompt.length).toBeLessThanOrEqual(RENDER_PROMPT_MAX);
     expect(prompt).not.toContain("\n");
+  });
+
+  it("refuses notes over the cap even from a caller that skipped the schema", async () => {
+    const e = await addEvidence("Brief", "A hall.");
+    const drafter = fake();
+    await expect(
+      rendersService.draft(
+        ctx,
+        { projectId, evidenceIds: [e.id], notes: "x".repeat(RENDER_DRAFT_NOTES_MAX + 1) },
+        drafter,
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(drafter).not.toHaveBeenCalled();
   });
 
   it("refuses too many, foreign and textless Evidence, and a stranger", async () => {

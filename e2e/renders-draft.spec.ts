@@ -109,6 +109,7 @@ test.describe("with an Assistant model", () => {
     await dialog.getByRole("button", { name: "Draft from Evidence" }).click();
     const description = dialog.getByLabel("Description");
     await expect(description).toHaveValue(DRAFT);
+    await expect(dialog.getByText("Drafted from: Site walk notes, Client brief")).toBeVisible();
     await page.screenshot(shot("after-renders-drafted-prompt"));
 
     // The model read both texts inside the data fence, and the PM's words.
@@ -138,6 +139,22 @@ test.describe("with an Assistant model", () => {
     expect(imagePrompts[0]!.startsWith(`${approved}. `)).toBe(true);
     for (const leak of [SECRET, "Site walk notes", "Client brief", "Pond Pavilion"])
       expect(imagePrompts[0]).not.toContain(leak);
+  });
+
+  test("a draft the PM detaches from its Evidence is not attributed to it", async ({ page }) => {
+    await projectWithEvidence(page, [{ title: "Site walk notes", body: "Beside the pond." }]);
+    const dialog = await openNewRender(page);
+    await dialog.getByRole("checkbox", { name: "Site walk notes" }).check();
+    await dialog.getByRole("button", { name: "Draft from Evidence" }).click();
+    await expect(dialog.getByLabel("Description")).toHaveValue(DRAFT);
+    const rewritten = "A small timber boathouse on stilts";
+    await dialog.getByLabel("Description").fill(rewritten);
+    await dialog.getByRole("button", { name: "Remove the Evidence attribution" }).click();
+    await expect(dialog.getByText("Drafted from")).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Generate" }).click();
+    const card = page.getByRole("listitem").filter({ hasText: rewritten });
+    await expect(card.getByRole("img")).toBeVisible({ timeout: 60_000 });
+    await expect(card.getByText("Drafted from")).toHaveCount(0);
   });
 
   test("the picker stops at three pieces of Evidence", async ({ page }) => {

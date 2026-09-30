@@ -48,7 +48,10 @@ The answer is collapsed to one paragraph and cut to `RENDER_PROMPT_MAX` at a wor
 
 `renders.evidence` is a jsonb array of `{ evidenceId, title }`, taken when the Render is requested.
 With no foreign key, the card still says "Drafted from: ..." after the Evidence is renamed or deleted.
-The ids that go with Generate are the ones the last successful draft read, not the current ticks, and clearing the description drops them, so a rewritten description is not attributed to Evidence.
+The ids that go with Generate are the ones the last successful draft read, not the current ticks.
+Edits keep them, because editing the draft is the intended flow.
+The form shows "Drafted from: ..." under the description with a Remove control, and clearing the description drops them too, so the PM decides when a rewritten description stops being attributed to Evidence.
+The attribution is therefore the PM's claim, not a server-verified fact: `request` checks that each id is Evidence in the same Project and within the cap, not that a draft read it.
 
 ## No eval suite
 

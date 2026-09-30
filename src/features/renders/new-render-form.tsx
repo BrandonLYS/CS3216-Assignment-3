@@ -81,6 +81,8 @@ export function NewRenderForm({
         required
         autoFocus={!drafting.enabled || drafting.sources.length === 0}
         maxLength={RENDER_PROMPT_MAX}
+        // A draft in flight replaces the description, so typing now would be lost.
+        readOnly={isDrafting}
         value={prompt}
         onChange={(e) => {
           setPrompt(e.target.value);
@@ -91,6 +93,23 @@ export function NewRenderForm({
         hint="Edit it as you like: only this description is sent. The image takes up to a minute."
         inputClassName="min-h-32"
       />
+      {draftedFrom.length > 0 && (
+        // Edits keep the attribution; the PM drops it here when the description is no longer from these.
+        <p className="-mt-2 flex items-center gap-2 text-caption text-ink-tertiary">
+          <span className="truncate">
+            Drafted from:{" "}
+            {draftedFrom.map((id) => drafting.sources.find((s) => s.id === id)?.title ?? "Evidence").join(", ")}
+          </span>
+          <button
+            type="button"
+            aria-label="Remove the Evidence attribution"
+            className="shrink-0 text-ink-subtle underline-offset-2 hover:underline"
+            onClick={() => setDraftedFrom([])}
+          >
+            Remove
+          </button>
+        </p>
+      )}
     </ActionForm>
   );
 }

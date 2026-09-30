@@ -3,6 +3,7 @@ import type { Ctx } from "@/server/core/context";
 import { compactPatch, diffFields } from "@/server/core/diff";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
+import { lockProject } from "@/server/core/sequence";
 import type { DbOrTx } from "@/server/db/client";
 import { getModelForUser } from "@/server/modules/assistant/model";
 import { turnErrorMessage } from "@/server/modules/assistant/turn-error";
@@ -10,7 +11,8 @@ import { evidenceLinksRepo, evidenceRepo } from "@/server/modules/evidence/repos
 import type { EvidenceRow } from "@/server/modules/evidence/schema";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { getStorage } from "@/server/storage";
-import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT } from "@/shared/domain";
+import { RENDER_DRAFT_NOTES_MAX, RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT } from "@/shared/domain";
+import { cutUnits } from "@/shared/lib/text";
 import {
   generateImage,
   isRenderConfigured,
@@ -99,6 +101,8 @@ export const rendersService = {
    */
   draft: async (ctx: Ctx, input: DraftRenderInput, drafter?: Draft): Promise<{ prompt: string }> => {
     await assertOwnsProject(ctx.db, ctx.userId, input.projectId);
+    if ((input.notes?.length ?? 0) > RENDER_DRAFT_NOTES_MAX)
+      throw new ValidationError("Notes are too long", { notes: ["Too long"] });
     const cited = await loadEvidence(ctx.db, input.projectId, input.evidenceIds);
     const sources = cited.map((e) => ({ title: e.title, kind: e.kind, text: draftText(e) }));
     const empty = sources.find((s) => !s.text);
@@ -111,7 +115,7 @@ export const rendersService = {
       draft = modelDraft(model);
     }
     const raw = await draft({
-      sources: sources.map((s) => ({ ...s, text: s.text.slice(0, DRAFT_EVIDENCE_CHARS) })),
+      sources: sources.map((s) => ({ ...s, text: cutUnits(s.text, DRAFT_EVIDENCE_CHARS) })),
       notes: input.notes ?? null,
       telemetry: { userId: ctx.userId, properties: { project_id: input.projectId, evidence_count: cited.length } },
     }).catch((e: unknown) => {
@@ -140,7 +144,8 @@ export const rendersService = {
     return mutate(ctx, async (tx, rec) => {
       await assertOwnsProject(tx, ctx.userId, input.projectId);
       const cited = await loadEvidence(tx, input.projectId, input.evidenceIds ?? []);
-      // Counted inside the transaction so two quick clicks cannot both pass the cap.
+      // Counted under the Project's row lock so two quick clicks cannot both pass the cap.
+      await lockProject(tx, input.projectId);
       const existing = await rendersRepo.countForProject(tx, input.projectId);
       if (existing >= RENDER_MAX_PER_PROJECT) {
         throw new ValidationError(`This project already has ${RENDER_MAX_PER_PROJECT} renders. Delete one first.`, {
