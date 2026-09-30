@@ -140,17 +140,19 @@ export function gradeItems(
   const missed: string[] = [];
   const mismatches: string[] = [];
   for (const want of expect.items) {
-    const i = unmatched.findIndex(
+    const candidates = unmatched.filter(
       (k) =>
         k.kind === want.kind && want.title.every((group) => group.some((term) => containsWords(titleOfItem(k), term))),
     );
-    if (i < 0) {
+    if (!candidates.length) {
       missed.push(want.label);
       continue;
     }
-    const [got] = unmatched.splice(i, 1);
+    // Two kept items can share a title; pair the expectation with one whose fields are right when there is one.
+    const got = candidates.find((k) => fieldMismatches(want, k).length === 0) ?? candidates[0]!;
+    unmatched.splice(unmatched.indexOf(got), 1);
     matched.push(want.label);
-    mismatches.push(...fieldMismatches(want, got!));
+    mismatches.push(...fieldMismatches(want, got));
   }
   const texts = kept.map((k) => norm([titleOfItem(k), k.fields.description].filter(Boolean).join(" \u00b7 ")));
   const forbidden = (expect.forbid ?? []).filter((term) => texts.some((t) => t.includes(norm(term))));
@@ -158,8 +160,10 @@ export function gradeItems(
     { name: "expected_items_found", pass: missed.length === 0, detail: missed.join("; ") || undefined },
     {
       name: "no_extra_items",
-      pass: kept.length === expect.items.length,
-      detail: `kept ${kept.length}, expected ${expect.items.length}`,
+      pass: unmatched.length === 0,
+      detail: unmatched.length
+        ? `kept ${kept.length}, expected ${expect.items.length}; extra: ${unmatched.map(titleOfItem).join("; ")}`
+        : undefined,
     },
     { name: "fields_exact", pass: mismatches.length === 0, detail: mismatches.join("; ") || undefined },
     { name: "no_forbidden_content", pass: forbidden.length === 0, detail: forbidden.join("; ") || undefined },
@@ -294,11 +298,10 @@ export function gradeWhy(
     checks.push({ name: "did_not_abstain", pass: !abstainStrict });
   }
 
-  for (const [i, group] of (expect.mustMention ?? []).entries()) {
+  for (const group of expect.mustMention ?? []) {
     checks.push({
       name: `mentions_${group[0]!.replace(/\s+/g, "_")}`,
       pass: group.some((term) => text.includes(norm(term))),
-      detail: i >= 0 ? undefined : undefined,
     });
   }
   const forbidden = (expect.forbid ?? []).filter((term) => text.includes(norm(term)));

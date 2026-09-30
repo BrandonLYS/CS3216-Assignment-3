@@ -64,12 +64,23 @@ describe("gradeItems", () => {
   });
 
   it("fails a missing item and an extra item", () => {
-    expect(failed({ items: [wantTask, wantMilestone] }, [task({})])).toMatchObject({
-      expected_items_found: "review",
-      no_extra_items: "kept 1, expected 2",
-    });
+    expect(failed({ items: [wantTask, wantMilestone] }, [task({})])).toEqual({ expected_items_found: "review" });
     expect(failed({ items: [wantTask] }, [task({}), task({ title: "Book the lab" })])).toEqual({
-      no_extra_items: "kept 2, expected 1",
+      no_extra_items: "kept 2, expected 1; extra: Book the lab",
+    });
+  });
+
+  it("reports an extra item even when a miss leaves the counts equal", () => {
+    expect(failed({ items: [wantTask] }, [task({ title: "Book the lab" })])).toMatchObject({
+      expected_items_found: "runbook",
+      no_extra_items: "kept 1, expected 1; extra: Book the lab",
+    });
+  });
+
+  it("pairs an expectation with the title match whose fields are right", () => {
+    const wrongOwner = task({ assigneeId: "person-1", assigneeName: "Wei Ling" });
+    expect(failed({ items: [wantTask] }, [wrongOwner, task({})])).toEqual({
+      no_extra_items: "kept 2, expected 1; extra: Draft the rollback runbook",
     });
   });
 

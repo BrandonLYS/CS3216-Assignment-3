@@ -77,6 +77,7 @@ const SUITES = new Set(
     .map((s) => s.trim())
     .flatMap((s) => (s === "both" ? ["extraction", "why"] : [s])),
 );
+if (SUITES.has("pass") && SUITES.size > 1) throw new Error("--suite pass runs on its own");
 const MODELS = arg("models", "openai/gpt-4o-mini")!
   .split(",")
   .map((m) => m.trim());
