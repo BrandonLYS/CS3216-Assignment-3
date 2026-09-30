@@ -1,7 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { RawProposal } from "./extract";
 import type { RawItems, RawMilestone, RawTask } from "./extract-items";
-import { attachPassages, fingerprintOf, isDuplicateTitle, traceAssumption, traceItems, traceProposals } from "./trace";
+import {
+  attachPassages,
+  fingerprintOf,
+  isDuplicateTitle,
+  startOnOrBeforeDue,
+  traceAssumption,
+  traceItems,
+  traceProposals,
+} from "./trace";
+
+describe("startOnOrBeforeDue", () => {
+  it("keeps a start on or before the due date and drops a later one", () => {
+    expect(startOnOrBeforeDue("2026-10-05", "2026-10-05")).toBe("2026-10-05");
+    expect(startOnOrBeforeDue("2026-10-01", "2026-10-05")).toBe("2026-10-01");
+    expect(startOnOrBeforeDue("2026-10-06", "2026-10-05")).toBeNull();
+  });
+
+  it("keeps the start when either date is missing", () => {
+    expect(startOnOrBeforeDue("2026-10-06", null)).toBe("2026-10-06");
+    expect(startOnOrBeforeDue(null, "2026-10-05")).toBeNull();
+  });
+});
 
 const sources = [
   { kind: "evidence" as const, entityId: "e1", title: "Notes", text: "We   decided to\nswitch to interviews. Done." },

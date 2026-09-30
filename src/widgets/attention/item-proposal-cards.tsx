@@ -1,6 +1,6 @@
 import { Diamond, SquareCheck } from "lucide-react";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
-import type { ProposedMilestoneFields, ProposedTaskFields } from "@/server/modules/proposals/schema";
+import { asProposedItem, itemTitleOf } from "@/server/modules/proposals/proposed-item";
 import type { ReviewableItem } from "@/server/modules/proposals/service";
 import { fmtDate } from "@/shared/lib/dates";
 import { Panel } from "@/shared/ui";
@@ -8,13 +8,13 @@ import { ItemProposalActions } from "./item-proposal-actions";
 import { ProposalSources } from "./proposal-sources";
 
 /** The resolved name for an id, else the name as the extractor wrote it, flagged; null when neither. */
-function named(rows: Array<{ id: string; name: string }>, id: string | null | undefined, written: string | null) {
+function displayName(rows: Array<{ id: string; name: string }>, id: string | null | undefined, written: string | null) {
   const hit = id ? rows.find((r) => r.id === id) : undefined;
   if (hit) return hit.name;
   return written ? `${written} (not in project)` : null;
 }
 
-const day = (d: string | null | undefined) => (d ? fmtDate(d, "d MMM yyyy") : null);
+const fmtDay = (d: string | null | undefined) => (d ? fmtDate(d, "d MMM yyyy") : null);
 
 /**
  * A pending Task or Milestone Proposal (#115) on the Overview: what one click would create, with
@@ -30,22 +30,26 @@ export function ItemProposalCard({
   sourceLabels: Map<string, string>;
 }) {
   const accept = item.acceptInput;
-  const isTask = item.kind === "task";
-  const title = isTask ? (item.fields as ProposedTaskFields).title : (item.fields as ProposedMilestoneFields).name;
+  const proposed = asProposedItem(item);
+  const isTask = proposed.kind === "task";
+  const title = itemTitleOf(proposed);
   const details: Array<[string, string | null]> = [];
-  if (isTask) {
-    const f = item.fields as ProposedTaskFields;
+  if (proposed.kind === "task") {
+    const f = proposed.fields;
     const input = accept?.kind === "task" ? accept.input : null;
     details.push(
-      ["Owner", named(refs.people, input?.assigneeId, f.assigneeName)],
-      ["Milestone", named(refs.milestones, input?.milestoneId, f.milestoneName)],
-      ["Start", day(input?.startDate ?? f.startDate)],
-      ["Due", day(input?.dueDate ?? f.dueDate)],
+      ["Owner", displayName(refs.people, input?.assigneeId, f.assigneeName)],
+      ["Milestone", displayName(refs.milestones, input?.milestoneId, f.milestoneName)],
+      ["Start", fmtDay(input?.startDate ?? f.startDate)],
+      ["Due", fmtDay(input?.dueDate ?? f.dueDate)],
     );
   } else {
-    const f = item.fields as ProposedMilestoneFields;
+    const f = proposed.fields;
     const input = accept?.kind === "milestone" ? accept.input : null;
-    details.push(["Owner", named(refs.people, input?.ownerId, f.ownerName)], ["Due", day(input?.dueDate ?? f.dueDate)]);
+    details.push(
+      ["Owner", displayName(refs.people, input?.ownerId, f.ownerName)],
+      ["Due", fmtDay(input?.dueDate ?? f.dueDate)],
+    );
   }
   const Icon = isTask ? SquareCheck : Diamond;
   const description = item.fields.description;
