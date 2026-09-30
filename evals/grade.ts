@@ -152,17 +152,28 @@ export function gradeItems(
   const unmatched = [...kept];
   const titleMatches = (want: ExpectedItem, k: TracedItem) =>
     k.kind === want.kind && want.title.every((group) => group.some((term) => containsWords(titleOfItem(k), term)));
-  // Exact pairs first, for every expectation, so an earlier loose title match cannot take the item a
-  // later expectation fits exactly; then each remaining expectation takes its first title match.
-  const pairs = new Map<ExpectedItem, TracedItem>();
-  for (const exact of [true, false]) {
-    for (const want of expect.items) {
-      if (pairs.has(want)) continue;
-      const got = unmatched.find((k) => titleMatches(want, k) && (!exact || fieldMismatches(want, k).length === 0));
-      if (!got) continue;
-      pairs.set(want, got);
-      unmatched.splice(unmatched.indexOf(got), 1);
-    }
+  // As many exact pairs (title and every field) as possible, by augmenting paths, so no expectation
+  // takes an item another one fits exactly; then each remaining expectation takes its first title match.
+  const exact = (want: ExpectedItem, k: TracedItem) => titleMatches(want, k) && fieldMismatches(want, k).length === 0;
+  const owner = new Map<TracedItem, ExpectedItem>();
+  const claim = (want: ExpectedItem, seen: Set<TracedItem>): boolean =>
+    kept.some((k) => {
+      if (seen.has(k) || !exact(want, k)) return false;
+      seen.add(k);
+      const holder = owner.get(k);
+      if (holder && !claim(holder, seen)) return false;
+      owner.set(k, want);
+      return true;
+    });
+  for (const want of expect.items) claim(want, new Set());
+  const pairs = new Map<ExpectedItem, TracedItem>([...owner].map(([k, want]) => [want, k]));
+  for (const k of owner.keys()) unmatched.splice(unmatched.indexOf(k), 1);
+  for (const want of expect.items) {
+    if (pairs.has(want)) continue;
+    const got = unmatched.find((k) => titleMatches(want, k));
+    if (!got) continue;
+    pairs.set(want, got);
+    unmatched.splice(unmatched.indexOf(got), 1);
   }
   const matched = expect.items.filter((w) => pairs.has(w)).map((w) => w.label);
   const missed = expect.items.filter((w) => !pairs.has(w)).map((w) => w.label);

@@ -60,8 +60,10 @@ Its findings, all fixed:
 
 - **Should-fix:** a mistyped `--suite` (for example `item`) ran nothing and exited 0, and any `--extractor` other than `heuristic` silently called the paid model.
   Both flags now reject unknown values.
-- Pairing is now two-pass: exact title-and-fields pairs for every expectation first, then title-only pairs.
-  An earlier expectation can no longer take the item a later one fits exactly.
+  Round 2 found that a bare trailing `--extractor` still fell through to the model, and a bare `--suite` fell back to `both`.
+  Any value flag given without a value now throws.
+- Pairing first takes a maximum matching over exact title-and-fields pairs, found by augmenting paths, then pairs the rest by title.
+  Round 1 made it two-pass, and round 2 showed an expectation that fits two items exactly could still take the only item another one fits.
 - Forbidden terms match as whole words, like titles.
   A case with an empty title group or a term that normalises to nothing is refused.
 - The run README says the stored per-check results predate the grader fixes.

@@ -93,6 +93,13 @@ describe("gradeItems", () => {
     });
   });
 
+  it("finds every exact pair even when an earlier expectation fits two items exactly", () => {
+    const anyReport: ExpectedItem = { ...wantTask, label: "any report", title: [["report"]] };
+    const parity: ExpectedItem = { ...wantTask, label: "parity report", title: [["parity"], ["report"]] };
+    const kept = [task({ title: "Parity report" }), task({ title: "Weekly report" })];
+    expect(failed({ items: [anyReport, parity] }, kept)).toEqual({});
+  });
+
   it("refuses a case whose title group or forbidden term normalises to nothing", () => {
     expect(() => gradeItems({ items: [{ ...wantTask, title: [] }] }, [], 0)).toThrow(/empty title/);
     expect(() => gradeItems({ items: [{ ...wantTask, title: [["--"]] }] }, [], 0)).toThrow(/empty title/);

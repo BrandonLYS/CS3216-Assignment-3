@@ -64,9 +64,13 @@ import {
 import { assertLocalDatabase } from "../evals/local-db";
 import { installUsageProbe, loadPricing, totals, type Call } from "../evals/usage";
 
+/** A flag given without a value is an error: falling back could silently switch suite or call the paid model. */
 const arg = (name: string, fallback?: string) => {
   const i = process.argv.indexOf(`--${name}`);
-  return i > 0 ? (process.argv[i + 1] ?? fallback) : fallback;
+  if (i < 0) return fallback;
+  const value = process.argv[i + 1];
+  if (value === undefined || value.startsWith("--")) throw new Error(`--${name} needs a value`);
+  return value;
 };
 const flag = (name: string) => process.argv.includes(`--${name}`);
 
@@ -83,7 +87,7 @@ if (!SUITES.size || unknownSuites.length)
   throw new Error(`--suite takes ${[...KNOWN_SUITES, "both"].join("|")}; got "${SUITE}"`);
 if (SUITES.has("pass") && SUITES.size > 1) throw new Error("--suite pass runs on its own");
 // Any other value would silently fall through to the paid model.
-if (arg("extractor") !== undefined && arg("extractor") !== "heuristic")
+if (flag("extractor") && arg("extractor") !== "heuristic")
   throw new Error(`--extractor takes only "heuristic"; got "${arg("extractor")}"`);
 const MODELS = arg("models", "openai/gpt-4o-mini")!
   .split(",")
