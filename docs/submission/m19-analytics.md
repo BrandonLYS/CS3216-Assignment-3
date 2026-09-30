@@ -87,7 +87,7 @@ PostHog (client `posthog-js`, server `posthog-node`).
 | `project_created`           | After `createProjectAction` succeeds                                               | `project_id`                                                                                                                                                                                                                                                    |
 | `evidence_created`          | After `createEvidenceAction` succeeds                                              | `evidence_id`, `evidence_kind`                                                                                                                                                                                                                                  |
 | `transcript_created`        | After Evidence of kind `transcript` is created                                     | `evidence_id`                                                                                                                                                                                                                                                   |
-| `render_requested`          | After a concept render is requested                                                | `render_id`                                                                                                                                                                                                                                                     |
+| `render_requested`          | After a concept render is requested                                                | `render_id`, `evidence_count` (Evidence the description was drafted from, 0 when typed)                                                                                                                                                                         |
 | `proposal_generated`        | After a pass commits at least one Proposal, automatic or requested                 | `project_id`, `trigger`, `extractor`, `proposal_count`, `source_count`, `evidence_source_count`, `comment_source_count`, `discarded_count`                                                                                                                      |
 | `proposal_accepted`         | After the transaction that turns the Proposal into a Decision commits              | `project_id`, `proposal_id`, `extractor`, `edited_before_accept`                                                                                                                                                                                                |
 | `proposal_rejected`         | After a pending Proposal is marked rejected                                        | `project_id`, `proposal_id`, `extractor`                                                                                                                                                                                                                        |
@@ -107,7 +107,7 @@ PostHog (client `posthog-js`, server `posthog-node`).
 ## LLM analytics
 
 `src/shared/analytics/ai.ts` records every model call as a PostHog `$ai_generation` event, which PostHog's LLM Analytics view turns into cost, latency and token dashboards per model.
-The four call sites are distinguished by `$ai_span_name`:
+The five call sites are distinguished by `$ai_span_name`:
 
 - `assistant_turn`: one event per model call in `/api/assistant/chat`, with `workflow`, `conversation_id` and `step`, grouped per request by `$ai_trace_id` and summarised by `assistant_turn_completed`.
   A provider failure, before or during the stream, is recorded; a tool or approval error is not a generation and is not.
@@ -115,10 +115,11 @@ The four call sites are distinguished by `$ai_span_name`:
 - `proposal_extraction`: the `generateObject` call of a model Proposal pass, with `project_id`, `trigger` and `source_count`.
 - `item_extraction`: the second `generateObject` call of the same pass, proposing Tasks and Milestones (#114), with the same properties.
 - `reflection`: the `generateObject` call that rewrites the Profile and Working Memory, with `conversation_id` and `project_id`, under the `$ai_trace_id` of the Assistant turn that triggered it.
+- `render_draft`: the `generateText` call that drafts a Render description from Evidence (#117, ADR 0016), with `project_id` and `evidence_count`.
 
 Failures are recorded with `$ai_is_error: true` and the error class name only, since a provider message can echo the prompt.
 A structured-output mismatch keeps the tokens it spent.
-For the three `generateObject` spans, `$ai_latency` covers the whole call, including any retries the SDK makes after a provider error.
+For the `generateObject` and `generateText` spans, `$ai_latency` covers the whole call, including any retries the SDK makes after a provider error.
 `$ai_provider` is the provider family (`openai`), not the SDK's per-API name (`openai.responses`).
 `$ai_input` and `$ai_output_choices` are never sent, so no prompt, Evidence text or answer reaches PostHog.
 

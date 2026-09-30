@@ -436,7 +436,12 @@ If passages are later replaced or deleted, Decision citations can degrade to the
 The Assistant's `read_evidence` tool exposes at most 20,000 characters in one result and reports whether the text was truncated.
 This is separate from the larger ingestion cap and limits how much untrusted source material enters one model tool result.
 
-Sources: [Evidence extraction](../src/server/modules/evidence/extract.ts), [Evidence passages](../src/server/modules/evidence/passages.ts), [Evidence service](../src/server/modules/evidence/service.ts), [tool registry](../src/server/modules/assistant/tools.ts), [proposal service](../src/server/modules/proposals/service.ts).
+A Render description can be drafted from up to three pieces of Evidence (ADR 0016).
+The User's own Assistant model reads each text (pruned, else extracted, else pasted, cut to 6,000 characters) fenced as data, and returns one visual description of at most 1,000 characters.
+The PM edits it, and only that approved description reaches the image provider; the Render keeps a title snapshot of the Evidence as provenance.
+The call is traced under the `render_draft` span and has no eval suite, because its output is subjective and always reviewed.
+
+Sources: [Evidence extraction](../src/server/modules/evidence/extract.ts), [Evidence passages](../src/server/modules/evidence/passages.ts), [Evidence service](../src/server/modules/evidence/service.ts), [tool registry](../src/server/modules/assistant/tools.ts), [proposal service](../src/server/modules/proposals/service.ts), [Render drafter](../src/server/modules/renders/draft.ts).
 
 ## 10. Impact detection and the decision graph
 
