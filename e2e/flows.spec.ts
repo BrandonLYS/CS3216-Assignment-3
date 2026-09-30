@@ -1233,13 +1233,23 @@ test.describe("transcripts", () => {
     await expect(cited).toHaveClass(/ring-1/);
     await shot(page, "citation-opens-passage");
 
-    // The Assistant's pass (already run after the ingest; the button confirms nothing is left) cites the Passage too.
+    // The Assistant's pass runs in the background after the ingest and cites the Passage too.
+    await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+    const card = page.getByTestId("proposal-card").filter({ hasText: "freeze scope after the pilot" });
+    await expect(async () => {
+      await page.reload();
+      await expect(card).toContainText("Steering meeting transcript · Marcus", { timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
+    // With the pass done, the button finds nothing left to read and opens the waiting Proposal.
     await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
     await expect(page).toHaveURL(/\/decisions$/);
     await page.getByTestId("propose-from-evidence").click();
-    await expect(page.getByText(/proposed from|already read/)).toBeVisible();
+    await expect(page.getByText(/^All evidence already read/)).toBeVisible();
+    const review = page.getByRole("dialog", { name: "Confirm proposed decision" });
+    await review.getByRole("button", { name: "Close" }).click();
+    await expect(review).toBeHidden();
     await page.getByRole("main").getByRole("link", { name: "Overview", exact: true }).click();
-    const card = page.getByTestId("proposal-card").filter({ hasText: "freeze scope after the pilot" });
     await expect(card).toContainText("Steering meeting transcript · Marcus");
     await shot(page, "proposal-cites-passage");
     await card.getByTestId("reject-proposal").click();
