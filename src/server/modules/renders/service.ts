@@ -4,7 +4,9 @@ import { compactPatch, diffFields } from "@/server/core/diff";
 import { ConflictError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { mutate } from "@/server/core/mutation";
 import type { DbOrTx } from "@/server/db/client";
-import { evidenceRepo } from "@/server/modules/evidence/repository";
+import { getModelForUser } from "@/server/modules/assistant/model";
+import { turnErrorMessage } from "@/server/modules/assistant/turn-error";
+import { evidenceLinksRepo, evidenceRepo } from "@/server/modules/evidence/repository";
 import type { EvidenceRow } from "@/server/modules/evidence/schema";
 import { assertOwnsProject } from "@/server/modules/projects/service";
 import { getStorage } from "@/server/storage";
@@ -17,9 +19,10 @@ import {
   RENDER_MODEL,
   RENDER_WIDTH,
 } from "./provider";
+import { DRAFT_EVIDENCE_CHARS, draftText, finishDraft, modelDraft, type Draft } from "./draft";
 import { rendersRepo } from "./repository";
 import type { RenderRow } from "./schema";
-import type { CreateRenderInput } from "./validation";
+import type { CreateRenderInput, DraftRenderInput } from "./validation";
 
 /** Activity Events want a short label; a thousand-character prompt is not one. */
 const labelOf = (prompt: string) => (prompt.length > 60 ? `${prompt.slice(0, 57).trimEnd()}...` : prompt);
@@ -45,6 +48,13 @@ async function loadEvidence(db: DbOrTx, projectId: string, ids: string[]): Promi
   });
 }
 
+const DRAFT_FAILED = "The Assistant could not draft a description. Try again.";
+/** Key, rate-limit and outage failures read as they do in the Assistant; anything else is generic. */
+const draftFailureMessage = (e: unknown) => {
+  const message = turnErrorMessage(e);
+  return message === turnErrorMessage(null) ? DRAFT_FAILED : message;
+};
+
 async function getOwned(db: DbOrTx, userId: string, id: string) {
   const row = await rendersRepo.findById(db, id);
   if (!row) throw new NotFoundError("Render");
@@ -68,6 +78,51 @@ export const rendersService = {
   },
 
   get: (ctx: Ctx, id: string) => getOwned(ctx.db, ctx.userId, id),
+
+  /**
+   * Whether this User has an Assistant model to draft with. An unreadable saved credential
+   * counts as none: the picker is disabled rather than the page failing.
+   */
+  canDraft: async (ctx: Ctx) => Boolean(await getModelForUser(ctx).catch(() => null)),
+
+  /** Evidence the picker may offer: id, title, kind and date only, never the text. */
+  draftSources: async (ctx: Ctx, projectId: string) => {
+    await assertOwnsProject(ctx.db, ctx.userId, projectId);
+    return evidenceLinksRepo.listSummariesWithText(ctx.db, projectId);
+  },
+
+  /**
+   * Condense up to three pieces of Evidence into a description the PM then edits (ADR 0016).
+   * Writes nothing: no Render, no Activity Event. The text goes to the User's own Assistant
+   * model only; the image provider sees whatever the PM finally approves in `request`.
+   * `drafter` is for tests; by default it is the User's model, or a ConflictError without one.
+   */
+  draft: async (ctx: Ctx, input: DraftRenderInput, drafter?: Draft): Promise<{ prompt: string }> => {
+    await assertOwnsProject(ctx.db, ctx.userId, input.projectId);
+    const cited = await loadEvidence(ctx.db, input.projectId, input.evidenceIds);
+    const sources = cited.map((e) => ({ title: e.title, kind: e.kind, text: draftText(e) }));
+    const empty = sources.find((s) => !s.text);
+    if (empty) throw new ValidationError(`"${empty.title}" has no text to draft from.`, { evidenceIds: ["No text"] });
+
+    let draft = drafter;
+    if (!draft) {
+      const model = await getModelForUser(ctx).catch(() => null);
+      if (!model) throw new ConflictError("Connect an Assistant model in Settings to draft from Evidence.");
+      draft = modelDraft(model);
+    }
+    const raw = await draft({
+      sources: sources.map((s) => ({ ...s, text: s.text.slice(0, DRAFT_EVIDENCE_CHARS) })),
+      notes: input.notes ?? null,
+      telemetry: { userId: ctx.userId, properties: { project_id: input.projectId, evidence_count: cited.length } },
+    }).catch((e: unknown) => {
+      // The provider's own text can echo the request, so the PM reads a mapped message.
+      console.error("Render draft failed", e);
+      throw new ConflictError(draftFailureMessage(e));
+    });
+    const prompt = finishDraft(raw);
+    if (!prompt) throw new ConflictError("The Assistant returned an empty description. Try again.");
+    return { prompt };
+  },
 
   /**
    * Record the request and return immediately; the picture arrives later via `fulfil`.

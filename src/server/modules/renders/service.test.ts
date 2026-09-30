@@ -3,13 +3,16 @@ import type { Ctx } from "@/server/core/context";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/server/core/errors";
 import { eventBus, type DomainEvent } from "@/server/events/bus";
 import { activityRepo } from "@/server/modules/activity/service";
+import { evidenceRepo } from "@/server/modules/evidence/repository";
 import { evidenceService } from "@/server/modules/evidence/service";
 import type { ProjectRow } from "@/server/modules/projects/schema";
 import { getStorage } from "@/server/storage";
-import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT } from "@/shared/domain";
+import { RENDER_EVIDENCE_MAX, RENDER_MAX_PER_PROJECT, RENDER_PROMPT_MAX } from "@/shared/domain";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
+import { DRAFT_EVIDENCE_CHARS, type Draft } from "./draft";
+import { promptSentFor } from "./provider";
 import { rendersService } from "./service";
-import { createRenderSchema } from "./validation";
+import { createRenderSchema, draftRenderSchema } from "./validation";
 
 let ctx: Ctx;
 let project: ProjectRow;
@@ -158,6 +161,101 @@ describe("rendersService.request with Evidence", () => {
   });
 });
 
+describe("rendersService.draft", () => {
+  const addEvidence = (title: string, body: string) =>
+    evidenceService.create(ctx, { projectId, title, kind: "other", body });
+  const fake = (reply = "A brick hall") => vi.fn<Draft>(async () => reply);
+
+  it("hands the drafter each text cut to 6,000 characters, plus the PM's words", async () => {
+    const long = await addEvidence("Long brief", "x".repeat(DRAFT_EVIDENCE_CHARS + 500));
+    const short = await addEvidence("Site walk", "Faces the park.");
+    const drafter = fake();
+    await rendersService.draft(ctx, { projectId, evidenceIds: [long.id, short.id], notes: "Show the roof" }, drafter);
+    const [input] = drafter.mock.calls[0]!;
+    expect(input.notes).toBe("Show the roof");
+    expect(input.sources.map((s) => [s.title, s.text.length])).toEqual([
+      ["Long brief", DRAFT_EVIDENCE_CHARS],
+      ["Site walk", "Faces the park.".length],
+    ]);
+  });
+
+  it("returns one paragraph within the prompt cap", async () => {
+    const e = await addEvidence("Brief", "A hall.");
+    const { prompt } = await rendersService.draft(
+      ctx,
+      { projectId, evidenceIds: [e.id] },
+      fake(`A hall.\n\n${"with brick ".repeat(200)}`),
+    );
+    expect(prompt.length).toBeLessThanOrEqual(RENDER_PROMPT_MAX);
+    expect(prompt).not.toContain("\n");
+  });
+
+  it("refuses too many, foreign and textless Evidence, and a stranger", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i <= RENDER_EVIDENCE_MAX; i++) ids.push((await addEvidence(`Note ${i}`, "Text")).id);
+    await expect(rendersService.draft(ctx, { projectId, evidenceIds: ids }, fake())).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(draftRenderSchema.safeParse({ projectId, evidenceIds: ids }).success).toBe(false);
+    expect(draftRenderSchema.safeParse({ projectId, evidenceIds: [] }).success).toBe(false);
+
+    const other = await freshProject();
+    const elsewhere = await evidenceService.create(ctx, { projectId: other.id, title: "X", kind: "other", body: "Y" });
+    await expect(rendersService.draft(ctx, { projectId, evidenceIds: [elsewhere.id] }, fake())).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+
+    const blank = await addEvidence("Scanned drawing", "placeholder");
+    await evidenceRepo.update(ctx.db, blank.id, { body: null, extractedText: null, prunedText: null });
+    await expect(rendersService.draft(ctx, { projectId, evidenceIds: [blank.id] }, fake())).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+
+    const stranger = await makeCtx();
+    await expect(rendersService.draft(stranger, { projectId, evidenceIds: [ids[0]!] }, fake())).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    await expect(rendersService.draftSources(stranger, projectId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("writes no Render and no Activity Event", async () => {
+    const e = await addEvidence("Brief", "A hall.");
+    const received: DomainEvent[] = [];
+    const unsub = eventBus.subscribe("*", (ev) => void received.push(ev));
+    await rendersService.draft(ctx, { projectId, evidenceIds: [e.id] }, fake());
+    unsub();
+    expect(received).toEqual([]);
+    expect(await rendersService.list(ctx, projectId)).toEqual([]);
+  });
+
+  it("maps a drafter failure to a message the PM can read", async () => {
+    const e = await addEvidence("Brief", "A hall.");
+    const failing = vi.fn<Draft>(async () => {
+      throw new Error("provider said: secret prompt echo");
+    });
+    const err = await rendersService.draft(ctx, { projectId, evidenceIds: [e.id] }, failing).catch((x) => x);
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err.message).not.toContain("secret");
+  });
+
+  it("refuses without an Assistant model, and says so through canDraft", async () => {
+    for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "AI_API_KEY"])
+      vi.stubEnv(k, "");
+    vi.stubEnv("AI_PROVIDER", "openai");
+    const e = await addEvidence("Brief", "A hall.");
+    expect(await rendersService.canDraft(ctx)).toBe(false);
+    await expect(rendersService.draft(ctx, { projectId, evidenceIds: [e.id] })).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("lists only Evidence with text, and only its id, title, kind and date", async () => {
+    const withText = await addEvidence("Has text", "Something");
+    const blank = await addEvidence("No text", "placeholder");
+    await evidenceRepo.update(ctx.db, blank.id, { body: null, extractedText: null, prunedText: null });
+    const listed = await rendersService.draftSources(ctx, projectId);
+    expect(listed).toEqual([{ id: withText.id, title: "Has text", kind: "other", sourceDate: null }]);
+  });
+});
+
 describe("rendersService.fulfil", () => {
   it("stores the bytes, flips the Render to ready and records the change", async () => {
     stubProvider();
@@ -185,13 +283,28 @@ describe("rendersService.fulfil", () => {
     expect(url.searchParams.get("safe")).toBe("privacy,secrets");
   });
 
-  it("never sends Project data, only the typed prompt", async () => {
+  it("sends only the approved prompt and the style suffix, never the Evidence it was drafted from", async () => {
+    const secret = "Quote from Jane Tan: budget capped at 4.2M, contact jane@example.com.";
+    const e = await evidenceService.create(ctx, {
+      projectId,
+      title: "Confidential client call",
+      kind: "minutes",
+      body: `${secret} The hall is a single storey with a timber roof.`,
+    });
+    const { prompt: drafted } = await rendersService.draft(
+      ctx,
+      { projectId, evidenceIds: [e.id] },
+      async () => "A single storey hall with a timber roof",
+    );
+    const approved = `${drafted}, beside a park`;
     const fetchMock = stubProvider();
-    const row = await rendersService.request(ctx, { projectId, prompt: "Just this sentence" });
+    const row = await rendersService.request(ctx, { projectId, prompt: approved, evidenceIds: [e.id] });
     await rendersService.fulfil(ctx, row.id);
+
     const sent = decodeURIComponent(new URL(String(fetchMock.mock.calls[0]![0])).pathname);
-    expect(sent).not.toContain(project.name);
-    expect(sent).not.toContain(project.key);
+    expect(sent).toBe(`/image/${promptSentFor(approved)}`);
+    for (const leak of [secret, "Confidential client call", project.name, project.key])
+      expect(sent).not.toContain(leak);
   });
 
   it("records a rate limit as a failure the PM can read, not an exception", async () => {

@@ -9,7 +9,7 @@ import { capture } from "./server";
  */
 
 /** Which model call site produced the generation. */
-export type AiSpan = "assistant_turn" | "proposal_extraction" | "item_extraction" | "reflection";
+export type AiSpan = "assistant_turn" | "proposal_extraction" | "item_extraction" | "reflection" | "render_draft";
 
 /**
  * Who a model call is attributed to, handed to a model-backed function by its service. Optional
