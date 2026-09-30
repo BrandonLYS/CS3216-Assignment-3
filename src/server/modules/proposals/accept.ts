@@ -4,7 +4,7 @@ import { createMilestoneSchema, type CreateMilestoneInput } from "@/server/modul
 import { createTaskSchema, type CreateTaskInput } from "@/server/modules/tasks/validation";
 import { asProposedItem } from "./proposed-item";
 import type { ItemProposalRow } from "./schema";
-import { byName, type TraceRefs } from "./trace";
+import { byName, startOnOrBeforeDue, type TraceRefs } from "./trace";
 
 /** The Project's current People and Milestones, against which a Proposal's names and ids are re-checked. */
 export type AcceptRefs = Pick<TraceRefs, "people" | "milestones">;
@@ -13,7 +13,7 @@ export type ItemAcceptInput =
   { kind: "task"; input: CreateTaskInput } | { kind: "milestone"; input: CreateMilestoneInput };
 
 /** The id when it still exists in the Project, else whatever the name resolves to now, else null. */
-const resolve = (rows: Array<{ id: string; name: string }>, id: string | null, name: string | null) =>
+const currentId = (rows: Array<{ id: string; name: string }>, id: string | null, name: string | null) =>
   (id && rows.some((r) => r.id === id) ? id : byName(rows, name, (r) => r.name)?.id) ?? null;
 
 function parsed<S extends z.ZodType>(schema: S, value: z.input<S>): z.infer<S> {
@@ -45,7 +45,7 @@ export function draftInputOf(
         name: f.name,
         description: f.description,
         dueDate: f.dueDate,
-        ownerId: resolve(refs.people, f.ownerId, f.ownerName),
+        ownerId: currentId(refs.people, f.ownerId, f.ownerName),
       },
     };
   }
@@ -57,9 +57,9 @@ export function draftInputOf(
       title: f.title,
       description: f.description,
       priority: "none",
-      assigneeId: resolve(refs.people, f.assigneeId, f.assigneeName),
-      milestoneId: resolve(refs.milestones, f.milestoneId, f.milestoneName),
-      startDate: f.startDate && f.dueDate && f.startDate > f.dueDate ? null : f.startDate,
+      assigneeId: currentId(refs.people, f.assigneeId, f.assigneeName),
+      milestoneId: currentId(refs.milestones, f.milestoneId, f.milestoneName),
+      startDate: startOnOrBeforeDue(f.startDate, f.dueDate),
       dueDate: f.dueDate,
     },
   };

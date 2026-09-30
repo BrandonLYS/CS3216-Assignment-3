@@ -177,8 +177,12 @@ const isoOrNull = (v: string | null | undefined) => {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
 };
 
+/** A start date after the due date is dropped; either date missing keeps the start as it is. */
+export const startOnOrBeforeDue = (start: string | null, due: string | null) =>
+  start && due && start > due ? null : start;
+
 /** Resolve a name to `[id, canonical name]`; an unresolved name stays as the extractor wrote it. */
-const resolve = <T extends { id: string }>(rows: T[], name: string | null, key: (r: T) => string) => {
+const resolveName = <T extends { id: string }>(rows: T[], name: string | null, key: (r: T) => string) => {
   const snapshot = cap(name, ITEM_LIMITS.name);
   const hit = byName(rows, snapshot, key);
   return hit ? ([hit.id, key(hit)] as const) : ([null, snapshot] as const);
@@ -224,10 +228,9 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
   for (const t of raw.tasks) {
     const title = cap(t.title, ITEM_LIMITS.title);
     keep("task", title, t.sources, () => {
-      const [assigneeId, assigneeName] = resolve(refs.people, t.assigneeName, (r) => r.name);
-      const [milestoneId, milestoneName] = resolve(refs.milestones, t.milestoneName, (r) => r.name);
+      const [assigneeId, assigneeName] = resolveName(refs.people, t.assigneeName, (r) => r.name);
+      const [milestoneId, milestoneName] = resolveName(refs.milestones, t.milestoneName, (r) => r.name);
       const dueDate = isoOrNull(t.dueDate);
-      const start = isoOrNull(t.startDate);
       return {
         title: title!,
         description: cap(t.description, ITEM_LIMITS.description),
@@ -235,7 +238,7 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
         assigneeName,
         milestoneId,
         milestoneName,
-        startDate: start && dueDate && start > dueDate ? null : start,
+        startDate: startOnOrBeforeDue(isoOrNull(t.startDate), dueDate),
         dueDate,
       };
     });
@@ -245,7 +248,7 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
     keep("milestone", name, m.sources, () => {
       const dueDate = isoOrNull(m.dueDate);
       if (!dueDate) return null;
-      const [ownerId, ownerName] = resolve(refs.people, m.ownerName, (r) => r.name);
+      const [ownerId, ownerName] = resolveName(refs.people, m.ownerName, (r) => r.name);
       return { name: name!, description: cap(m.description, ITEM_LIMITS.description), dueDate, ownerId, ownerName };
     });
   }

@@ -216,11 +216,16 @@ export const proposalsService = {
         properties: { project_id: projectId, trigger: opts.trigger, source_count: candidates.length },
       },
     });
-    const markRead = (tx: DbOrTx, pass: ProposalPass, candidates: Candidate[]) =>
-      passSourcesRepo.upsertMany(
-        tx,
-        candidates.map((c) => ({ projectId, pass, kind: c.kind, entityId: c.entityId, textHash: c.textHash })),
-      );
+    // Bookkeeping and the new Proposals land together, after the extractor returned. Two passes
+    // racing on one Project (two quick saves) are safe: the unique keys absorb the loser.
+    const commit = <R>(pass: ProposalPass, candidates: Candidate[], insert: (tx: DbOrTx) => Promise<R[]>) =>
+      ctx.db.transaction(async (tx) => {
+        await passSourcesRepo.upsertMany(
+          tx,
+          candidates.map((c) => ({ projectId, pass, kind: c.kind, entityId: c.entityId, textHash: c.textHash })),
+        );
+        return insert(tx);
+      });
 
     const decisionPass = async (): Promise<DecisionPassOutcome> => {
       if (!decisionCandidates.length) return nothingNew();
@@ -236,15 +241,12 @@ export const proposalsService = {
         const traced = traceProposals(raw.proposals, decisionCandidates, refs);
         const kept = attachPassages(traced.kept, passagesByEvidence);
         discarded = traced.discarded;
-        // Bookkeeping and the new Proposals land together, after the extractor returned. Two passes
-        // racing on one Project (two quick saves) are safe: the unique keys absorb the loser.
-        inserted = await ctx.db.transaction(async (tx) => {
-          await markRead(tx, "decision", decisionCandidates);
-          return proposalsRepo.insertMany(
+        inserted = await commit("decision", decisionCandidates, (tx) =>
+          proposalsRepo.insertMany(
             tx,
             kept.map((k) => ({ ...k, projectId, extractor: extractorName })),
-          );
-        });
+          ),
+        );
       } catch (e) {
         console.error("Proposal pass failed", e);
         return { skipped: "failed" };
@@ -280,13 +282,12 @@ export const proposalsService = {
         const traced = traceItems(raw, itemCandidates, refs, known);
         const kept = attachPassages(traced.kept, passagesByEvidence);
         discarded = traced.discarded;
-        inserted = await ctx.db.transaction(async (tx) => {
-          await markRead(tx, "item", itemCandidates);
-          return itemProposalsRepo.insertMany(
+        inserted = await commit("item", itemCandidates, (tx) =>
+          itemProposalsRepo.insertMany(
             tx,
             kept.map((k) => ({ ...k, projectId, extractor: itemExtractorName })),
-          );
-        });
+          ),
+        );
       } catch (e) {
         console.error("Item proposal pass failed", e);
         return { skipped: "failed" };
