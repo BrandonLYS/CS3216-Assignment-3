@@ -1,10 +1,10 @@
 import type { UIMessage } from "ai";
 import { sql } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/server/core/context";
 import { ForbiddenError, NotFoundError } from "@/server/core/errors";
 import { closeDb, makeCtx, makeProject } from "@/test/helpers";
-import { messagesRepo } from "./repository";
+import { conversationsRepo, messagesRepo } from "./repository";
 import { conversations } from "./schema";
 import { assistantService } from "./service";
 
@@ -131,6 +131,23 @@ describe("assistantService conversations", () => {
     // A project Conversation cannot be resumed through the dashboard scope, or vice versa.
     await expect(assistantService.thread(ctx, c.id, null)).rejects.toBeInstanceOf(NotFoundError);
     await expect(assistantService.thread(ctx, c.id, projectId)).resolves.toBeDefined();
+  });
+
+  it("opens a fresh Conversation when a concurrent prune deletes the empty one it was about to open", async () => {
+    const own = await makeCtx();
+    const pid = (await makeProject(own, "RACE")).id;
+    // Another request's `library` prune lands between the dock's read and its thread load.
+    const latest = vi.spyOn(conversationsRepo, "latest").mockImplementationOnce(async (db, userId, scope) => {
+      const row = (await conversationsRepo.listByScope(db, userId, scope))[0]!;
+      await settle(row.id);
+      await assistantService.library(own);
+      return row;
+    });
+    const dock = await assistantService.dock(own, pid);
+    latest.mockRestore();
+    expect(dock.thread.messages).toEqual([]);
+    expect(dock.conversations.map((c) => c.id)).toEqual([dock.thread.conversation.id]);
+    await expect(assistantService.thread(own, dock.thread.conversation.id)).resolves.toBeDefined();
   });
 
   it("pins Conversations to the top and prunes empty ones", async () => {
