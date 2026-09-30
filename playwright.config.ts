@@ -6,7 +6,9 @@ export default defineConfig({
   testDir: "./e2e",
   // Proof specs capture before/after screenshots and some need a live model; run them by hand.
   testIgnore: process.env.CI ? "**/*.proof.spec.ts" : undefined,
-  timeout: 30_000,
+  // CI's dev server compiles each route cold on first hit, which alone can outlast the defaults.
+  timeout: process.env.CI ? 60_000 : 30_000,
+  expect: { timeout: process.env.CI ? 15_000 : 5_000 },
   retries: 0,
   use: {
     baseURL: `http://localhost:${port}`,
