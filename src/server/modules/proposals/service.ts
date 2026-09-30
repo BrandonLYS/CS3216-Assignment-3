@@ -34,6 +34,7 @@ import {
 } from "./analytics";
 import { pickExtractor, type Extract, type ExtractSource } from "./extract";
 import { heuristicExtractItems, pickExtractors, type ExtractItems } from "./extract-items";
+import { asProposedItem, itemTitleOf } from "./proposed-item";
 import { itemProposalsRepo, passSourcesRepo, proposalsRepo } from "./repository";
 import type { ItemProposalRow, ProposalRow } from "./schema";
 import { attachPassages, traceItems, traceProposals, type TraceRefs } from "./trace";
@@ -67,7 +68,8 @@ export type ReviewableItem = ItemProposalRow & {
 
 export type AcceptedItem = { kind: "task"; item: TaskRow } | { kind: "milestone"; item: MilestoneRow };
 
-const acceptRefs = async (db: DbOrTx, projectId: string): Promise<AcceptRefs> => {
+/** The Project's People and Milestones, as a pass traces names against them and an accept re-checks them. */
+const projectRefsOf = async (db: DbOrTx, projectId: string): Promise<AcceptRefs> => {
   const [people, milestones] = await Promise.all([
     peopleRepo.listByProject(db, projectId),
     milestonesRepo.listByProject(db, projectId),
@@ -189,16 +191,11 @@ export const proposalsService = {
       return { ...(await nothingNew()), items: { skipped: "nothing_new" } };
 
     // Only what both sides need is loaded here; each side loads the rest inside its own try.
-    const [people, milestones, tasks] = await Promise.all([
-      peopleRepo.listByProject(ctx.db, projectId),
-      milestonesRepo.listByProject(ctx.db, projectId),
+    const [projectRefs, tasks] = await Promise.all([
+      projectRefsOf(ctx.db, projectId),
       tasksRepo.listByProject(ctx.db, projectId),
     ]);
-    const refs: TraceRefs = {
-      people: people.map((p) => ({ id: p.id, name: p.name })),
-      milestones: milestones.map((m) => ({ id: m.milestone.id, name: m.milestone.name })),
-      tasks: tasks.map((t) => ({ id: t.task.id, title: t.task.title })),
-    };
+    const refs: TraceRefs = { ...projectRefs, tasks: tasks.map((t) => ({ id: t.task.id, title: t.task.title })) };
     const context = {
       people: refs.people.map((p) => p.name),
       milestones: refs.milestones.map((m) => m.name),
@@ -279,10 +276,7 @@ export const proposalsService = {
         // The Conversation stays out of the item prompt (ADR 0015).
         const raw = await extractItems(extractorInput(itemCandidates));
         const itemRows = await itemProposalsRepo.listByProject(ctx.db, projectId);
-        const known = itemRows.map((r) => ({
-          kind: r.kind,
-          title: "title" in r.fields ? r.fields.title : r.fields.name,
-        }));
+        const known = itemRows.map((r) => ({ kind: r.kind, title: itemTitleOf(asProposedItem(r)) }));
         const traced = traceItems(raw, itemCandidates, refs, known);
         const kept = attachPassages(traced.kept, passagesByEvidence);
         discarded = traced.discarded;
@@ -320,7 +314,7 @@ export const proposalsService = {
     await assertOwnsProject(ctx.db, ctx.userId, projectId);
     const [rows, refs] = await Promise.all([
       itemProposalsRepo.listByProject(ctx.db, projectId, "pending"),
-      acceptRefs(ctx.db, projectId),
+      projectRefsOf(ctx.db, projectId),
     ]);
     // A payload the create schema refuses is still listed, so the PM can edit or reject it.
     return rows.map((r) => ({
@@ -341,7 +335,7 @@ export const proposalsService = {
     if (!p) throw new NotFoundError("Proposal");
     await assertOwnsProject(ctx.db, ctx.userId, p.projectId);
     if (p.status !== "pending") throw new ConflictError("That proposal was already resolved");
-    const refs = await acceptRefs(ctx.db, p.projectId);
+    const refs = await projectRefsOf(ctx.db, p.projectId);
     // A stored payload the create schema refuses can still be accepted once the PM has edited it.
     const base = input ? acceptInputOrNull(p.projectId, p, refs) : acceptInputOf(p.projectId, p, refs);
     const accepted = input ?? base!;

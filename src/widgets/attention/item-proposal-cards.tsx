@@ -1,6 +1,6 @@
 import { Diamond, SquareCheck } from "lucide-react";
 import type { ProjectRefs } from "@/server/modules/projects/refs";
-import type { ProposedMilestoneFields, ProposedTaskFields } from "@/server/modules/proposals/schema";
+import { asProposedItem, itemTitleOf } from "@/server/modules/proposals/proposed-item";
 import type { ReviewableItem } from "@/server/modules/proposals/service";
 import { fmtDate } from "@/shared/lib/dates";
 import { Panel } from "@/shared/ui";
@@ -30,11 +30,12 @@ export function ItemProposalCard({
   sourceLabels: Map<string, string>;
 }) {
   const accept = item.acceptInput;
-  const isTask = item.kind === "task";
-  const title = isTask ? (item.fields as ProposedTaskFields).title : (item.fields as ProposedMilestoneFields).name;
+  const proposed = asProposedItem(item);
+  const isTask = proposed.kind === "task";
+  const title = itemTitleOf(proposed);
   const details: Array<[string, string | null]> = [];
-  if (isTask) {
-    const f = item.fields as ProposedTaskFields;
+  if (proposed.kind === "task") {
+    const f = proposed.fields;
     const input = accept?.kind === "task" ? accept.input : null;
     details.push(
       ["Owner", named(refs.people, input?.assigneeId, f.assigneeName)],
@@ -43,7 +44,7 @@ export function ItemProposalCard({
       ["Due", day(input?.dueDate ?? f.dueDate)],
     );
   } else {
-    const f = item.fields as ProposedMilestoneFields;
+    const f = proposed.fields;
     const input = accept?.kind === "milestone" ? accept.input : null;
     details.push(["Owner", named(refs.people, input?.ownerId, f.ownerName)], ["Due", day(input?.dueDate ?? f.dueDate)]);
   }

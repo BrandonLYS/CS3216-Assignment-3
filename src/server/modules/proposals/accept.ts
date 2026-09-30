@@ -2,7 +2,8 @@ import { z } from "zod";
 import { ValidationError } from "@/server/core/errors";
 import { createMilestoneSchema, type CreateMilestoneInput } from "@/server/modules/milestones/validation";
 import { createTaskSchema, type CreateTaskInput } from "@/server/modules/tasks/validation";
-import type { ItemProposalRow, ProposedMilestoneFields, ProposedTaskFields } from "./schema";
+import { asProposedItem } from "./proposed-item";
+import type { ItemProposalRow } from "./schema";
 import { byName, type TraceRefs } from "./trace";
 
 /** The Project's current People and Milestones, against which a Proposal's names and ids are re-checked. */
@@ -34,8 +35,9 @@ export function draftInputOf(
   item: Pick<ItemProposalRow, "kind" | "fields">,
   refs: AcceptRefs,
 ): ItemAcceptInput {
-  if (item.kind === "milestone") {
-    const f = item.fields as ProposedMilestoneFields;
+  const proposed = asProposedItem(item);
+  if (proposed.kind === "milestone") {
+    const f = proposed.fields;
     return {
       kind: "milestone",
       input: {
@@ -47,7 +49,7 @@ export function draftInputOf(
       },
     };
   }
-  const f = item.fields as ProposedTaskFields;
+  const f = proposed.fields;
   return {
     kind: "task",
     input: {
