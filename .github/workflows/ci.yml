@@ -32,3 +32,89 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+  unit:
+    name: Vitest
+    runs-on: ubuntu-latest
+    services:
+      db_test:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pm
+          POSTGRES_PASSWORD: pm
+          POSTGRES_DB: pm_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U pm -d pm_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Environment
+        run: cp .env.example .env
+
+      - name: Vitest
+        run: npm test
+
+  e2e:
+    name: Playwright
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pm
+          POSTGRES_PASSWORD: pm
+          POSTGRES_DB: pm
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pm -d pm"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # The proposal flows assert exact Proposals; the heuristic extractor is the deterministic one.
+      PROPOSALS_EXTRACTOR: heuristic
+      E2E_DATABASE_URL: postgres://pm:pm@localhost:5433/pm
+      AI_CREDENTIALS_ENCRYPTION_KEY: Y2ktb25seS1rZXktbm90LWEtc2VjcmV0LTMyYnl0ZXM=
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Environment
+        run: cp .env.example .env
+
+      - name: Migrate and seed
+        run: npm run db:migrate && npm run db:seed
+
+      - name: Playwright
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7

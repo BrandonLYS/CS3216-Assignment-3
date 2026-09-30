@@ -4,6 +4,8 @@ const port = process.env.E2E_PORT ?? "3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Proof specs capture before/after screenshots and some need a live model; run them by hand.
+  testIgnore: process.env.CI ? "**/*.proof.spec.ts" : undefined,
   timeout: 30_000,
   retries: 0,
   use: {
