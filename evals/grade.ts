@@ -97,7 +97,10 @@ export interface ItemExpectation {
   forbid?: string[];
 }
 
-/** Whole-word containment on the words trace compares titles by, so "ci" is not found in "pricing". */
+/**
+ * Whole-word containment on the words trace compares titles by, so "ci" is not found in "pricing".
+ * Used for expected titles and forbidden terms alike.
+ */
 const padded = (s: string) => ` ${titleWords(s).join(" ")} `;
 const containsWords = (text: string, term: string) =>
   titleWords(term).length > 0 && padded(text).includes(padded(term));
@@ -130,32 +133,42 @@ function fieldMismatches(want: ExpectedItem, got: TracedItem): string[] {
   return out.filter((m): m is string => m !== null).map((m) => `${want.label}: ${m}`);
 }
 
+/** A group or term that normalises to nothing would match everything or nothing; refuse the case. */
+function assertWellFormed(expect: ItemExpectation) {
+  const empty = (term: string) => titleWords(term).length === 0;
+  for (const want of expect.items) {
+    if (!want.title.length || want.title.some((group) => !group.length || group.some(empty)))
+      throw new Error(`Item case expectation "${want.label}" has an empty title group or term`);
+  }
+  if ((expect.forbid ?? []).some(empty)) throw new Error("Item case has an empty forbidden term");
+}
+
 export function gradeItems(
   expect: ItemExpectation,
   kept: TracedItem[],
   rawCount: number,
 ): { checks: Check[]; matched: string[]; missed: string[] } {
+  assertWellFormed(expect);
   const unmatched = [...kept];
-  const matched: string[] = [];
-  const missed: string[] = [];
-  const mismatches: string[] = [];
-  for (const want of expect.items) {
-    const candidates = unmatched.filter(
-      (k) =>
-        k.kind === want.kind && want.title.every((group) => group.some((term) => containsWords(titleOfItem(k), term))),
-    );
-    if (!candidates.length) {
-      missed.push(want.label);
-      continue;
+  const titleMatches = (want: ExpectedItem, k: TracedItem) =>
+    k.kind === want.kind && want.title.every((group) => group.some((term) => containsWords(titleOfItem(k), term)));
+  // Exact pairs first, for every expectation, so an earlier loose title match cannot take the item a
+  // later expectation fits exactly; then each remaining expectation takes its first title match.
+  const pairs = new Map<ExpectedItem, TracedItem>();
+  for (const exact of [true, false]) {
+    for (const want of expect.items) {
+      if (pairs.has(want)) continue;
+      const got = unmatched.find((k) => titleMatches(want, k) && (!exact || fieldMismatches(want, k).length === 0));
+      if (!got) continue;
+      pairs.set(want, got);
+      unmatched.splice(unmatched.indexOf(got), 1);
     }
-    // Two kept items can share a title; pair the expectation with one whose fields are right when there is one.
-    const got = candidates.find((k) => fieldMismatches(want, k).length === 0) ?? candidates[0]!;
-    unmatched.splice(unmatched.indexOf(got), 1);
-    matched.push(want.label);
-    mismatches.push(...fieldMismatches(want, got));
   }
-  const texts = kept.map((k) => norm([titleOfItem(k), k.fields.description].filter(Boolean).join(" \u00b7 ")));
-  const forbidden = (expect.forbid ?? []).filter((term) => texts.some((t) => t.includes(norm(term))));
+  const matched = expect.items.filter((w) => pairs.has(w)).map((w) => w.label);
+  const missed = expect.items.filter((w) => !pairs.has(w)).map((w) => w.label);
+  const mismatches = [...pairs].flatMap(([want, got]) => fieldMismatches(want, got));
+  const texts = kept.map((k) => [titleOfItem(k), k.fields.description].filter(Boolean).join(" "));
+  const forbidden = (expect.forbid ?? []).filter((term) => texts.some((t) => containsWords(t, term)));
   const checks: Check[] = [
     { name: "expected_items_found", pass: missed.length === 0, detail: missed.join("; ") || undefined },
     {

@@ -84,6 +84,27 @@ describe("gradeItems", () => {
     });
   });
 
+  it("keeps an item for the expectation it fits exactly when an earlier one only matches its title", () => {
+    const anyReport: ExpectedItem = { ...wantTask, label: "any report", title: [["report"]], dueDate: "2026-10-01" };
+    const parity: ExpectedItem = { ...wantTask, label: "parity report", title: [["parity"], ["report"]] };
+    const kept = [task({ title: "Parity report" }), task({ title: "Weekly report" })];
+    expect(failed({ items: [anyReport, parity] }, kept)).toEqual({
+      fields_exact: "any report: dueDate want 2026-10-01 got 2026-10-09",
+    });
+  });
+
+  it("refuses a case whose title group or forbidden term normalises to nothing", () => {
+    expect(() => gradeItems({ items: [{ ...wantTask, title: [] }] }, [], 0)).toThrow(/empty title/);
+    expect(() => gradeItems({ items: [{ ...wantTask, title: [["--"]] }] }, [], 0)).toThrow(/empty title/);
+    expect(() => gradeItems({ items: [], forbid: [" "] }, [], 0)).toThrow(/forbidden/);
+  });
+
+  it("matches forbidden terms as whole words", () => {
+    expect(failed({ items: [wantTask], forbid: ["ci"] }, [task({ description: "Check the pricing page" })])).toEqual(
+      {},
+    );
+  });
+
   it("fails an item of the other kind with a matching title", () => {
     expect(failed({ items: [wantMilestone] }, [task({ title: "Go-live review" })])).toHaveProperty(
       "expected_items_found",

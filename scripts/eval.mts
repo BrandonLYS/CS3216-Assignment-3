@@ -77,7 +77,14 @@ const SUITES = new Set(
     .map((s) => s.trim())
     .flatMap((s) => (s === "both" ? ["extraction", "why"] : [s])),
 );
+const KNOWN_SUITES = ["extraction", "items", "why", "pass"];
+const unknownSuites = [...SUITES].filter((s) => !KNOWN_SUITES.includes(s));
+if (!SUITES.size || unknownSuites.length)
+  throw new Error(`--suite takes ${[...KNOWN_SUITES, "both"].join("|")}; got "${SUITE}"`);
 if (SUITES.has("pass") && SUITES.size > 1) throw new Error("--suite pass runs on its own");
+// Any other value would silently fall through to the paid model.
+if (arg("extractor") !== undefined && arg("extractor") !== "heuristic")
+  throw new Error(`--extractor takes only "heuristic"; got "${arg("extractor")}"`);
 const MODELS = arg("models", "openai/gpt-4o-mini")!
   .split(",")
   .map((m) => m.trim());

@@ -52,6 +52,25 @@ It found three factual errors in the note, all fixed:
 - `i06` fails on the title, not the owner.
 - The second `i01` run also invented a Milestone link.
 
+## Adversarial review of PR #121
+
+The adversarial reviewer found no blockers.
+It confirmed that a perfect extraction passes 12/12, that the local-database guard has no bypass across ten URL shapes, and that the note's numbers match the artifacts.
+Its findings, all fixed:
+
+- **Should-fix:** a mistyped `--suite` (for example `item`) ran nothing and exited 0, and any `--extractor` other than `heuristic` silently called the paid model.
+  Both flags now reject unknown values.
+- Pairing is now two-pass: exact title-and-fields pairs for every expectation first, then title-only pairs.
+  An earlier expectation can no longer take the item a later one fits exactly.
+- Forbidden terms match as whole words, like titles.
+  A case with an empty title group or a term that normalises to nothing is refused.
+- The run README says the stored per-check results predate the grader fixes.
+  Re-grading gives the same verdicts.
+  Its Outcome paragraph is split one sentence per line.
+- Part A's duplicate-check title now follows `kind` (`itemTitleOf(asProposedItem(r))`), where `main` followed whichever field existed (`"title" in r.fields`).
+  The two differ only for a row whose `kind` and `fields` disagree, which trace never writes.
+  Following `kind` is the intended reading, so this is recorded rather than reverted.
+
 ## Observed, not fixed
 
 - Item Proposals raised by one pass share `created_at`, and `itemProposalsRepo.listByProject` breaks the tie on the random id.
