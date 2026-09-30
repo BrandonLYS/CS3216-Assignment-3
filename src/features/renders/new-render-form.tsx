@@ -45,7 +45,8 @@ export function NewRenderForm({
     setDraftError(null);
     const ids = picked;
     startDraft(async () => {
-      const res = await draftRenderPromptAction({ projectId, evidenceIds: ids, notes });
+      const res = await draftRenderPromptAction({ projectId, evidenceIds: ids, notes }).catch(() => null);
+      if (!res) return setDraftError("Something went wrong. Please try again.");
       if (!res.ok) return setDraftError(res.error);
       setPrompt(res.data.prompt);
       setDraftedFrom(ids);
@@ -58,6 +59,8 @@ export function NewRenderForm({
       action={createRenderAction}
       hidden={{ projectId }}
       submitLabel="Generate"
+      // Generate waits for a draft in flight, which would otherwise land after the PM submitted.
+      submitDisabled={isDrafting}
       cancel={onDone}
       onSuccess={onDone}
     >

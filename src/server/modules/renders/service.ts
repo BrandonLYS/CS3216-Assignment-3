@@ -27,7 +27,7 @@ import type { RenderRow } from "./schema";
 import type { CreateRenderInput, DraftRenderInput } from "./validation";
 
 /** Activity Events want a short label; a thousand-character prompt is not one. */
-const labelOf = (prompt: string) => (prompt.length > 60 ? `${prompt.slice(0, 57).trimEnd()}...` : prompt);
+const labelOf = (prompt: string) => (prompt.length > 60 ? `${cutUnits(prompt, 57).trimEnd()}...` : prompt);
 
 const storageKeyFor = (projectId: string, renderId: string) => `renders/${projectId}/${renderId}/image`;
 
