@@ -273,6 +273,53 @@ describe("traceItems", () => {
     expect(b!.fields).toMatchObject({ dueDate: "2026-10-02", startDate: null });
   });
 
+  it("discards a Task that restates a known Milestone", () => {
+    const { kept, discarded } = run({
+      tasks: [task({ title: "UAT begins", milestoneName: null })],
+    });
+    expect(kept).toEqual([]);
+    expect(discarded).toBe(1);
+  });
+
+  it("keeps the dated Milestone over a Task restating it in the same pass", () => {
+    const { kept, discarded } = run({
+      tasks: [task({ title: "Pilot readout", milestoneName: null })],
+      milestones: [milestone()],
+    });
+    expect(kept.map((k) => k.kind)).toEqual(["milestone"]);
+    expect(discarded).toBe(1);
+  });
+
+  it("keeps a Task that only contains a Milestone's name", () => {
+    const { kept } = run({ tasks: [task({ title: "Plan mobile app v2 launch", milestoneName: null })] }, [
+      { kind: "milestone", title: "Mobile app v2 launch" },
+    ]);
+    expect(kept.map((k) => k.kind)).toEqual(["task"]);
+  });
+
+  it("never discards a Milestone because of a Task, existing or proposed", () => {
+    const { kept, discarded } = run(
+      {
+        milestones: [
+          milestone(),
+          milestone({ name: "Recruit interviewees" }),
+          milestone({ name: "Recruit interviewees checklist" }),
+        ],
+      },
+      [{ kind: "task", title: "Pilot readout" }],
+    );
+    expect(kept.map((k) => k.kind)).toEqual(["milestone", "milestone", "milestone"]);
+    expect(discarded).toBe(0);
+  });
+
+  it("keeps a Task when the same-pass Milestone it restates is discarded", () => {
+    const { kept } = run({
+      tasks: [task({ title: "Pilot readout", milestoneName: null })],
+      milestones: [milestone({ dueDate: null })],
+    });
+    expect(kept.map((k) => k.kind)).toEqual(["task"]);
+  });
+
   it("discards a Milestone without a valid date", () => {
     const { kept, discarded } = run({ milestones: [milestone({ dueDate: null }), milestone({ dueDate: "soon" })] });
     expect(kept).toEqual([]);

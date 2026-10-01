@@ -4,7 +4,7 @@ import { ForbiddenError } from "@/server/core/errors";
 import { aiConfigService } from "@/server/modules/ai-config/service";
 import { userAiConfigs } from "@/server/modules/ai-config/schema";
 import { closeDb, makeCtx } from "@/test/helpers";
-import { getModelForUser } from "./model";
+import { buildModel, getModelForUser, modelInfo } from "./model";
 
 let ctx: Ctx;
 let stranger: Ctx;
@@ -24,6 +24,22 @@ beforeEach(async () => {
   await ctx.db.delete(userAiConfigs);
 });
 afterAll(closeDb);
+
+describe("modelInfo", () => {
+  it("reports the provider and id of the model that runs, not the environment default", () => {
+    vi.stubEnv("AI_MODEL", "gpt-4o-mini");
+    const own = buildModel({ provider: "anthropic", model: "claude-haiku-4-5", apiKey: "k" });
+    expect(modelInfo(own)).toEqual({ provider: "anthropic.messages", model: "claude-haiku-4-5" });
+    const compatible = buildModel({
+      provider: "openai_compatible",
+      model: "google/gemini-2.5-flash",
+      apiKey: "k",
+      baseUrl: "https://openrouter.ai/api/v1",
+    });
+    expect(modelInfo(compatible)).toEqual({ provider: "openai_compatible.chat", model: "google/gemini-2.5-flash" });
+    expect(modelInfo("openai/gpt-4o-mini")).toEqual({ provider: "gateway", model: "openai/gpt-4o-mini" });
+  });
+});
 
 describe("getModelForUser", () => {
   it("resolves all environment providers and rejects unsupported or incomplete settings", async () => {
@@ -45,7 +61,7 @@ describe("getModelForUser", () => {
     vi.stubEnv("AI_BASE_URL", "https://api.example.test/v1");
     vi.stubEnv("AI_MODEL", "custom-env");
     expect(details(await getModelForUser(ctx))).toMatchObject({
-      provider: "user-openai-compatible.chat",
+      provider: "openai_compatible.chat",
       modelId: "custom-env",
     });
 

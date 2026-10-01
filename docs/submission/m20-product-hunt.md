@@ -20,10 +20,10 @@ We prepared the launch as if submitting today, and have not launched for real: t
 ## Gallery (in order)
 
 1. **Hero, 1270 x 760:** "Your project's memory" over the Overview with Proposal cards. ([source](../../artifacts/after-item-proposal-cards.png))
-2. **The 30-second loop (video):** paste notes, Proposals appear, accept, ask "why", click the citation. Recorded from `flows/01-citation-and-abstention.webm` and the Proposal flow.
+2. **The 30-second loop (video):** paste notes, Proposals appear, accept, ask "why", click the citation. To be cut from `flows/01-citation-and-abstention.webm` and the Proposal flow; the source recordings exist, the finished 45-second video does not yet.
 3. **"Why did we...?" answered with sources.** ([source](flows/assistant-answer-with-citation.png))
 4. **"There is no recorded decision about that."** Caption: _An assistant that knows when it doesn't know._ ([source](flows/assistant-no-recorded-decision.png))
-5. **Approve every change.** The approval card. Caption: _The AI proposes. You decide._ ([source](flows/tool-approval-card.png))
+5. **Approve changes.** The approval card. Caption: _The AI proposes. You decide._ ([source](flows/tool-approval-card.png))
 6. **From brief to concept image.** Render drafted from Evidence. ([source](../../artifacts/after-renders-drafted-from.png))
 7. **Works in Claude Desktop and Cursor.** The MCP config snippet from the README.
 
@@ -40,7 +40,7 @@ We prepared the launch as if submitting today, and have not launched for real: t
 > - Drop in meeting notes, transcripts or PDFs. PrismPM proposes the Decisions, Tasks and Milestones they contain, each quoting the exact sentence it came from. You accept, edit or reject.
 > - Ask the Assistant "why did we...?" and it answers only from Decisions you confirmed, with a link to the source. If nothing was recorded, it says so instead of making something up.
 > - When a date slips or a person leaves, PrismPM flags which Decisions rested on that assumption.
-> - The Assistant can plan and update the project for you, but every change shows up as a card you approve.
+> - The Assistant can plan and update the project for you; in-app writes need your approval by default, and you choose which tools to "always allow".
 >
 > We measured all of this rather than hoping: 54 evaluation cases for Decision, Task and Milestone extraction and for answers, a three-model bake-off, and a prompt injection test that one popular model fails (details in our write-up).
 >
@@ -68,5 +68,5 @@ Using the M19 events, split by `ref=producthunt`:
 ## Prepared replies to likely questions
 
 - **"How is this different from Notion AI or Jira's Rovo?"** Both can pull decisions out of meeting notes now, but their documentation describes answers drawn from everything they can see, not from a set of confirmed Decisions (sources in M1). PrismPM answers "why" only from Decisions a person confirmed, cites them, and says when nothing exists. It's a record, not a guess.
-- **"Is my data used to train models?"** No. Bring your own model key if you prefer, and the image service only ever sees text you approved.
-- **"What if the AI extracts something wrong?"** Nothing enters the project until you accept it, and every Proposal quotes its source so checking takes seconds.
+- **"Is my data used to train models?"** PrismPM does not use Project content to train any model of its own. What the configured model provider does with the text it receives follows that provider's terms, so bring your own key if you want your own agreement with a provider; the image service only ever sees text you approved.
+- **"What if the AI extracts something wrong?"** A Proposal enters the project only when you accept it, and every Proposal quotes its source so you can check it without re-reading the notes.

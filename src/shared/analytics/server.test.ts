@@ -16,11 +16,14 @@ vi.mock("next/server", () => ({ after: request.after }));
 vi.mock("@/server/auth/session", () => ({ getSession: request.session }));
 
 const sid = "0195351c-67a7-7b00-8410-85317b184742";
+const local = { environment: "local", release: "local" };
 
 beforeEach(() => {
   vi.resetModules();
   vi.resetAllMocks();
   vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
+  vi.stubEnv("VERCEL_ENV", undefined);
+  vi.stubEnv("VERCEL_GIT_COMMIT_SHA", undefined);
   request.headers.mockResolvedValue(new Headers({ "X-PostHog-Session-Id": sid, "X-PostHog-Distinct-Id": "user-a" }));
   request.session.mockResolvedValue({ user: { id: "user-a" } });
   sdk.flush.mockResolvedValue(undefined);
@@ -33,7 +36,7 @@ describe("server capture contract", () => {
     expect(sdk.capture).toHaveBeenCalledWith({
       distinctId: "user-a",
       event: "project_created",
-      properties: { project_id: "project-a", browser_context: "browser", $session_id: sid },
+      properties: { project_id: "project-a", ...local, browser_context: "browser", $session_id: sid },
     });
     const flush = request.after.mock.calls[0][0];
     await flush();
@@ -51,8 +54,24 @@ describe("server capture contract", () => {
     expect(sdk.capture).toHaveBeenCalledWith({
       distinctId: "user-a",
       event: "project_created",
-      properties: { browser_context: "none" },
+      properties: { ...local, browser_context: "none" },
     });
+  });
+
+  it("tags every event with the Vercel environment and short release", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "9ecfa2aa3766b46db9afdbd90f4b247a69ab4833");
+    const { capture } = await import("./server");
+    await capture("user-a", "project_created");
+    expect(sdk.capture.mock.calls[0][0].properties).toMatchObject({ environment: "production", release: "9ecfa2a" });
+  });
+
+  it("falls back to local when the Vercel variables are set but empty", async () => {
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
+    const { capture } = await import("./server");
+    await capture("user-a", "project_created");
+    expect(sdk.capture.mock.calls[0][0].properties).toMatchObject(local);
   });
 
   it("captures trusted background work without inventing a browser session", async () => {
@@ -65,7 +84,7 @@ describe("server capture contract", () => {
     expect(sdk.capture).toHaveBeenCalledWith({
       distinctId: "user-a",
       event: "background_completed",
-      properties: { browser_context: "none" },
+      properties: { ...local, browser_context: "none" },
     });
     expect(sdk.flush).toHaveBeenCalledOnce();
   });

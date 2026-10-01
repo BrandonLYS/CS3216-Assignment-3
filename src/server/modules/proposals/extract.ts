@@ -163,7 +163,7 @@ export async function generateExtraction<T>(
   if (!model) throw new Error("Assistant not configured");
   const temperature = settings.temperature === undefined ? EXTRACT_TEMPERATURE : (settings.temperature ?? undefined);
   const run = (temperature: number | undefined) => generateObject({ model, temperature, ...args });
-  const { object } = await traceGeneration(telemetry, { span, ...modelInfo() }, () =>
+  const { object } = await traceGeneration(telemetry, { span, ...modelInfo(model) }, () =>
     run(temperature).catch((e) =>
       temperature !== undefined && rejectsTemperature(e) ? run(undefined) : Promise.reject(e),
     ),

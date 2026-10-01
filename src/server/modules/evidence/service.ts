@@ -154,7 +154,7 @@ export const evidenceService = {
     if (file && storageKey) await getStorage().put(storageKey, file.bytes, file.type);
     const converted = file ? ((await fileToMarkdown(file)) ?? (await fileToTextInProcess(file))) : null;
     // Only a file no converter can read (a scan, an image-only PDF) goes to the model.
-    const extractedText = converted ?? (file ? await fileToTextViaModel(file) : null);
+    const extractedText = converted ?? (file ? await fileToTextViaModel(ctx, input.projectId, file) : null);
     // LitePruner takes text, not files: only converted text or a pasted body is sent. The index
     // stores what it will embed - the pruned copy, else the original text on any failure.
     const toPrune = input.body ?? converted ?? "";

@@ -2,12 +2,16 @@
 
 ## What is evaluated
 
-Two model-backed behaviours, because they are the two that can be wrong in a way a User would believe:
+The primary semantic suite covers the user-facing behaviours whose wrong output could be mistaken for Project truth.
+This page covers the first two; Task and Milestone extraction, the third, has its own 12 cases in the [M11 addendum](m11-item-evals.md).
 
 1. **Proposal extraction** - given Evidence and Comments, which Decisions did this team already make? (`proposals/extract.ts`, filtered by `proposals/trace.ts`)
 2. **Answering from the Project** - "why did we...", plus factual questions over Evidence, through the real tool loop. (`assistant/prompt.ts`, `decisions/service.ts` `search`, `search/service.ts`)
 
-Everything else in the AI layer is deterministic application logic (impact detection, decision graph walks, ranking) and is covered by unit tests, not by this suite.
+Impact detection, Decision graph walks and ranking are deterministic application logic, covered by unit tests.
+The other model-backed paths - Reflection (Profile and Working Memory) and Render drafting - have service and unit tests but no equivalent semantic eval: their output is either edited by the PM before use (Render drafts) or never shown as a Project fact.
+Scanned-file transcription has neither tests nor an eval.
+It runs on the User's saved model, so a text-only model returns no transcription and the Evidence keeps `extractedText: null`.
 
 ## The fixture
 

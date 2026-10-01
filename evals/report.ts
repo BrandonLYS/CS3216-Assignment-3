@@ -270,6 +270,32 @@ async function main() {
     ["`heuristic` (no model)", "artifacts/item-evals-2026-09-30/heuristic/results.json", "heuristic"],
     ["`gpt-4o-mini`", "artifacts/item-evals-2026-09-30/results.json", "gpt-4o-mini"],
     ["`gpt-4o-mini` (repeat)", "artifacts/item-evals-2026-09-30/repeat/results.json", "gpt-4o-mini"],
+    [
+      "`gpt-4o-mini`, 1 Oct baseline, Milestone-strict grader",
+      "artifacts/item-evals-2026-10-01/baseline/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "`gpt-4o-mini`, owner rule, pre-narrowing trace",
+      "artifacts/item-evals-2026-10-01/pre-narrowing-1/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "`gpt-4o-mini`, owner rule, pre-narrowing trace, repeat",
+      "artifacts/item-evals-2026-10-01/pre-narrowing-2/results.json",
+      "gpt-4o-mini",
+    ],
+    ["`gpt-4o-mini`, owner rule, final trace", "artifacts/item-evals-2026-10-01/final-1/results.json", "gpt-4o-mini"],
+    [
+      "`gpt-4o-mini`, owner rule, final trace, repeat 2",
+      "artifacts/item-evals-2026-10-01/final-2/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "`gpt-4o-mini`, owner rule, final trace, repeat 3",
+      "artifacts/item-evals-2026-10-01/final-3/results.json",
+      "gpt-4o-mini",
+    ],
   ];
   // Direct OpenAI returns no price, so a zero cost with tokens spent is unpriced rather than free.
   const cost = (s: ReturnType<typeof suiteStats>) =>
@@ -304,6 +330,32 @@ async function main() {
     ],
     ["temperature 0, OpenAI (30 Sep)", "artifacts/item-evals-2026-09-30/results.json", "gpt-4o-mini"],
     ["temperature 0, OpenAI (30 Sep, repeat)", "artifacts/item-evals-2026-09-30/repeat/results.json", "gpt-4o-mini"],
+    ["temperature 0, OpenAI (1 Oct, baseline)", "artifacts/item-evals-2026-10-01/baseline/results.json", "gpt-4o-mini"],
+    [
+      "temperature 0, OpenAI (1 Oct, owner rule, pre-narrowing trace)",
+      "artifacts/item-evals-2026-10-01/pre-narrowing-1/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "temperature 0, OpenAI (1 Oct, owner rule, pre-narrowing trace, repeat)",
+      "artifacts/item-evals-2026-10-01/pre-narrowing-2/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "temperature 0, OpenAI (1 Oct, owner rule, final trace)",
+      "artifacts/item-evals-2026-10-01/final-1/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "temperature 0, OpenAI (1 Oct, owner rule, final trace, repeat 2)",
+      "artifacts/item-evals-2026-10-01/final-2/results.json",
+      "gpt-4o-mini",
+    ],
+    [
+      "temperature 0, OpenAI (1 Oct, owner rule, final trace, repeat 3)",
+      "artifacts/item-evals-2026-10-01/final-3/results.json",
+      "gpt-4o-mini",
+    ],
   ];
   const decisionSets: Array<[string, CaseResult[]]> = [];
   for (const [label, path, model] of decisionRuns) {

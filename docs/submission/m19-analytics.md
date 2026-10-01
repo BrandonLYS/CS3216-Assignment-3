@@ -44,8 +44,8 @@ The sample is small and mixed, so these numbers describe exercised workflows, no
 
 ### Next
 
-1. Separate production from development (own project or an `environment` property on every event) and populate the test cohort.
-2. Find and fix the cause of the failed model calls, then record the resolved model and provider on every span.
+1. Separate production from development (own project or an `environment` property on every event) and populate the test cohort. _Server events tagged on 1 October; the cohort is still empty._
+2. Find and fix the cause of the failed model calls, then record the resolved model and provider on every span. _Attribution fixed on 1 October; the failure cause is still open._
 3. Set `capture_exceptions` explicitly and verify it in a fresh browser.
 4. Add `project_id` to Evidence, transcript and Render events, and rebuild the funnel as Evidence to Proposal to Decision.
 5. Re-measure over a defined external-user period, with outcomes split by extractor, before making product claims.
@@ -54,6 +54,33 @@ The sample is small and mixed, so these numbers describe exercised workflows, no
 ![AI questions by workflow and application exceptions](posthog-2026-09-28/screenshots/02-workflows-and-exceptions.png)
 ![Core product activity and funnel](posthog-2026-09-28/screenshots/03-product-activity-and-funnel.png)
 ![Proposal acceptance rate and outcomes](posthog-2026-09-28/screenshots/04-proposal-outcomes.png)
+
+## Update: dashboard on 1 October 2026
+
+The same dashboard, re-captured on 1 October: the AI panels cover 1 September to 1 October, the product and Proposal panels 17 September to 1 October.
+It is still one mixed project: local development, end-to-end test sign-ups and the deployment all report to it, so every count below is an upper bound on real use.
+
+![AI questions, daily AI users, questions by workflow and exceptions, 1 October](posthog-2026-10-01/screenshots/01-ai-usage.png)
+![Product activity, funnel and Proposal outcomes, 1 October](posthog-2026-10-01/screenshots/02-product-and-proposals.png)
+
+| Measure                     | 1 October reading                                                            | Read it as                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Assistant questions         | Peak of about 38 on 30 September, almost all in the `project` workflow       | The team's final testing day; questions moved from the workspace dock to Project context          |
+| Daily AI users              | Peak of 10 on 30 September, otherwise 0 to 3                                 | Testers, not a user base                                                                          |
+| Proposal outcomes           | About 97 accepted and 24 rejected on 30 September, 33 and 17 on 29 September | Acceptance rose from 47% (to 28 September) to about 80% once Task and Milestone Proposals shipped |
+| Funnel, Project to Evidence | 79 people created a Project, 67 (84.8%) added Evidence                       | Most people who start a Project give it material, though e2e sign-ups inflate both steps          |
+| Funnel, Evidence to Render  | 0 of 67                                                                      | The saved funnel's third step is a Render, which the product never requires (below)               |
+| Exceptions                  | 1 on 21 September, 3 on 24 September, about 2 on 25 September, none since    | Not evidence of stability: the browser SDK does not set `capture_exceptions`                      |
+
+What these insights changed:
+
+- **The funnel measures the wrong path.** `render_requested` does fire (a few a day in the activity panel), so 0 of 67 means none of the people who created a Project and then Evidence requested a Render in the funnel's order and window. Either way a Render is not a step toward accepting a Proposal, while 121 Proposal decisions happened on 30 September alone.
+  The funnel to rebuild is Project, then Evidence, then `proposal_generated`, then `proposal_accepted` or `item_proposal_accepted`.
+- **Environment tagging was the first fix.** Every server event now carries `environment` (`VERCEL_ENV`, or `local`) and `release` (the short commit), so production can be filtered from local and e2e runs from this release on.
+  Pageviews already carry their host in `$current_url`.
+- **Model attribution is fixed.** Proposal extraction, Reflection, Render drafting and the chat route now record the model that actually ran, including a User's own saved model, rather than the environment default.
+  Scanned-file transcription is now traced too, as span `scan_transcription`.
+- **Acceptance is the measure to watch.** The jump to about 80% coincides with the model extractor and item Proposals; whether it holds outside the team's own testing is the question a defined external-user period has to answer.
 
 ## Tool
 
@@ -66,6 +93,7 @@ PostHog (client `posthog-js`, server `posthog-node`).
 - The server helper uses `next/server` `after()` to flush events after the response is sent.
 - Browser identification, sign-out reset and real browser session propagation follow the [issue #73 contract](../artifacts/73-analytics-identity/README.md).
 - Signup is captured once after identification; returning and restored sessions do not create signup events.
+- Every server event carries `environment` (`VERCEL_ENV`, or `local`) and `release` (short commit SHA), so production can be separated from local and e2e traffic.
 - Every server event carries `browser_context`, which is `browser` when the originating browser session correlates and `none` when there is none to correlate.
 - The Evidence to Proposal to Decision funnel follows the [issue #74 contract](../artifacts/74-proposal-funnel/README.md): the transitions emit their own events, after the write.
 - Automatic capture and replay are disabled (since 22 September); credential routes are suppressed and URL query/hash content is removed.
@@ -106,8 +134,8 @@ PostHog (client `posthog-js`, server `posthog-node`).
 
 ## LLM analytics
 
-`src/shared/analytics/ai.ts` records every model call as a PostHog `$ai_generation` event, which PostHog's LLM Analytics view turns into cost, latency and token dashboards per model.
-The five call sites are distinguished by `$ai_span_name`:
+`src/shared/analytics/ai.ts` records every model call that a User's work triggers - the Assistant turn, Decision and item extraction, Reflection, Render drafting and scanned-file transcription - as a PostHog `$ai_generation` event, which PostHog's LLM Analytics view turns into cost, latency and token dashboards per model.
+The six call sites are distinguished by `$ai_span_name`. The one model call not recorded is the Settings "test connection" probe (`ai-config/service.ts`), which checks a key rather than doing work:
 
 - `assistant_turn`: one event per model call in `/api/assistant/chat`, with `workflow`, `conversation_id` and `step`, grouped per request by `$ai_trace_id` and summarised by `assistant_turn_completed`.
   A provider failure, before or during the stream, is recorded; a tool or approval error is not a generation and is not.
@@ -116,6 +144,7 @@ The five call sites are distinguished by `$ai_span_name`:
 - `item_extraction`: the second `generateObject` call of the same pass, proposing Tasks and Milestones (#114), with the same properties.
 - `reflection`: the `generateObject` call that rewrites the Profile and Working Memory, with `conversation_id` and `project_id`, under the `$ai_trace_id` of the Assistant turn that triggered it.
 - `render_draft`: the `generateText` call that drafts a Render description from Evidence (#117, ADR 0016), with `project_id` and `evidence_count`.
+- `scan_transcription`: the `generateText` call that transcribes a scanned PDF or image no converter could read, with `project_id`.
 
 Failures are recorded with `$ai_is_error: true` and the error class name only, since a provider message can echo the prompt.
 A structured-output mismatch keeps the tokens it spent.

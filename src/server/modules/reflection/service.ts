@@ -45,7 +45,7 @@ const modelRewrite =
   async (input) => {
     const model = await getModelForUser(ctx);
     if (!model) throw new Error("Assistant not configured");
-    const { object } = await traceGeneration(input.telemetry, { span: "reflection", ...modelInfo() }, () =>
+    const { object } = await traceGeneration(input.telemetry, { span: "reflection", ...modelInfo(model) }, () =>
       generateObject({
         model,
         schema: outputSchema,

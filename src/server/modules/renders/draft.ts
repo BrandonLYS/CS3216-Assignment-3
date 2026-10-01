@@ -73,7 +73,7 @@ const MAX_OUTPUT_TOKENS = 400;
 export const modelDraft =
   (model: LanguageModel): Draft =>
   async (input) => {
-    const { text } = await traceGeneration(input.telemetry, { span: "render_draft", ...modelInfo() }, () =>
+    const { text } = await traceGeneration(input.telemetry, { span: "render_draft", ...modelInfo(model) }, () =>
       generateText({ model, system: SYSTEM, prompt: draftPrompt(input), maxOutputTokens: MAX_OUTPUT_TOKENS }),
     );
     return text;

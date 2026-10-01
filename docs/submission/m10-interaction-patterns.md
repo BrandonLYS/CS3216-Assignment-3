@@ -31,14 +31,15 @@ One User turn is a loop: the model may call tools, read their results and call m
 A question like "why is the security review two half-days?" needs `search_decisions`, possibly `read_evidence` on a cited Source, then an answer - three steps the model plans itself.
 
 The loop is capped at `ASSISTANT_MAX_STEPS = 8`.
-Measured on the 20 answer cases, no model used more than 3 steps (median 2) - [M12](m12-optimization.md) - so the cap never cuts off a real answer and exists only to stop a runaway loop.
+Measured on the 20 answer cases, no model used more than 3 steps (median 2) - [M12](m12-optimization.md) - so the cap did not cut off any measured answer and is there to stop a runaway loop.
+The answer cases are questions, not planning requests; a long multi-entity plan may need more steps, which is why the cap sits well above 3.
 A turn that hits it is recorded as `hit_step_cap` in analytics.
 
 ## 3. Human approval inside the loop
 
 - **Where:** `toolApprovalFor` in `ai-tools.ts`, ADR 0011
 
-Every tool marked `mutates` stops the loop at an approval card; read tools run immediately.
+By default every tool marked `mutates` stops the loop at an approval card; read tools run immediately.
 Destructive and Project-level tools (`delete_task`, `delete_milestone`, `update_project`) also carry `requiresConfirmation` and a `describe` that names the concrete target, for example `Delete Task PM-12 "Write test plan"?`.
 The User may "always allow" a write tool per scope, which turns the card off for that tool only.
 
@@ -50,14 +51,15 @@ The threat model is in [M13](m13-safety.md).
 
 ## 4. Retrieval-augmented answers, over two indexes
 
-The Assistant never answers from the model's own knowledge.
+The system prompt requires the Assistant to retrieve before answering a question about the Project, and the eval suite fails an answer that skips retrieval (M11).
+That is an instruction and a measurement, not a guarantee: in case `w06`, `gemini-2.5-flash` answered "There is no recorded decision" without calling `search_decisions` until the rule was tightened (M11), and only server-side routing would enforce it.
 It retrieves through three tools and cites what they return.
 
-| Tool               | What it retrieves                                                                                                         | How                                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_evidence`  | Chunks of Evidence text, ranked by semantic similarity, optionally restricted by Label or by a linked Task/Risk/Milestone | Chunked embeddings (`text-embedding-3-small`, 1536 dims) in a per-Project FAISS index, fed by an `evidence.*` event subscriber (`src/server/modules/search/`, ADR 0014) |
-| `read_evidence`    | The full text of one Evidence item, up to 20,000 characters                                                               | Direct read, by id or by title                                                                                                                                          |
-| `search_decisions` | Confirmed Decisions with context, rejected alternatives, supersession, Assumptions and Sources                            | Structured search over the Decision graph (ADR 0008); pending Proposals are never returned                                                                              |
+| Tool               | What it retrieves                                                                                                         | How                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_evidence`  | Chunks of Evidence text, ranked by semantic similarity, optionally restricted by Label or by a linked Task/Risk/Milestone | Chunked embeddings (`text-embedding-3-small`, 1536 dims) in a per-Project FAISS index, fed by an `evidence.*` event subscriber (`src/server/modules/search/`, ADR 0014)                        |
+| `read_evidence`    | The full text of one Evidence item, up to 20,000 characters                                                               | Direct read, by id or by title                                                                                                                                                                 |
+| `search_decisions` | Confirmed Decisions with context, rejected alternatives, supersession, Assumptions and Sources                            | Weighted term matching over the text fields of confirmed Decision records (title x3, chosen x2, the rest x1), returned with their graph links (ADR 0008); pending Proposals are never returned |
 
 The split is deliberate.
 Semantic search is right for "what did the vendor say about dates?", where the answer is somewhere in prose.

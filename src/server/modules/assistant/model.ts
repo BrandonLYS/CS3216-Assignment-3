@@ -33,7 +33,8 @@ export function buildModel(settings: ModelSettings): LanguageModel {
   if (settings.provider === "anthropic") return createAnthropic({ apiKey: settings.apiKey })(settings.model);
   if (settings.provider === "google") return createGoogleGenerativeAI({ apiKey: settings.apiKey })(settings.model);
   return createOpenAICompatible({
-    name: "user-openai-compatible",
+    // The provider name analytics reports (`$ai_provider`), matching the `AiProvider` value.
+    name: "openai_compatible",
     apiKey: settings.apiKey,
     baseURL: settings.baseUrl!,
     fetch: guardedFetch(undefined, undefined, new URL(settings.baseUrl!).origin),
@@ -61,11 +62,13 @@ function environmentSettings(): ModelSettings | null {
   return null;
 }
 
-/** The configured provider and model id: what `getModel` builds and what analytics reports. */
-export const modelInfo = (settings?: Pick<ModelSettings, "provider" | "model"> | null) =>
-  settings
-    ? { provider: settings.provider, model: settings.model }
-    : { provider: process.env.AI_PROVIDER ?? "openai", model: process.env.AI_MODEL || DEFAULT_MODEL };
+/**
+ * The provider and model id of the model a call actually runs on, which is what analytics reports:
+ * a User's saved config when they have one, the environment fallback otherwise. A bare string is a
+ * gateway model id.
+ */
+export const modelInfo = (model: LanguageModel) =>
+  typeof model === "string" ? { provider: "gateway", model } : { provider: model.provider, model: model.modelId };
 
 /** The configured chat model, or null so the app boots and the dock can say "not configured". */
 export function getModel(): LanguageModel | null {

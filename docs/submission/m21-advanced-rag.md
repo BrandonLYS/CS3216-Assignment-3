@@ -1,17 +1,19 @@
 # Milestone 21 (optional) - Advanced RAG
 
-## Technique: agentic, routed retrieval over a knowledge graph and a filtered vector index
+**Status: implemented, but its advantage over basic RAG is argued case by case, not measured by a controlled ablation, so we do not claim this optional milestone as complete.**
+
+## Technique: agentic, routed retrieval over structured Decision records and a filtered vector index
 
 Basic RAG embeds the question, pulls the top-k chunks, and pastes them into the prompt.
 PrismPM does three things differently.
 
 1. **Agentic retrieval.** Retrieval is a set of tools the model chooses between inside the bounded loop (M10), not a fixed pre-step. It can search, read a full document, and search again.
-2. **Graph retrieval for "why".** `search_decisions` does not search text at all. It returns confirmed Decisions from the Decision graph (ADR 0008) with their context, rejected alternatives, Assumptions, the Decision that superseded them, and a ready-made citation for every Source. The prompt routes every "why" question there first.
-3. **Hybrid, filtered vector search for facts.** `search_evidence` ranks Evidence chunks by embedding similarity (per-Project FAISS, 1,600-character chunks with 200-character overlap) and can combine that with metadata filters: Labels (AND) and "linked to this Task, Risk or Milestone". With no embedding key it falls back to literal matching and says so. Text is compressed once at ingest (LitePruner) before embedding.
+2. **Structured retrieval for "why".** `search_decisions` does not search Evidence chunks. It ranks confirmed Decision records by weighted term matches over their own text fields (title x3, chosen x2, context, alternatives and the rest x1), so a suggestion in a transcript can never come back as a reason. It returns those Decisions from the Decision graph (ADR 0008) with their context, rejected alternatives, Assumptions, the Decision that superseded them, and a ready-made citation for every Source. The prompt routes every "why" question there first.
+3. **Metadata-filtered dense vector search for facts.** `search_evidence` ranks Evidence chunks by embedding similarity (per-Project FAISS, 1,600-character chunks with 200-character overlap) and can combine that with metadata filters: Labels (AND) and "linked to this Task, Risk or Milestone". With no embedding key it falls back to literal matching and says so. Text is compressed once at ingest (LitePruner) before embedding.
 
 | Tool               | Index                          | Used for                                                     |
 | ------------------ | ------------------------------ | ------------------------------------------------------------ |
-| `search_decisions` | Decision graph in Postgres     | Why and how something was decided; supersession; Assumptions |
+| `search_decisions` | Decision records in Postgres   | Why and how something was decided; supersession; Assumptions |
 | `search_evidence`  | FAISS + Label and link filters | Where something is said in the documents                     |
 | `read_evidence`    | Postgres, full text            | Exact facts a 500-character snippet would cut off            |
 
@@ -40,4 +42,6 @@ The design still depends on the model following the route: the deployed `gpt-4o-
 ## Limits, stated plainly
 
 We did not run a controlled ablation of "the same model with plain top-k chunk RAG" against this design, so the table above shows what each case requires rather than a measured basic-RAG score.
+That ablation - the same model and cases, with only `search_evidence` over unfiltered top-k chunks - is what would close this milestone.
+The vector search is dense only, with metadata filters; it is not hybrid in the dense plus sparse (BM25) sense.
 Retrieval ranking is the next thing to improve: paraphrases rank below exact wording and there is no relevance threshold yet ([rag-check-openrouter](../../artifacts/rag-check-openrouter-2026-09-28/README.md)); the graph route is what keeps that weakness away from "why" answers.
