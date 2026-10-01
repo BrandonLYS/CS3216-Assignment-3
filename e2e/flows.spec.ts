@@ -470,6 +470,13 @@ test.describe("calendar", () => {
     await login(page);
     await page.getByRole("link", { name: "Calendar", exact: true }).click();
     await expect(page).toHaveURL("/calendar");
+    // The workspace calendar opens on today's month; step to the month the seeded dates are in.
+    const now = new Date();
+    const offset = (2026 - now.getFullYear()) * 12 + (8 - now.getMonth());
+    for (let i = 0; i < Math.abs(offset); i++) {
+      await page.getByRole("button", { name: offset > 0 ? "Next" : "Previous", exact: true }).click();
+    }
+    await expect(page.getByRole("heading", { name: "September 2026" })).toBeVisible();
     await expect(page.getByTitle("Implement v2 endpoints")).toBeVisible();
     await shot(page, "workspace-september");
     await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -908,7 +915,7 @@ test.describe("decisions", () => {
     await expect(page.getByText("1 decision · newest first")).toBeVisible();
     await page.getByLabel("Show superseded").check();
     await expect(page.getByText("2 decisions · newest first")).toBeVisible();
-    const d1 = page.getByRole("row").filter({ hasText: "D-1" });
+    const d1 = page.getByRole("row").filter({ hasText: /\bD-1(?!\d)/ });
     await expect(d1).toContainText("Superseded");
     await expect(d1).toContainText("by D-2");
     await shot(page, "list-with-superseded");
@@ -971,7 +978,12 @@ test.describe("impact", () => {
 
     await page.getByRole("main").getByRole("link", { name: "Decisions", exact: true }).click();
     await page.getByLabel("Show superseded").check();
-    await expect(page.getByRole("row").filter({ hasText: "D-1" }).getByText("Broken")).toBeVisible();
+    await expect(
+      page
+        .getByRole("row")
+        .filter({ hasText: /\bD-1(?!\d)/ })
+        .getByText("Broken"),
+    ).toBeVisible();
     await shot(page, "decision-still-broken");
   });
 });
@@ -1092,7 +1104,9 @@ test.describe("graph", () => {
     await expect(consequences.getByTestId("graph-node").filter({ hasText: "Load-test the new gateway" })).toContainText(
       "leads to this",
     );
-    await expect(consequences.getByTestId("graph-node").filter({ hasText: "D-2" })).toContainText("superseded by this");
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: /\bD-2(?!\d)/ })).toContainText(
+      "superseded by this",
+    );
     await shot(page, "centred-on-decision");
 
     // Re-centre on the Assumption: nothing leads to it; the watched Milestone and both Decisions follow.
@@ -1142,7 +1156,7 @@ test.describe("graph", () => {
     await expect(page).toHaveURL(/\/graph\?node=assumption:[0-9a-f-]{36}$/);
     await expect(centre).toContainText("Vendor contract renews in Q4");
     await expect(centre).toContainText("Broken");
-    await expect(consequences.getByTestId("graph-node").filter({ hasText: "D-2" })).toBeVisible();
+    await expect(consequences.getByTestId("graph-node").filter({ hasText: /\bD-2(?!\d)/ })).toBeVisible();
     await shot(page, "opened-from-alert");
 
     // Re-centre on D-2: the new Assumption is a highlighted cause one step back; D-1 two steps back is
@@ -1150,7 +1164,7 @@ test.describe("graph", () => {
     // person Assumption is not.
     await consequences
       .getByTestId("graph-node")
-      .filter({ hasText: "D-2" })
+      .filter({ hasText: /\bD-2(?!\d)/ })
       .getByRole("link", { name: "Centre here" })
       .click();
     await expect(centre).toContainText("Interviews plus a short exit survey");
