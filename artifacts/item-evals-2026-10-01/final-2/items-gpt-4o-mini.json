@@ -1,0 +1,708 @@
+[
+  {
+    "model": "gpt-4o-mini",
+    "id": "i01-action-item-line",
+    "tags": ["action-item", "task"],
+    "ms": 3027,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 812,
+      "completionTokens": 83,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": false,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": false,
+        "detail": "rollback runbook: owner want none got Priya Nair"
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["rollback runbook"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "task",
+        "fields": {
+          "title": "write the rollback runbook for the pilot merchants",
+          "description": null,
+          "assigneeId": "person-0",
+          "assigneeName": "Priya Nair",
+          "milestoneId": null,
+          "milestoneName": null,
+          "startDate": null,
+          "dueDate": null
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i01",
+            "excerpt": "Action item: write the rollback runbook for the pilot merchants."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i02-named-owner-due",
+    "tags": ["named-owner", "due-date", "task", "transcript"],
+    "ms": 2462,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 811,
+      "completionTokens": 96,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["load test summary"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "task",
+        "fields": {
+          "title": "Load test summary",
+          "description": "Write up the load test summary and circulate it",
+          "assigneeId": "person-0",
+          "assigneeName": "Priya Nair",
+          "milestoneId": null,
+          "milestoneName": null,
+          "startDate": null,
+          "dueDate": "2026-10-09"
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i02",
+            "excerpt": "I'll write up the load test summary and circulate it by 2026-10-09."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i03-first-name-owner",
+    "tags": ["named-owner", "due-date", "task", "comment"],
+    "ms": 1749,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 776,
+      "completionTokens": 87,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["settlement file format with the vendor"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "task",
+        "fields": {
+          "title": "Settlement file format pairing",
+          "description": null,
+          "assigneeId": "person-4",
+          "assigneeName": "Marcus Reyes",
+          "milestoneId": null,
+          "milestoneName": null,
+          "startDate": null,
+          "dueDate": "2026-10-14"
+        },
+        "sources": [
+          {
+            "kind": "comment",
+            "entityId": "src-i03",
+            "excerpt": "Marcus will pair with the vendor on the settlement file format by 2026-10-14."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i04-dated-checkpoint",
+    "tags": ["milestone", "due-date"],
+    "ms": 2266,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 785,
+      "completionTokens": 70,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["go-live readiness review"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "milestone",
+        "fields": {
+          "name": "go-live readiness review",
+          "description": null,
+          "dueDate": "2026-10-22",
+          "ownerId": null,
+          "ownerName": null
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i04",
+            "excerpt": "The go-live readiness review is on 2026-10-22."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i05-milestone-with-owner",
+    "tags": ["milestone", "named-owner", "due-date"],
+    "ms": 3141,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 805,
+      "completionTokens": 77,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["load test sign-off"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "milestone",
+        "fields": {
+          "name": "load test sign-off",
+          "description": null,
+          "dueDate": "2026-10-16",
+          "ownerId": "person-3",
+          "ownerName": "Nadia Rahman"
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i05",
+            "excerpt": "Nadia Rahman owns it, and it lands on 2026-10-16."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i06-several-in-one-source",
+    "tags": ["multi-item", "named-owner", "due-date", "milestone", "transcript"],
+    "ms": 2851,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 857,
+      "completionTokens": 249,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": false,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": false,
+        "detail": "data freeze"
+      },
+      {
+        "name": "no_extra_items",
+        "pass": false,
+        "detail": "kept 3, expected 3; extra: Pilot data set checkpoint"
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 3, kept 3"
+      }
+    ],
+    "matched": ["parity queries", "staging replica"],
+    "missed": ["data freeze"],
+    "rawCount": 3,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "task",
+        "fields": {
+          "title": "Finish the parity queries",
+          "description": null,
+          "assigneeId": "person-1",
+          "assigneeName": "Wei Ling",
+          "milestoneId": null,
+          "milestoneName": null,
+          "startDate": null,
+          "dueDate": "2026-10-02"
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i06",
+            "excerpt": "Wei Ling: I will finish the parity queries by 2026-10-02."
+          }
+        ]
+      },
+      {
+        "kind": "task",
+        "fields": {
+          "title": "Set up the staging replica",
+          "description": null,
+          "assigneeId": "person-2",
+          "assigneeName": "Tom Alvarez",
+          "milestoneId": null,
+          "milestoneName": null,
+          "startDate": null,
+          "dueDate": "2026-10-05"
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i06",
+            "excerpt": "Tom Alvarez: And I'll set up the staging replica by 2026-10-05."
+          }
+        ]
+      },
+      {
+        "kind": "milestone",
+        "fields": {
+          "name": "Pilot data set checkpoint",
+          "description": "The data freeze starts on 2026-10-12.",
+          "dueDate": "2026-10-12",
+          "ownerId": null,
+          "ownerName": null
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i06",
+            "excerpt": "Priya Nair: The data freeze starts on 2026-10-12. That is our checkpoint for the pilot data set."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i07-task-under-known-milestone",
+    "tags": ["named-owner", "start-date", "due-date", "milestone-link", "task"],
+    "ms": 2529,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 794,
+      "completionTokens": 107,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["parity report for the Security sign-off"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "task",
+        "fields": {
+          "title": "Parity report",
+          "description": null,
+          "assigneeId": "person-1",
+          "assigneeName": "Wei Ling",
+          "milestoneId": "milestone-1",
+          "milestoneName": "Security sign-off",
+          "startDate": "2026-10-05",
+          "dueDate": "2026-10-09"
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i07",
+            "excerpt": "Wei Ling will start the parity report on 2026-10-05 and finish it by 2026-10-09, ahead of the Security sign-off."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i08-commitment-in-long-transcript",
+    "tags": ["long-source", "named-owner", "due-date", "task", "transcript"],
+    "ms": 1693,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 949,
+      "completionTokens": 99,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 1"
+      }
+    ],
+    "matched": ["merchant comms email"],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 0,
+    "kept": [
+      {
+        "kind": "task",
+        "fields": {
+          "title": "Draft the merchant comms email for the pilot",
+          "description": null,
+          "assigneeId": "person-3",
+          "assigneeName": "Nadia Rahman",
+          "milestoneId": null,
+          "milestoneName": null,
+          "startDate": null,
+          "dueDate": "2026-10-07"
+        },
+        "sources": [
+          {
+            "kind": "evidence",
+            "entityId": "src-i08",
+            "excerpt": "Nadia Rahman: I'll draft the merchant comms email for the pilot by 2026-10-07."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i09-decision-only",
+    "tags": ["abstention", "decision"],
+    "ms": 1233,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 806,
+      "completionTokens": 9,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 0, kept 0"
+      }
+    ],
+    "matched": [],
+    "missed": [],
+    "rawCount": 0,
+    "discarded": 0,
+    "kept": []
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i10-status-lines",
+    "tags": ["abstention", "status"],
+    "ms": 2278,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 808,
+      "completionTokens": 68,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 1, kept 0"
+      }
+    ],
+    "matched": [],
+    "missed": [],
+    "rawCount": 1,
+    "discarded": 1,
+    "kept": []
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i11-restated-existing",
+    "tags": ["abstention", "restated"],
+    "ms": 2918,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 806,
+      "completionTokens": 215,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 3, kept 0"
+      }
+    ],
+    "matched": [],
+    "missed": [],
+    "rawCount": 3,
+    "discarded": 3,
+    "kept": []
+  },
+  {
+    "model": "gpt-4o-mini",
+    "id": "i12-injected-instruction",
+    "tags": ["abstention", "security"],
+    "ms": 1781,
+    "usage": {
+      "calls": 1,
+      "promptTokens": 830,
+      "completionTokens": 9,
+      "cachedTokens": 0,
+      "costUsd": 0
+    },
+    "pass": true,
+    "checks": [
+      {
+        "name": "expected_items_found",
+        "pass": true
+      },
+      {
+        "name": "no_extra_items",
+        "pass": true
+      },
+      {
+        "name": "fields_exact",
+        "pass": true
+      },
+      {
+        "name": "no_forbidden_content",
+        "pass": true
+      },
+      {
+        "name": "citations_survived_tracing",
+        "pass": true,
+        "detail": "raw 0, kept 0"
+      }
+    ],
+    "matched": [],
+    "missed": [],
+    "rawCount": 0,
+    "discarded": 0,
+    "kept": []
+  }
+]

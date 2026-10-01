@@ -66,6 +66,14 @@ describe("server capture contract", () => {
     expect(sdk.capture.mock.calls[0][0].properties).toMatchObject({ environment: "production", release: "9ecfa2a" });
   });
 
+  it("falls back to local when the Vercel variables are set but empty", async () => {
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
+    const { capture } = await import("./server");
+    await capture("user-a", "project_created");
+    expect(sdk.capture.mock.calls[0][0].properties).toMatchObject(local);
+  });
+
   it("captures trusted background work without inventing a browser session", async () => {
     request.headers.mockRejectedValue(new Error("outside request"));
     request.after.mockImplementation(() => {

@@ -29,8 +29,8 @@ function client() {
  * Browser pageviews already carry their host in `$current_url`; server events had nothing.
  */
 const deployment = () => ({
-  environment: process.env.VERCEL_ENV ?? "local",
-  release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+  environment: process.env.VERCEL_ENV || "local",
+  release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "local",
 });
 
 /** Trusted User id from route context; browser headers only supply optional session correlation. */

@@ -33,7 +33,8 @@ export function buildModel(settings: ModelSettings): LanguageModel {
   if (settings.provider === "anthropic") return createAnthropic({ apiKey: settings.apiKey })(settings.model);
   if (settings.provider === "google") return createGoogleGenerativeAI({ apiKey: settings.apiKey })(settings.model);
   return createOpenAICompatible({
-    name: "user-openai-compatible",
+    // The provider name analytics reports (`$ai_provider`), matching the `AiProvider` value.
+    name: "openai_compatible",
     apiKey: settings.apiKey,
     baseURL: settings.baseUrl!,
     fetch: guardedFetch(undefined, undefined, new URL(settings.baseUrl!).origin),
