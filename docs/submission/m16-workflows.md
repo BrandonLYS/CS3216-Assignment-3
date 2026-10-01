@@ -21,7 +21,7 @@ Each is shown as a PM performs it, with the reason it was designed that way rath
 | The PM types Decisions into a log by hand          | This is what every competitor offers, and it is exactly the habit nobody keeps. The value of a Decision Memory depends on it being filled without effort.                                                                       |
 | The model writes Decisions and Tasks directly      | Extraction is right about 9 times in 10 at best (M11). A wrong Decision cited later as "the reason" is worse than no Decision, and one prompt injection could plant one (M13). A pending queue costs the PM one click per item. |
 | A "Generate" button the PM must remember to press  | Kept as **Propose from evidence** for re-runs, but the default is automatic: the pass runs on save in `after()`, and content hashing makes a repeat pass free (M12), so there is no cost reason to make the PM ask.             |
-| Cards without the quote, only the extracted fields | The PM cannot judge a Proposal without seeing where it came from. The verbatim excerpt turns review into a two-second check rather than re-reading the notes.                                                                   |
+| Cards without the quote, only the extracted fields | The PM cannot judge a Proposal without seeing where it came from. The verbatim excerpt lets the PM check a Proposal against its source without re-reading the notes.                                                            |
 
 ## 2. "Why did we...?" gets a cited answer, or an honest "nothing recorded"
 
@@ -50,7 +50,7 @@ Each is shown as a PM performs it, with the reason it was designed that way rath
 
 1. The PM asks the Assistant "Plan a two-month launch with UAT in week 6" or "Move the pilot readout to next Friday".
 2. The model reads the Project summary, then proposes each write as a tool call.
-3. Each write pauses at an approval card that names the tool and its arguments. Deletes and Project-level changes name the exact target ("Delete Task PM-12 'Write test plan'?").
+3. By default each write pauses at an approval card that names the tool and its arguments (a User who has chosen **Always allow** for that tool in this scope skips it). Deletes and Project-level changes name the exact target ("Delete Task PM-12 'Write test plan'?").
 4. The PM chooses **Allow once**, **Always allow** (for this tool, in this scope) or **Deny**. The tool runs through the same service as the UI, and the answer summarises what changed in one or two sentences.
 
 ![Approval card for update_task with its arguments and Deny / Always allow / Allow once](flows/tool-approval-card.png)

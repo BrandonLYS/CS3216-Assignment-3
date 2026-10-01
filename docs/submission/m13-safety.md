@@ -157,3 +157,4 @@ Stated so they are not mistaken for solved.
 4. **The gateway sees prompts.** Routing through OpenRouter adds one party that reads Evidence text ([M9](m9-model-bakeoff.md)); a deployment handling customer data should call the vendor directly, which is a configuration change.
 5. **DNS rebinding** on a User-configured endpoint, above.
 6. **Coverage.** Injection is tested by three cases (`x07`, `w11`, `i12`) on one fixture. That separates the three models measured; it is not a red-team.
+7. **No consolidated adversarial run yet.** The rows above are separate tests, evals and one live check, not one runner that executes each attack against a release and records expected, observed and the persisted state (issue #77). The rate-limit and forged-approval rows rest on the code path and unit tests, not on an executed end-to-end attack.

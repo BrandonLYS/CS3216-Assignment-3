@@ -8,7 +8,7 @@ This note extends [M11](m11-evals.md) to the item extractor, which #114 added be
 Since #114, the Proposal pass makes a second model call with its own prompt (`src/server/modules/proposals/extract-items.ts`, span `item_extraction`).
 The call reads the same Evidence and Comments as the Decision call and proposes the Tasks and Milestones the team committed to.
 `traceItems` (`proposals/trace.ts`) keeps an item only when its excerpt is verbatim.
-It also drops an item with no title, a Milestone without a real date, and an item that duplicates an existing one.
+It also drops an item with no title, a Milestone without a real date, and an item that duplicates an existing one of either kind.
 A PM then accepts or rejects each item on the Overview (#115).
 
 The item extractor had shipped without a measured baseline.
@@ -43,7 +43,7 @@ Each case carries its own sources, and the refs are the same five People, three 
 - **Nothing extra.** Every kept item must pair with an expected one.
   The grader first finds the largest set of exact pairs, where a kept item matches an expectation's title and all its fields, then pairs what is left by title alone.
   Pairing order therefore never fails a correct extraction.
-- **A Milestone link is checked only where a case expects one.** An invented link elsewhere stays in the artifact but does not fail the case.
+- **A Milestone link the case does not expect fails it.** Until 1 October an omitted `milestone` meant "not checked", so an invented link stayed in the artifact without failing the case; it now means "none expected".
 - **Forbidden content** in a kept title or description fails the case (`pwned` in `i12`), matched as whole words like titles.
 - A case with an empty title group, or a spelling that normalises to nothing, is refused rather than graded.
 - The raw and kept counts are recorded, so a case that trace rescued shows up.
@@ -71,7 +71,7 @@ The same three cases failed in both runs.
    The model assigned the Task to Priya Nair in one run and to Tom Alvarez in the other.
    Temperature 0 did not make that choice stable.
    In the second run it also linked the Task to the `Pilot cut-over` Milestone, which the text never mentions.
-   The grader checks a Milestone link only where a case expects one, so that invention is visible in the artifact but not in the verdict.
+   The grader then checked a Milestone link only where a case expected one, so that invention was visible in the artifact but not in the verdict; it fails the case since 1 October (see below).
    An owner the text never gave is the failure that costs a PM most, because it looks like a fact on the card.
 2. **`i04` misses a one-line checkpoint.** "The go-live readiness review is on 2026-10-22" produced no item in either run.
    The prompt names a review as a Milestone example, so this is a recall gap on terse sources.
@@ -117,19 +117,34 @@ It is worth recording that temperature 0 on OpenAI directly did not reproduce it
 The 28 September runs through OpenRouter repeated their verdicts exactly.
 The claim in `EXTRACT_TEMPERATURE`'s comment, that both models repeated their own output at 0, holds for that gateway and day, not as a property of the model.
 
-## What this changes
+## The follow-up: an explicit-owner rule (1 October)
 
-Nothing in the product yet.
-No prompt was edited in this change, by design: a baseline measured after tuning is not a baseline.
-The failures above are the input for a follow-up prompt change to `extract-items.ts`, measured against this suite and the 22 Decision cases, as M11 did for the Decision prompt.
-The first candidate is an explicit rule that an owner is only a Person the text names as doing the work, never an attendee or the speaker by default.
-That targets `i01` and `i06` at once.
+The baseline above was measured before any tuning, by design: a baseline measured after tuning is not a baseline.
+Its failures were the input for one prompt change, measured against this suite and the 22 Decision cases.
+Raw runs, the commands and the wordings that were tried and dropped: [artifacts/item-evals-2026-10-01](../../artifacts/item-evals-2026-10-01/README.md).
+
+1. **The grader was tightened first.** An omitted `milestone` now means none is expected.
+   The unchanged prompt still scored 9/12 under it, with `i01` now failing on both the invented owner and the invented `Pilot cut-over` link.
+2. **One sentence was added to the prompt:** set an assignee or owner only when the text gives that Person the work; attending, speaking or being named nearby does not; leave the field empty rather than guess; the same for a Milestone link.
+3. **Trace now drops a Task that restates a known Milestone.** With the new sentence, `i11` returned "The Pilot cut-over stays on 2026-10-06" as a Task, which the same-kind duplicate check let through.
+
+| Extractor, `gpt-4o-mini`, temperature 0, OpenAI | Items | Decision cases | Failed item cases   |
+| ----------------------------------------------- | ----- | -------------- | ------------------- |
+| 30 September prompt, stricter grader            | 9/12  | 21/22          | `i01`, `i04`, `i06` |
+| Explicit-owner rule, cross-kind dedupe          | 10/12 | 21/22          | `i04`, `i06`        |
+| The same, repeat                                | 10/12 | 21/22          | `i04`, `i06`        |
+
+`i01` now keeps the runbook Task with no owner and no Milestone in both runs.
+`i06` keeps both assigned Tasks with the right owners and no invented owner on the checkpoint, but still does not propose the data freeze as a Milestone.
+`i04` still misses the one-line review, so the remaining gap is recall on terse checkpoints, not invention.
+The first wording tried ended with "otherwise null" and the model wrote the string `"null"` as an owner, which trace keeps as an unresolved name: 8/12 in two runs.
+The Decision prompt was not touched, and its only failure in all three runs is `x07`.
 
 ## Limitations
 
 The author wrote both the cases and the grader, so the suite measures this Project's shape.
 Twelve cases separate a good extractor from a poor one, but they will not rank two close models.
-The baseline and the Decision re-run used a different gateway from the 28 September runs, and the gateway changes sampling behaviour (see above).
+The item runs and the Decision re-runs used a different gateway from the 28 September runs, and the gateway changes sampling behaviour (see above).
 Direct OpenAI runs are unpriced in the harness; the cost above is computed from the list price by hand.
 
 ## Running it

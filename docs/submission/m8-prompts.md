@@ -159,7 +159,8 @@ This prompt is not covered by the eval suite, which is Project-scoped. Its behav
 It was kept separate from the Decision prompt on purpose: one combined prompt would have changed the prompt behind the 22 measured Decision cases, and the iteration history above shows that every edit moves some case.
 A snapshot test pins the Decision prompt so this refactor could not drift it.
 Its prompt reuses the same techniques - a negative definition beside the positive one ("A Decision, a status line, a risk and a date restated from an existing plan are not Tasks or Milestones"), verbatim excerpts, fenced data - and adds one rule specific to items: "Give dates only when the text states them ... A Milestone without a stated date is not a Milestone."
-Its baseline is 9/12 on its own cases, and the failures point at the next edit: the model invents an owner from the attendee list ([M11 addendum](m11-item-evals.md)).
+Its baseline was 9/12 on its own cases, and the failures pointed at the next edit: the model invented an owner from the attendee list.
+One sentence, "set an assignee or owner only when the text gives that Person the work", took it to 10/12 in two runs without moving the Decision cases ([M11 addendum](m11-item-evals.md)).
 
 **Render drafting** (`renders/draft.ts`, ADR 0016) condenses up to three pieces of Evidence into a visual description for an image model.
 Its distinctive technique is an exclusion list aimed at privacy rather than accuracy: "Leave out names of people and organisations, email addresses, phone numbers, prices, budgets, dates, ids and anything else that is not visible in the picture."

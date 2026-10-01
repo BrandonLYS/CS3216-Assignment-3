@@ -17,6 +17,7 @@ The saving is the system prompt plus the People, Milestone and Task context, whi
 
 The trade is real and was measured too: the batched call returned 5 Proposals where the nine separate calls returned 6, so one Decision was lost in the longer context.
 At this Project size the latency win matters more, because the pass runs inside `after()` on someone's save.
+Batching is therefore a latency and cost versus recall trade-off, not an unconditional optimization: a Project with longer or more numerous sources may need the pass split again.
 
 ### The pass on current main: two calls
 
@@ -115,17 +116,17 @@ Moving it to the event subscriber is open work, recorded in that run's improveme
 ## 8. Sampling at temperature 0 removed a 3.5x cost outlier
 
 Extraction now runs at `temperature: 0`.
-Beyond reproducibility ([M9](m9-model-bakeoff.md)), one provider-default repeat spent 19,743 completion tokens against a ~3,100-token norm and cost $0.0139 instead of $0.0040 - a structured-output retry loop that greedy sampling did not reproduce in either of its repeats.
+Beyond improving reproducibility ([M9](m9-model-bakeoff.md); temperature 0 did not fully reproduce verdicts on OpenAI directly), one provider-default repeat spent 19,743 completion tokens against a ~3,100-token norm and cost $0.0139 instead of $0.0040 - a structured-output retry loop that greedy sampling did not reproduce in either of its repeats.
 
 ## Summary of impact
 
 | Technique                        | Where                                          | Measured effect                                                                                                                        |
 | -------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Batched pass                     | `proposals/service.ts`                         | -57% tokens, -57% latency, -29% cost per pass; current two-call pass $0.00106 for 9 sources                                            |
+| Batched pass                     | `proposals/service.ts`                         | -57% tokens, -57% latency, -29% cost per pass, for 5 Proposals instead of 6; current two-call pass $0.00106 for 9 sources              |
 | Content-hash idempotency         | `proposal_pass_sources`, Proposal fingerprints | Repeat pass: 5,981 ms and $0.0043 becomes 11 ms and $0                                                                                 |
-| Stable-prefix prompt order       | `assistant/prompt.ts`                          | 95.3% of prompt tokens served from cache (`gpt-4o-mini` via OpenRouter)                                                                |
+| Stable-prefix prompt order       | `assistant/prompt.ts`                          | 95.3% of prompt tokens served from cache (`gpt-4o-mini` via OpenRouter, 28 Sep); not yet measured on the direct-OpenAI deployment      |
 | Model choice as cache choice     | deployment config                              | 8x cost difference between two models of similar quality                                                                               |
 | Streaming plus `after()`         | chat route, Reflection                         | Whole-turn latency of 2.5-5.0 s is streamed rather than waited out; Reflection off the response path. Time to first token not measured |
-| Greedy extraction sampling       | `proposals/extract.ts`                         | Removed a 6x token, 3.5x cost outlier; output reproducible                                                                             |
+| Greedy extraction sampling       | `proposals/extract.ts`                         | Removed the observed 6x token, 3.5x cost outlier in the measured repeats                                                               |
 | Embed once per text and embedder | `search/`                                      | Six later runs paid $0 for retrieval setup                                                                                             |
 | Zero-cost fallback               | `PROPOSALS_EXTRACTOR=heuristic`                | Feature works with no key at 12/22 instead of 21/22                                                                                    |

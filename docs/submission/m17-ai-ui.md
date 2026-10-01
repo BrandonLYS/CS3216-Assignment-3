@@ -3,6 +3,7 @@
 PrismPM's AI can be wrong, can be manipulated by a document, and acts on data a team depends on.
 Every decision below comes from one principle: **the PM must be able to see where an AI output came from, check it quickly, and stay the one who commits it.**
 The guidelines we leaned on are Microsoft's _Guidelines for Human-AI Interaction_ (Amershi et al., CHI 2019) and Google PAIR's _People + AI Guidebook_; each decision names the guideline it applies.
+These are design and engineering decisions supported by that research and our own testing; target-User task success with them was not separately measured within this assignment.
 
 ## 1. Show the evidence next to every AI suggestion
 
@@ -67,7 +68,8 @@ Offering the nearest Evidence keeps the answer useful.
 
 ## 6. Approval cards name the exact change
 
-Every write pauses at a card showing the tool and its arguments, with **Deny**, **Always allow** and **Allow once**.
+In-app writes pause by default at a card showing the tool and its arguments, with **Deny**, **Always allow** and **Allow once**.
+**Always allow** removes the card for that tool in that scope from then on, and MCP clients apply their own approval UI instead.
 
 ![Current approval card](flows/tool-approval-card.png)
 
