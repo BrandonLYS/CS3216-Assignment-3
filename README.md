@@ -44,7 +44,9 @@ npm run dev                   # landing page on http://localhost:3000, workspace
 
 The Assistant, Proposals and semantic search need a model key: set `OPENAI_API_KEY` in `.env` (the default model is `gpt-4o-mini`).
 Everything else works without one.
-Each User can also bring their own provider key from **Settings**.
+You can also skip the `.env` key and add your own AI key once the app is running: sign in, open **Settings** in the sidebar, and choose a provider (OpenAI, Anthropic, Google Gemini or any OpenAI-compatible endpoint), model and key.
+A personal key takes precedence over the `.env` default and is stored encrypted, so set `AI_CREDENTIALS_ENCRYPTION_KEY` in `.env` first (`openssl rand -base64 32`).
+The same Settings page works on the live application.
 
 ### Verify
 
