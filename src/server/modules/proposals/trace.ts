@@ -226,6 +226,16 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
     kept.push({ kind, fingerprint, fields, sources: traced });
   };
 
+  // Milestones first, so a Task restating one in the same pass is the item discarded; Tasks still lead `kept`.
+  for (const m of raw.milestones) {
+    const name = cap(m.name, ITEM_LIMITS.name);
+    keep("milestone", name, m.sources, () => {
+      const dueDate = isoOrNull(m.dueDate);
+      if (!dueDate) return null;
+      const [ownerId, ownerName] = resolveName(refs.people, m.ownerName, (r) => r.name);
+      return { name: name!, description: cap(m.description, ITEM_LIMITS.description), dueDate, ownerId, ownerName };
+    });
+  }
   for (const t of raw.tasks) {
     const title = cap(t.title, ITEM_LIMITS.title);
     keep("task", title, t.sources, () => {
@@ -244,16 +254,7 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
       };
     });
   }
-  for (const m of raw.milestones) {
-    const name = cap(m.name, ITEM_LIMITS.name);
-    keep("milestone", name, m.sources, () => {
-      const dueDate = isoOrNull(m.dueDate);
-      if (!dueDate) return null;
-      const [ownerId, ownerName] = resolveName(refs.people, m.ownerName, (r) => r.name);
-      return { name: name!, description: cap(m.description, ITEM_LIMITS.description), dueDate, ownerId, ownerName };
-    });
-  }
-  return { kept, discarded };
+  return { kept: [...kept.filter((k) => k.kind === "task"), ...kept.filter((k) => k.kind === "milestone")], discarded };
 }
 
 /** Keep the traceable Proposals, drop the rest; Assumptions that do not resolve are dropped individually. */

@@ -281,6 +281,15 @@ describe("traceItems", () => {
     expect(discarded).toBe(1);
   });
 
+  it("keeps the dated Milestone over a Task restating it in the same pass", () => {
+    const { kept, discarded } = run({
+      tasks: [task({ title: "Pilot readout", milestoneName: null })],
+      milestones: [milestone()],
+    });
+    expect(kept.map((k) => k.kind)).toEqual(["milestone"]);
+    expect(discarded).toBe(1);
+  });
+
   it("discards a Milestone without a valid date", () => {
     const { kept, discarded } = run({ milestones: [milestone({ dueDate: null }), milestone({ dueDate: "soon" })] });
     expect(kept).toEqual([]);
