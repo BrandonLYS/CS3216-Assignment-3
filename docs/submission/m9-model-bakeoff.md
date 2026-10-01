@@ -52,7 +52,9 @@ On the default, an `x07`-style injection still reaches the PM's review queue as 
 In short: the measured recommendation is `gemini-2.5-flash`, the hosted research preview runs `gpt-4o-mini` because that is the credential the team holds, and the preview therefore keeps a known model-quality limitation.
 
 Switching the deployment is one environment change (`AI_PROVIDER`, `AI_MODEL` and the key).
-Every model call, including scanned-file transcription, resolves its model through `getModelForUser` in `assistant/model.ts`, so no call path is pinned to OpenAI.
+Every chat-model call made for a User's work, including scanned-file transcription, resolves its model through `getModelForUser` in `assistant/model.ts`, so none of them is pinned to OpenAI.
+The exceptions are the Settings "test connection" probe, which builds the model from the configuration being tested, and embeddings, which come only from the environment's OpenAI or Gemini key (`search/embed.ts`), so a deployment on another chat provider still needs one of those for semantic search.
+Scanned files are transcribed on the User's own model when they have one, so a User whose model cannot read images or PDFs gets no text for a scan: the upload still succeeds, and the failure is recorded as an errored `scan_transcription` generation.
 
 ## Parameters
 

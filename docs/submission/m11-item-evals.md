@@ -8,7 +8,7 @@ This note extends [M11](m11-evals.md) to the item extractor, which #114 added be
 Since #114, the Proposal pass makes a second model call with its own prompt (`src/server/modules/proposals/extract-items.ts`, span `item_extraction`).
 The call reads the same Evidence and Comments as the Decision call and proposes the Tasks and Milestones the team committed to.
 `traceItems` (`proposals/trace.ts`) keeps an item only when its excerpt is verbatim.
-It also drops an item with no title, a Milestone without a real date, and an item that duplicates an existing one of either kind.
+It also drops an item with no title, a Milestone without a real date, an item that duplicates an existing one of its own kind, and a Task titled exactly like a Milestone.
 A PM then accepts or rejects each item on the Overview (#115).
 
 The item extractor had shipped without a measured baseline.
@@ -126,22 +126,30 @@ Raw runs, the commands and the wordings that were tried and dropped: [artifacts/
 1. **The grader was tightened first.** An omitted `milestone` now means none is expected.
    The unchanged prompt still scored 9/12 under it, with `i01` now failing on both the invented owner and the invented `Pilot cut-over` link.
 2. **One sentence was added to the prompt:** set an assignee or owner only when the text gives that Person the work; attending, speaking or being named nearby does not; leave the field empty rather than guess; the same for a Milestone link.
-3. **Trace now drops a Task that restates a known Milestone.** With the new sentence, `i11` returned "The Pilot cut-over stays on 2026-10-06" as a Task, which the same-kind duplicate check let through.
+3. **Trace now drops a Task titled exactly like a known Milestone.** With the new sentence, `i11` returned a Task titled "Pilot cut-over", restating the known Milestone from "The Pilot cut-over stays on 2026-10-06", and the same-kind duplicate check let it through.
    Across kinds the check needs the exact title and only ever drops the Task, so "Plan mobile app v2 launch" survives beside the Milestone "Mobile app v2 launch", and a Task never blocks a Milestone.
    Milestones are traced first, so within one pass the dated Milestone is the item kept.
-   The two runs below predate that narrowing; replaying their kept items and the heuristic extractor on all 12 cases through the final trace gives the same result, but the raw model output is not stored, so `i06` was not re-checked against it.
+   The cost is that a real Task named exactly like a Milestone ("Tom will do the Security sign-off by Friday") is dropped too.
 
-| Extractor, `gpt-4o-mini`, temperature 0, OpenAI | Items | Decision cases | Failed item cases   |
-| ----------------------------------------------- | ----- | -------------- | ------------------- |
-| 30 September prompt, stricter grader            | 9/12  | 21/22          | `i01`, `i04`, `i06` |
-| Explicit-owner rule, cross-kind dedupe          | 10/12 | 21/22          | `i04`, `i06`        |
-| The same, repeat                                | 10/12 | 21/22          | `i04`, `i06`        |
+Five runs with the new sentence: two before the trace check was narrowed to exact titles, three after it, all on the code as merged except that narrowing.
 
-`i01` now keeps the runbook Task with no owner and no Milestone in both runs.
-`i06` keeps both assigned Tasks with the right owners and no invented owner on the checkpoint, but still does not propose the data freeze as a Milestone.
-`i04` still misses the one-line review, so the remaining gap is recall on terse checkpoints, not invention.
-The first wording tried ended with "otherwise null" and the model wrote the string `"null"` as an owner, which trace keeps as an unresolved name: 8/12 in two runs.
-The Decision prompt was not touched, and its only failure in all three runs is `x07`.
+| `gpt-4o-mini`, temperature 0, OpenAI | Items | Decision cases | Failed item cases   |
+| ------------------------------------ | ----- | -------------- | ------------------- |
+| 30 September prompt, stricter grader | 9/12  | 21/22          | `i01`, `i04`, `i06` |
+| Owner rule, first trace check        | 10/12 | 21/22          | `i04`, `i06`        |
+| The same, repeat                     | 10/12 | 21/22          | `i04`, `i06`        |
+| Owner rule, final trace              | 12/12 | 20/22          | none                |
+| The same, repeat                     | 10/12 | 20/22          | `i01`, `i06`        |
+| The same, second repeat              | 9/12  | 20/22          | `i04`, `i06`, `i08` |
+
+Read the rows as a spread, not a score: the same prompt on the same day gave 9, 10, 10, 10 and 12 of 12, so the honest claim is a direction, not a number.
+
+- **Invented owners are rarer, not gone.** `i01` invented an owner in all three runs without the rule (twice on 30 September, once on 1 October) and in 1 of 5 with it (Priya Nair, `final-2`).
+- **Invented Milestone links are not fixed.** `i08` linked `Pilot cut-over` from "for the pilot" in 1 of 5 runs, a failure the old grader could not see.
+- **`i11` now passes in all five runs**, with every restated item dropped by trace.
+- **Recall on checkpoints is the remaining gap.** `i06` named the data freeze "Pilot data set checkpoint" in 4 of 5 runs, and `i04` missed the one-line review in 3 of 5.
+- The first wording tried ended with "otherwise null", and the model wrote the string `"null"` as an owner, which trace keeps as an unresolved name: 8/12 in two runs, so it was dropped.
+- **The Decision prompt was not touched.** Its scores of 20 to 21 of 22 move the same way between back-to-back runs as on 30 September, and `x07` fails in every run.
 
 ## Limitations
 

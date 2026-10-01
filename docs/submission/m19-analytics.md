@@ -74,7 +74,7 @@ It is still one mixed project: local development, end-to-end test sign-ups and t
 
 What these insights changed:
 
-- **The funnel is wrong, and now provably so.** With 67 people at Evidence and 121 Proposal decisions on one day, a 0% third step can only mean the step is the wrong event.
+- **The funnel measures the wrong path.** `render_requested` does fire (a few a day in the activity panel), so 0 of 67 means none of the people who created a Project and then Evidence requested a Render in the funnel's order and window. Either way a Render is not a step toward accepting a Proposal, while 121 Proposal decisions happened on 30 September alone.
   The funnel to rebuild is Project, then Evidence, then `proposal_generated`, then `proposal_accepted` or `item_proposal_accepted`.
 - **Environment tagging was the first fix.** Every server event now carries `environment` (`VERCEL_ENV`, or `local`) and `release` (the short commit), so production can be filtered from local and e2e runs from this release on.
   Pageviews already carry their host in `$current_url`.
@@ -134,8 +134,8 @@ PostHog (client `posthog-js`, server `posthog-node`).
 
 ## LLM analytics
 
-`src/shared/analytics/ai.ts` records every model call - the Assistant turn, Decision and item extraction, Reflection, Render drafting and scanned-file transcription - as a PostHog `$ai_generation` event, which PostHog's LLM Analytics view turns into cost, latency and token dashboards per model.
-The five call sites are distinguished by `$ai_span_name`:
+`src/shared/analytics/ai.ts` records every model call that a User's work triggers - the Assistant turn, Decision and item extraction, Reflection, Render drafting and scanned-file transcription - as a PostHog `$ai_generation` event, which PostHog's LLM Analytics view turns into cost, latency and token dashboards per model.
+The six call sites are distinguished by `$ai_span_name`. The one model call not recorded is the Settings "test connection" probe (`ai-config/service.ts`), which checks a key rather than doing work:
 
 - `assistant_turn`: one event per model call in `/api/assistant/chat`, with `workflow`, `conversation_id` and `step`, grouped per request by `$ai_trace_id` and summarised by `assistant_turn_completed`.
   A provider failure, before or during the stream, is recorded; a tool or approval error is not a generation and is not.
@@ -144,6 +144,7 @@ The five call sites are distinguished by `$ai_span_name`:
 - `item_extraction`: the second `generateObject` call of the same pass, proposing Tasks and Milestones (#114), with the same properties.
 - `reflection`: the `generateObject` call that rewrites the Profile and Working Memory, with `conversation_id` and `project_id`, under the `$ai_trace_id` of the Assistant turn that triggered it.
 - `render_draft`: the `generateText` call that drafts a Render description from Evidence (#117, ADR 0016), with `project_id` and `evidence_count`.
+- `scan_transcription`: the `generateText` call that transcribes a scanned PDF or image no converter could read, with `project_id`.
 
 Failures are recorded with `$ai_is_error: true` and the error class name only, since a provider message can echo the prompt.
 A structured-output mismatch keeps the tokens it spent.

@@ -160,7 +160,7 @@ It was kept separate from the Decision prompt on purpose: one combined prompt wo
 A snapshot test pins the Decision prompt so this refactor could not drift it.
 Its prompt reuses the same techniques - a negative definition beside the positive one ("A Decision, a status line, a risk and a date restated from an existing plan are not Tasks or Milestones"), verbatim excerpts, fenced data - and adds one rule specific to items: "Give dates only when the text states them ... A Milestone without a stated date is not a Milestone."
 Its baseline was 9/12 on its own cases, and the failures pointed at the next edit: the model invented an owner from the attendee list.
-One sentence, "set an assignee or owner only when the text gives that Person the work", took it to 10/12 in two runs without moving the Decision cases ([M11 addendum](m11-item-evals.md)).
+One sentence, "set an assignee or owner only when the text gives that Person the work", cut the invented owner from every run to 1 in 5; the five runs scored 9 to 12 of 12, so the gain is a direction rather than a fixed score ([M11 addendum](m11-item-evals.md)).
 
 **Render drafting** (`renders/draft.ts`, ADR 0016) condenses up to three pieces of Evidence into a visual description for an image model.
 Its distinctive technique is an exclusion list aimed at privacy rather than accuracy: "Leave out names of people and organisations, email addresses, phone numbers, prices, budgets, dates, ids and anything else that is not visible in the picture."
