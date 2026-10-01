@@ -99,8 +99,7 @@ The reasoning behind each choice is in [M15](docs/submission/m15-stack.md).
 The product name is **PrismPM**; package names, MCP server identity, and other technical identifiers use `prismpm`.
 The repository remains `BrandonLYS/CS3216-Assignment-3`, so existing clone URLs and checkout paths still apply.
 
-New personal API tokens start with `prismpm_`.
-Previously issued `vtg_` tokens continue to authenticate and can still be revoked.
+Personal API tokens start with `prismpm_`.
 The Assistant dock migrates `vantage.assistant-open` to `prismpm.assistant-open` on first use, preserving an existing new-key preference and removing the legacy key after a successful migration.
 The Participant session cookie retains its legacy `vantage_participant` name to preserve signed-in sessions.
 
