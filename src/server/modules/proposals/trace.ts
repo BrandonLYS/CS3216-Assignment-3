@@ -190,8 +190,8 @@ const resolveName = <T extends { id: string }>(rows: T[], name: string | null, k
 
 /**
  * Keep traceable Task and Milestone Proposals (issue #114). An item is discarded when a Source does
- * not trace, it has no title, a Milestone has no real ISO date, or it duplicates an existing item,
- * an item Proposal already raised or one kept earlier in the same pass. Unresolved names keep their
+ * not trace, it has no title, a Milestone has no real ISO date, or it duplicates an existing item of
+ * either kind, an item Proposal already raised or one kept earlier in the same pass. Unresolved names keep their
  * snapshot with a null id.
  */
 export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceRefs, pending: KnownItem[] = []) {
@@ -211,7 +211,8 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
   ) => {
     const traced = traceSources(rawSources, sources);
     const fields = title && traced ? build() : null;
-    if (!traced || !fields || known.some((k) => k.kind === kind && isDuplicateTitle(k.title, title!))) {
+    // Across kinds too: a Task named like a known Milestone restates it, whichever list the model put it in.
+    if (!traced || !fields || known.some((k) => isDuplicateTitle(k.title, title!))) {
       discarded++;
       return;
     }

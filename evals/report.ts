@@ -270,6 +270,13 @@ async function main() {
     ["`heuristic` (no model)", "artifacts/item-evals-2026-09-30/heuristic/results.json", "heuristic"],
     ["`gpt-4o-mini`", "artifacts/item-evals-2026-09-30/results.json", "gpt-4o-mini"],
     ["`gpt-4o-mini` (repeat)", "artifacts/item-evals-2026-09-30/repeat/results.json", "gpt-4o-mini"],
+    [
+      "`gpt-4o-mini`, 1 Oct baseline, Milestone-strict grader",
+      "artifacts/item-evals-2026-10-01/baseline/results.json",
+      "gpt-4o-mini",
+    ],
+    ["`gpt-4o-mini`, explicit-owner rule", "artifacts/item-evals-2026-10-01/run1/results.json", "gpt-4o-mini"],
+    ["`gpt-4o-mini`, explicit-owner rule (repeat)", "artifacts/item-evals-2026-10-01/run2/results.json", "gpt-4o-mini"],
   ];
   // Direct OpenAI returns no price, so a zero cost with tokens spent is unpriced rather than free.
   const cost = (s: ReturnType<typeof suiteStats>) =>
@@ -304,6 +311,13 @@ async function main() {
     ],
     ["temperature 0, OpenAI (30 Sep)", "artifacts/item-evals-2026-09-30/results.json", "gpt-4o-mini"],
     ["temperature 0, OpenAI (30 Sep, repeat)", "artifacts/item-evals-2026-09-30/repeat/results.json", "gpt-4o-mini"],
+    ["temperature 0, OpenAI (1 Oct, baseline)", "artifacts/item-evals-2026-10-01/baseline/results.json", "gpt-4o-mini"],
+    ["temperature 0, OpenAI (1 Oct, owner rule)", "artifacts/item-evals-2026-10-01/run1/results.json", "gpt-4o-mini"],
+    [
+      "temperature 0, OpenAI (1 Oct, owner rule, repeat)",
+      "artifacts/item-evals-2026-10-01/run2/results.json",
+      "gpt-4o-mini",
+    ],
   ];
   const decisionSets: Array<[string, CaseResult[]]> = [];
   for (const [label, path, model] of decisionRuns) {

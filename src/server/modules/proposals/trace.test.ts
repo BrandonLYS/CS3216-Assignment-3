@@ -273,6 +273,14 @@ describe("traceItems", () => {
     expect(b!.fields).toMatchObject({ dueDate: "2026-10-02", startDate: null });
   });
 
+  it("discards a Task that restates a known Milestone", () => {
+    const { kept, discarded } = run({
+      tasks: [task({ title: "UAT begins", milestoneName: null })],
+    });
+    expect(kept).toEqual([]);
+    expect(discarded).toBe(1);
+  });
+
   it("discards a Milestone without a valid date", () => {
     const { kept, discarded } = run({ milestones: [milestone({ dueDate: null }), milestone({ dueDate: "soon" })] });
     expect(kept).toEqual([]);

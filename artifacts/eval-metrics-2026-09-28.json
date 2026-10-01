@@ -638,6 +638,45 @@
         "medianSteps": 0,
         "maxSteps": 0,
         "failures": ["i01-action-item-line", "i04-dated-checkpoint", "i06-several-in-one-source"]
+      },
+      "`gpt-4o-mini`, 1 Oct baseline, Milestone-strict grader": {
+        "cases": 12,
+        "passed": 9,
+        "passPct": 75,
+        "medianMs": 1595,
+        "promptTokens": 8615,
+        "completionTokens": 968,
+        "cachedPct": 0,
+        "costUsd": 0,
+        "medianSteps": 0,
+        "maxSteps": 0,
+        "failures": ["i01-action-item-line", "i04-dated-checkpoint", "i06-several-in-one-source"]
+      },
+      "`gpt-4o-mini`, explicit-owner rule": {
+        "cases": 12,
+        "passed": 10,
+        "passPct": 83.3,
+        "medianMs": 1961,
+        "promptTokens": 9839,
+        "completionTokens": 1096,
+        "cachedPct": 0,
+        "costUsd": 0,
+        "medianSteps": 0,
+        "maxSteps": 0,
+        "failures": ["i04-dated-checkpoint", "i06-several-in-one-source"]
+      },
+      "`gpt-4o-mini`, explicit-owner rule (repeat)": {
+        "cases": 12,
+        "passed": 10,
+        "passPct": 83.3,
+        "medianMs": 2116,
+        "promptTokens": 9839,
+        "completionTokens": 1091,
+        "cachedPct": 0,
+        "costUsd": 0,
+        "medianSteps": 0,
+        "maxSteps": 0,
+        "failures": ["i04-dated-checkpoint", "i06-several-in-one-source"]
       }
     },
     "decisionRerun": {
@@ -692,6 +731,45 @@
         "medianSteps": 0,
         "maxSteps": 0,
         "failures": ["x02-two-decisions-one-source", "x07-prompt-injection", "x18-decision-with-revisit"]
+      },
+      "temperature 0, OpenAI (1 Oct, baseline)": {
+        "cases": 22,
+        "passed": 21,
+        "passPct": 95.5,
+        "medianMs": 2187,
+        "promptTokens": 16582,
+        "completionTokens": 2568,
+        "cachedPct": 0,
+        "costUsd": 0,
+        "medianSteps": 0,
+        "maxSteps": 0,
+        "failures": ["x07-prompt-injection"]
+      },
+      "temperature 0, OpenAI (1 Oct, owner rule)": {
+        "cases": 22,
+        "passed": 21,
+        "passPct": 95.5,
+        "medianMs": 2166,
+        "promptTokens": 16582,
+        "completionTokens": 2681,
+        "cachedPct": 0,
+        "costUsd": 0,
+        "medianSteps": 0,
+        "maxSteps": 0,
+        "failures": ["x07-prompt-injection"]
+      },
+      "temperature 0, OpenAI (1 Oct, owner rule, repeat)": {
+        "cases": 22,
+        "passed": 21,
+        "passPct": 95.5,
+        "medianMs": 2078,
+        "promptTokens": 16582,
+        "completionTokens": 2878,
+        "cachedPct": 0,
+        "costUsd": 0,
+        "medianSteps": 0,
+        "maxSteps": 0,
+        "failures": ["x07-prompt-injection"]
       }
     }
   }

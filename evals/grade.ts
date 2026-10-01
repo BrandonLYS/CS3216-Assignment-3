@@ -88,7 +88,7 @@ export interface ExpectedItem {
   dueDate: string | null;
   /** Tasks only; null when omitted. */
   startDate?: string | null;
-  /** Tasks only; checked only when set. */
+  /** Tasks only; omitted means the Task must not link a Milestone, so an invented link fails. */
   milestone?: string;
 }
 
@@ -124,7 +124,7 @@ function fieldMismatches(want: ExpectedItem, got: TracedItem): string[] {
       nameMismatch("owner", want.owner, f.assigneeName, f.assigneeId),
       date("dueDate", want.dueDate, f.dueDate),
       date("startDate", want.startDate ?? null, f.startDate),
-      want.milestone === undefined ? null : nameMismatch("milestone", want.milestone, f.milestoneName, f.milestoneId),
+      nameMismatch("milestone", want.milestone ?? null, f.milestoneName, f.milestoneId),
     );
   } else {
     const f = item.fields;

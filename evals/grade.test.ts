@@ -63,6 +63,13 @@ describe("gradeItems", () => {
     expect(graded.matched).toEqual(["runbook", "review"]);
   });
 
+  it("fails a Milestone link the case does not expect", () => {
+    const invented = task({ milestoneId: "milestone-0", milestoneName: "Pilot cut-over" });
+    expect(failed({ items: [wantTask] }, [invented])).toEqual({
+      fields_exact: "runbook: milestone want none got Pilot cut-over",
+    });
+  });
+
   it("fails a missing item and an extra item", () => {
     expect(failed({ items: [wantTask, wantMilestone] }, [task({})])).toEqual({ expected_items_found: "review" });
     expect(failed({ items: [wantTask] }, [task({}), task({ title: "Book the lab" })])).toEqual({
