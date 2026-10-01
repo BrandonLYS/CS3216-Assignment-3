@@ -170,6 +170,17 @@ export function isDuplicateTitle(a: string, b: string) {
   return ` ${long.join(" ")} `.includes(` ${short.join(" ")} `);
 }
 
+/**
+ * A new item restates a known one of its own kind by `isDuplicateTitle`. Across kinds only a Task
+ * with exactly a Milestone's title restates it: the Milestone is the dated checkpoint the model
+ * misfiled. A Task never blocks a Milestone, and "Plan mobile app v2 launch" is work towards
+ * "Mobile app v2 launch", not a copy of it.
+ */
+const restates = (kind: ItemProposalKind, title: string, known: KnownItem) =>
+  known.kind === kind
+    ? isDuplicateTitle(known.title, title)
+    : kind === "task" && titleWords(known.title).join(" ") === titleWords(title).join(" ");
+
 /** A real calendar date in ISO form; "2026-02-30" has the shape but no day. */
 const isoOrNull = (v: string | null | undefined) => {
   if (!v || !ISO_DATE.test(v)) return null;
@@ -190,9 +201,9 @@ const resolveName = <T extends { id: string }>(rows: T[], name: string | null, k
 
 /**
  * Keep traceable Task and Milestone Proposals (issue #114). An item is discarded when a Source does
- * not trace, it has no title, a Milestone has no real ISO date, or it duplicates an existing item of
- * either kind, an item Proposal already raised or one kept earlier in the same pass. Unresolved names keep their
- * snapshot with a null id.
+ * not trace, it has no title, a Milestone has no real ISO date, or it restates (`restates`) an
+ * existing item, an item Proposal already raised or one kept earlier in the same pass. Unresolved
+ * names keep their snapshot with a null id.
  */
 export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceRefs, pending: KnownItem[] = []) {
   const known: KnownItem[] = [
@@ -211,8 +222,7 @@ export function traceItems(raw: RawItems, sources: ExtractSource[], refs: TraceR
   ) => {
     const traced = traceSources(rawSources, sources);
     const fields = title && traced ? build() : null;
-    // Across kinds too: a Task named like a known Milestone restates it, whichever list the model put it in.
-    if (!traced || !fields || known.some((k) => isDuplicateTitle(k.title, title!))) {
+    if (!traced || !fields || known.some((k) => restates(kind, title!, k))) {
       discarded++;
       return;
     }

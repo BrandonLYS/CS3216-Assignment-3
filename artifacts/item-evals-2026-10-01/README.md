@@ -14,6 +14,7 @@ The key was supplied through the environment only and is in no file here.
    Re-running the unchanged prompt under the stricter grader (`baseline/`) still scores 9/12, with `i01` now failing on both the owner and the Milestone.
 2. **One prompt sentence:** set an assignee or owner only when the text gives that Person the work; attending, speaking or being named nearby does not; leave the field empty rather than guess; the same holds for a Milestone link.
 3. **Trace drops a Task that restates a known Milestone** (`traceItems` compares titles across kinds).
+   After these runs the cross-kind check was narrowed to an exact title that only ever drops the Task, with Milestones traced first; the kept items replay unchanged, but raw output is not stored.
    With the new sentence, `i11` began returning "The Pilot cut-over stays on 2026-10-06" as a Task, which the same-kind check let through.
 
 ## Iterations not kept

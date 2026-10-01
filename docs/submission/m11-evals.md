@@ -9,7 +9,9 @@ This page covers the first two; Task and Milestone extraction, the third, has it
 2. **Answering from the Project** - "why did we...", plus factual questions over Evidence, through the real tool loop. (`assistant/prompt.ts`, `decisions/service.ts` `search`, `search/service.ts`)
 
 Impact detection, Decision graph walks and ranking are deterministic application logic, covered by unit tests.
-The other model-backed paths - Reflection (Profile and Working Memory), Render drafting and scanned-file transcription - have service and unit tests but no equivalent semantic eval: their output is either edited by the PM before use (Render drafts) or never shown as a Project fact.
+The other model-backed paths - Reflection (Profile and Working Memory) and Render drafting - have service and unit tests but no equivalent semantic eval: their output is either edited by the PM before use (Render drafts) or never shown as a Project fact.
+Scanned-file transcription has neither tests nor an eval.
+It runs on the User's saved model, so a text-only model returns no transcription and the Evidence keeps `extractedText: null`.
 
 ## The fixture
 

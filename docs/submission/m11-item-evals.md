@@ -127,6 +127,9 @@ Raw runs, the commands and the wordings that were tried and dropped: [artifacts/
    The unchanged prompt still scored 9/12 under it, with `i01` now failing on both the invented owner and the invented `Pilot cut-over` link.
 2. **One sentence was added to the prompt:** set an assignee or owner only when the text gives that Person the work; attending, speaking or being named nearby does not; leave the field empty rather than guess; the same for a Milestone link.
 3. **Trace now drops a Task that restates a known Milestone.** With the new sentence, `i11` returned "The Pilot cut-over stays on 2026-10-06" as a Task, which the same-kind duplicate check let through.
+   Across kinds the check needs the exact title and only ever drops the Task, so "Plan mobile app v2 launch" survives beside the Milestone "Mobile app v2 launch", and a Task never blocks a Milestone.
+   Milestones are traced first, so within one pass the dated Milestone is the item kept.
+   The two runs below predate that narrowing; replaying their kept items and the heuristic extractor on all 12 cases through the final trace gives the same result, but the raw model output is not stored, so `i06` was not re-checked against it.
 
 | Extractor, `gpt-4o-mini`, temperature 0, OpenAI | Items | Decision cases | Failed item cases   |
 | ----------------------------------------------- | ----- | -------------- | ------------------- |
