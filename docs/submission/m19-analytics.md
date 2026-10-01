@@ -57,7 +57,7 @@ The sample is small and mixed, so these numbers describe exercised workflows, no
 
 ## Update: dashboard on 1 October 2026
 
-The same dashboard, re-captured on 1 October with the window 17 September to 1 October.
+The same dashboard, re-captured on 1 October: the AI panels cover 1 September to 1 October, the product and Proposal panels 17 September to 1 October.
 It is still one mixed project: local development, end-to-end test sign-ups and the deployment all report to it, so every count below is an upper bound on real use.
 
 ![AI questions, daily AI users, questions by workflow and exceptions, 1 October](posthog-2026-10-01/screenshots/01-ai-usage.png)
