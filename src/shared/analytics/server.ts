@@ -24,6 +24,15 @@ function client() {
   }));
 }
 
+/**
+ * Which deployment sent the event, so production can be filtered from local runs, e2e and previews.
+ * Browser pageviews already carry their host in `$current_url`; server events had nothing.
+ */
+const deployment = () => ({
+  environment: process.env.VERCEL_ENV ?? "local",
+  release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+});
+
 /** Trusted User id from route context; browser headers only supply optional session correlation. */
 export async function capture(userId: string, event: string, properties?: Record<string, unknown>) {
   try {
@@ -43,6 +52,7 @@ export async function capture(userId: string, event: string, properties?: Record
       event,
       properties: {
         ...safeProperties,
+        ...deployment(),
         // Explicit: a missing property cannot say whether a browser session was absent or lost.
         // Work scheduled with `after()` still reads its originating request, so it says "browser".
         browser_context: sessionId ? "browser" : "none",

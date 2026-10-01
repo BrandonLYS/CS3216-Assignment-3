@@ -116,7 +116,7 @@ async function main() {
     timestamp: new Date().toISOString(),
     database: process.env.DATABASE_URL?.replace(/\/\/[^@]*@/, "//***@"),
     gateway: process.env.OPENAI_BASE_URL,
-    ...modelInfo(),
+    ...modelInfo(model),
     embeddingModel: embeddingModelId(),
     maxSteps: assistantConfig().maxSteps,
     toolNames: TOOL_NAMES,

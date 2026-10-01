@@ -156,7 +156,7 @@ async function streamTurn({
   const traceId = crypto.randomUUID();
   const started = performance.now();
   const properties = { workflow, conversation_id: conversationId };
-  const generations = generationRecorder(ctx.userId, { traceId, ...modelInfo(), properties });
+  const generations = generationRecorder(ctx.userId, { traceId, ...modelInfo(model), properties });
   const result = streamText({
     model,
     system,
