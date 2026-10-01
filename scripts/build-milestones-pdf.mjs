@@ -134,7 +134,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
     <dt>Group</dt><dd>${group}</dd>
     <dt>Live application</dt><dd><a href="${liveUrl}">${liveUrl}</a></dd>
     <dt>GitHub repository</dt><dd><a href="${repoUrl}">${repoUrl}</a></dd>
-    <dt>Release</dt><dd>main at <code>${process.env.RELEASE || "34be9db"}</code>, deployed to the live URL</dd>
+    <dt>Release</dt><dd>main at <code>${process.env.RELEASE || "25d24b7"}</code>, deployed to the live URL as <code>844143f</code> on the <code>realqijun/jira-pro-max</code> fork</dd>
     <dt>Date</dt><dd>${new Date().toISOString().slice(0, 10)}</dd>
   </dl>
 </section>

@@ -1,7 +1,8 @@
 # Milestone 18 - Landing page
 
 **Live:** https://jira-pro-max.vercel.app (the workspace is at `/dashboard`).
-Checked against the deployment on 30 September 2026, which serves commit `34be9db`.
+Checked against the deployment on 30 September 2026, then serving `34be9db`.
+The deployment now serves `844143f` on the `realqijun/jira-pro-max` fork, which is `25d24b7` in this repository; no landing page file changed between the two, and the live hero was re-checked on 1 October 2026.
 
 ## Sections
 
