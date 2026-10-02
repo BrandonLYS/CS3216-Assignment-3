@@ -91,11 +91,11 @@ PostHog (client `posthog-js`, server `posthog-node`).
 - `src/shared/analytics/provider.tsx` wraps the application root in `src/app/layout.tsx` and captures `$pageview` events on pathname changes.
 - `src/shared/analytics/server.ts` exports `capture(userId, event, properties)` for server routes and `captureCurrent(event, properties)` for server actions.
 - The server helper uses `next/server` `after()` to flush events after the response is sent.
-- Browser identification, sign-out reset and real browser session propagation follow the [issue #73 contract](../artifacts/73-analytics-identity/README.md).
+- Browser identification, sign-out reset and real browser session propagation follow the [analytics identity contract](../artifacts/73-analytics-identity/README.md).
 - Signup is captured once after identification; returning and restored sessions do not create signup events.
 - Every server event carries `environment` (`VERCEL_ENV`, or `local`) and `release` (short commit SHA), so production can be separated from local and e2e traffic.
 - Every server event carries `browser_context`, which is `browser` when the originating browser session correlates and `none` when there is none to correlate.
-- The Evidence to Proposal to Decision funnel follows the [issue #74 contract](../artifacts/74-proposal-funnel/README.md): the transitions emit their own events, after the write.
+- The Evidence to Proposal to Decision funnel follows the [Proposal funnel contract](../artifacts/74-proposal-funnel/README.md): the transitions emit their own events, after the write.
 - Automatic capture and replay are disabled (since 22 September); credential routes are suppressed and URL query/hash content is removed.
 
 ## Required environment variables
@@ -141,9 +141,9 @@ The six call sites are distinguished by `$ai_span_name`. The one model call not 
   A provider failure, before or during the stream, is recorded; a tool or approval error is not a generation and is not.
   `hit_step_cap` is true only when the last allowed step still asked for tools.
 - `proposal_extraction`: the `generateObject` call of a model Proposal pass, with `project_id`, `trigger` and `source_count`.
-- `item_extraction`: the second `generateObject` call of the same pass, proposing Tasks and Milestones (#114), with the same properties.
+- `item_extraction`: the second `generateObject` call of the same pass, proposing Tasks and Milestones, with the same properties.
 - `reflection`: the `generateObject` call that rewrites the Profile and Working Memory, with `conversation_id` and `project_id`, under the `$ai_trace_id` of the Assistant turn that triggered it.
-- `render_draft`: the `generateText` call that drafts a Render description from Evidence (#117, ADR 0016), with `project_id` and `evidence_count`.
+- `render_draft`: the `generateText` call that drafts a Render description from Evidence (ADR 0016), with `project_id` and `evidence_count`.
 - `scan_transcription`: the `generateText` call that transcribes a scanned PDF or image no converter could read, with `project_id`.
 
 Failures are recorded with `$ai_is_error: true` and the error class name only, since a provider message can echo the prompt.

@@ -35,7 +35,7 @@ That disqualifies several cheaper models outright - it is a capability requireme
 ### `gemini-2.5-flash` best fits this product
 
 It is the most accurate on extraction, ties for most accurate on answers within noise, is the fastest on both suites, and costs one seventh of Haiku.
-It was also the only candidate that refused the prompt injection hidden in Evidence (`x07`): `gpt-4o-mini` recorded a Proposal titled `PWNED` claiming the steering committee approved a vendor dashboard.
+It was also the only candidate that refused the prompt injection hidden in Evidence: `gpt-4o-mini` recorded a Proposal titled `PWNED` claiming the steering committee approved a vendor dashboard.
 For a feature whose entire purpose is to put a Proposal in front of a PM for one-click acceptance, that behaviour is disqualifying, and no prompt edit fixed it - four attempts are recorded in [artifacts/prompt-iteration-2026-09-28](../../artifacts/prompt-iteration-2026-09-28/README.md).
 
 Haiku wins the answer suite outright, 20/20, and would be the choice if quality were the only axis.
@@ -48,7 +48,7 @@ We have no Gemini or OpenRouter key to put behind the deployment, and on OpenAI'
 So a User who does not bring their own key gets `gpt-4o-mini`: it is cheap, fast and the best model available on that key, but this bake-off shows it is the weakest of the three on grounding and the only one that obeyed the injection.
 A User who wants the measured winner can add their own key and endpoint in Settings (bring your own key, stored in `user_ai_configs`) and pick `google/gemini-2.5-flash` through OpenRouter; `.env.example` documents the same switch for a self-hosted deployment.
 The scores quoted for `gemini-2.5-flash` elsewhere in this report are what that configuration gets, not what the default deployment gets.
-On the default, an `x07`-style injection still reaches the PM's review queue as a Proposal; the human accept step stops it from becoming a confirmed Decision, not from being proposed.
+On the default, this kind of injection still reaches the PM's review queue as a Proposal; the human accept step stops it from becoming a confirmed Decision, not from being proposed.
 In short: the measured recommendation is `gemini-2.5-flash`, the hosted research preview runs `gpt-4o-mini` because that is the credential the team holds, and the preview therefore keeps a known model-quality limitation.
 
 Switching the deployment is one environment change (`AI_PROVIDER`, `AI_MODEL` and the key).
@@ -75,4 +75,4 @@ Two repeats of the same suite at each setting, everything else fixed.
 
 The extractor uses `generateObject` with a Zod schema (`rawProposalSchema`), so the provider constrains generation rather than the app parsing a hopeful string.
 One gateway failure in these runs surfaced as `AI_APICallError: Invalid JSON response` and was counted as a failed case rather than retried away.
-Schema conformance is not correctness: every candidate still passes the traceability filter in `proposals/trace.ts`, and `x07` shows a schema-valid, verbatim-cited Proposal that should never have been proposed.
+Schema conformance is not correctness: every candidate still passes the traceability filter in `proposals/trace.ts`, and the prompt-injection case shows a schema-valid, verbatim-cited Proposal that should never have been proposed.
