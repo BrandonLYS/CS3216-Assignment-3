@@ -1,15 +1,14 @@
 # M11 addendum - Task and Milestone extraction evals
 
-Issue #116.
-This note extends [M11](m11-evals.md) to the item extractor, which #114 added beside the Decision extractor.
+This note extends [M11](m11-evals.md) to the item extractor, which was added beside the Decision extractor.
 
 ## What is evaluated
 
-Since #114, the Proposal pass makes a second model call with its own prompt (`src/server/modules/proposals/extract-items.ts`, span `item_extraction`).
+Since the item extractor was added, the Proposal pass makes a second model call with its own prompt (`src/server/modules/proposals/extract-items.ts`, span `item_extraction`).
 The call reads the same Evidence and Comments as the Decision call and proposes the Tasks and Milestones the team committed to.
 `traceItems` (`proposals/trace.ts`) keeps an item only when its excerpt is verbatim.
 It also drops an item with no title, a Milestone without a real date, an item that duplicates an existing one of its own kind, and a Task titled exactly like a Milestone.
-A PM then accepts or rejects each item on the Overview (#115).
+A PM then accepts or rejects each item on the Overview.
 
 The item extractor had shipped without a measured baseline.
 It is a separate prompt with a separate failure mode, a Task nobody committed to, so it gets its own case set rather than more rows in `extraction.json`.
@@ -100,7 +99,7 @@ Its `i07` item keeps the whole sentence as the title, because its `will ... by <
 
 ## The Decision pass is unchanged
 
-The Decision prompt is byte-identical before and after #114.
+The Decision prompt is byte-identical before and after the item extractor was added.
 The snapshot test in `extract.test.ts` pins it.
 The 22 Decision cases were run again in the same two runs.
 

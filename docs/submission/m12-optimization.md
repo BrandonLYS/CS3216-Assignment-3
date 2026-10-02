@@ -22,7 +22,7 @@ Batching is therefore a latency and cost versus recall trade-off, not an uncondi
 ### The pass on current main: two calls
 
 The table above was measured on 28 September with `gemini-2.5-flash`, when a pass made one call.
-Since #114 the pass also makes a second, independent call for Tasks and Milestones, so that figure is no longer the full cost of the pipeline.
+The pass now also makes a second, independent call for Tasks and Milestones, so that figure is no longer the full cost of the pipeline.
 It was re-measured on current `main` on 30 September, on the same 9-source fixture, with `gpt-4o-mini` (the deployed model) through OpenAI, three runs, each call attributed by its system prompt ([artifacts/cost-2026-09-30](../../artifacts/cost-2026-09-30/README.md)).
 
 | Call                          | Prompt tokens | Completion tokens | Cost (list price) |

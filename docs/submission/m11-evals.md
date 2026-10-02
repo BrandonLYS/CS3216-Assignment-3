@@ -31,6 +31,7 @@ Fixture ids land in `evals/fixture.local.json`, which the runner reads and the a
 ## The cases
 
 42 cases, written before any model was run.
+Each case has a short id that matches its entry in `evals/cases/` and the raw runs in `artifacts/`: `x` for Decision extraction, `w` for Assistant answers, and `i` for Task and Milestone extraction (in the [addendum](m11-item-evals.md)).
 
 **Extraction, 22 cases** (`evals/cases/extraction.json`). Each case carries its own self-contained sources, so a single bad extraction cannot contaminate another case.
 
@@ -84,7 +85,7 @@ Consolidated tables: [artifacts/eval-tables-2026-09-28.md](../../artifacts/eval-
 
 After the prompt work below, on the same cases: `gpt-4o-mini` 20/22 extraction, `gemini-2.5-flash` 21/22 extraction and 20/20 answers.
 
-Task and Milestone extraction (#114) has its own 12 cases and baseline: [M11 addendum](m11-item-evals.md).
+Task and Milestone extraction has its own 12 cases and baseline: [M11 addendum](m11-item-evals.md).
 
 ## How the results changed the product
 

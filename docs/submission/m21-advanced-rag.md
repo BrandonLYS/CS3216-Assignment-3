@@ -23,20 +23,20 @@ The core question - "why did we do X?" - is exactly where basic RAG fails danger
 A similar-sounding paragraph is not a Decision: a transcript can contain a reason someone suggested and the team rejected, and chunk retrieval will return it with high similarity.
 Three of our answer cases were written to expose that.
 
-| Case         | What basic chunk RAG would do                                                                              | What the routed design does                                                     | Result, `gemini-2.5-flash` |
-| ------------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------- |
-| `w03`        | Retrieves both the old (11 merchants) and new (14 merchants) text with no way to know which replaced which | The graph returns D-2 with `supersededBy` D-5; the answer names the replacement | Pass                       |
-| `w14`        | A plausible reason exists in Evidence, so similarity finds it and the model repeats it as fact             | No Decision exists, so the answer abstains and links the nearest Evidence       | Pass                       |
-| `w17`, `w18` | Top-k over the whole Project, mixing vendors and workstreams                                               | Label and linked-item filters narrow the search to what the PM filed            | Pass                       |
+| Case                            | What basic chunk RAG would do                                                                              | What the routed design does                                                     | Result, `gemini-2.5-flash` |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------- |
+| Superseded Decision             | Retrieves both the old (11 merchants) and new (14 merchants) text with no way to know which replaced which | The graph returns D-2 with `supersededBy` D-5; the answer names the replacement | Pass                       |
+| Plausible but unrecorded reason | A plausible reason exists in Evidence, so similarity finds it and the model repeats it as fact             | No Decision exists, so the answer abstains and links the nearest Evidence       | Pass                       |
+| Labelled and linked Evidence    | Top-k over the whole Project, mixing vendors and workstreams                                               | Label and linked-item filters narrow the search to what the PM filed            | Pass                       |
 
 With the final prompt, `gemini-2.5-flash` passes all 20 answer cases ([M11](m11-evals.md)).
-The design still depends on the model following the route: the deployed `gpt-4o-mini` still misses `w03` and `w14`, which is why a User who brings their own key can run `gemini-2.5-flash` instead (M9).
+The design still depends on the model following the route: the deployed `gpt-4o-mini` still misses the first two, which is why a User who brings their own key can run `gemini-2.5-flash` instead (M9).
 
 ## Measured impact of the retrieval changes
 
 - **Citations:** giving every retrieval result a ready-made `cite` took citations the model had to build itself from **0 of 6 working to 16 of 16** ([rag-check-citation-fix](../../artifacts/rag-check-citation-fix-2026-09-28/README.md)).
-- **Abstention:** four cases must abstain (`w04`, `w05`, `w12`, `w14`); all pass with the routed design on the recommended model.
-  Before the prompt required calling `search_decisions` before abstaining, `w06` abstained without retrieving at all; that one rule took the model from 19/20 to 20/20.
+- **Abstention:** four cases ask questions with no recorded answer and must abstain; all pass with the routed design on the recommended model.
+  Before the prompt required calling `search_decisions` before abstaining, one case abstained without retrieving at all; that one rule took the model from 19/20 to 20/20.
 - **Stale vectors:** each chunk records the `provider:model` that embedded it, so switching embedder re-embeds instead of mixing vector spaces; verified by switching and watching all 4 indexed items re-compute.
 
 ## Limits, stated plainly

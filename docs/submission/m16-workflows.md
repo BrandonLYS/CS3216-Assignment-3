@@ -38,11 +38,11 @@ Each is shown as a PM performs it, with the reason it was designed that way rath
 
 **Why this design over the alternatives**
 
-| Alternative                                 | Why not                                                                                                                                                                                           |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plain semantic search over all text         | A similar-sounding paragraph is not a Decision. Routing "why" questions to confirmed Decisions only is what lets the answer be trusted (M10, pattern 4).                                          |
-| A separate search page with a results list  | The question arises mid-task, on the page the PM is already on. The dock keeps context and turns results into one sentence with sources, which is what the PM actually wanted.                    |
-| Let the model answer from general knowledge | A plausible invented reason is the most damaging output possible during a handover. The abstention sentence is required by the prompt and graded by four eval cases (`w04`, `w05`, `w12`, `w14`). |
+| Alternative                                 | Why not                                                                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Plain semantic search over all text         | A similar-sounding paragraph is not a Decision. Routing "why" questions to confirmed Decisions only is what lets the answer be trusted (M10, pattern 4).                                                     |
+| A separate search page with a results list  | The question arises mid-task, on the page the PM is already on. The dock keeps context and turns results into one sentence with sources, which is what the PM actually wanted.                               |
+| Let the model answer from general knowledge | A plausible invented reason is the most damaging output possible during a handover. The abstention sentence is required by the prompt and graded by four eval cases whose questions have no recorded answer. |
 
 ## 3. Plan or change the Project in one sentence, with approval
 

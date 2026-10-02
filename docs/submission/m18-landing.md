@@ -59,4 +59,4 @@ The image is generated at build time by `src/app/opengraph-image.tsx` from the s
 
 ![Live landing on a phone](screenshots/live-mobile.png)
 
-Earlier verification of the same page, including before and after screenshots and the SEO response dump, is in the [issue #72 report](../artifacts/72-landing/README.md).
+Earlier verification of the same page, including before and after screenshots and the SEO response dump, is in the [landing page verification report](../artifacts/72-landing/README.md).

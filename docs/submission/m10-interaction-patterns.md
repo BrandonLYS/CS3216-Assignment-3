@@ -52,7 +52,7 @@ The threat model is in [M13](m13-safety.md).
 ## 4. Retrieval-augmented answers, over two indexes
 
 The system prompt requires the Assistant to retrieve before answering a question about the Project, and the eval suite fails an answer that skips retrieval (M11).
-That is an instruction and a measurement, not a guarantee: in case `w06`, `gemini-2.5-flash` answered "There is no recorded decision" without calling `search_decisions` until the rule was tightened (M11), and only server-side routing would enforce it.
+That is an instruction and a measurement, not a guarantee: in one eval case, `gemini-2.5-flash` answered "There is no recorded decision" without calling `search_decisions` until the rule was tightened (M11), and only server-side routing would enforce it.
 It retrieves through three tools and cites what they return.
 
 | Tool               | What it retrieves                                                                                                         | How                                                                                                                                                                                            |
