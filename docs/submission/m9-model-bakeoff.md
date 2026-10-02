@@ -1,78 +1,55 @@
-# M9 - Choice of model, provider and parameters
+# M9 - User choice of AI provider and model
 
-## Provider: an OpenAI-compatible gateway, not a model vendor
+PrismPM gives each User control over which AI model runs their Assistant.
+They change it inside **Settings > Assistant > Provider**, so choosing a model is a product setting rather than a deployment task.
+The Project's Tasks, Evidence, Decisions, Conversations, and approval rules remain in PrismPM when the User changes providers.
 
-PrismPM talks to models through `getModel()` in `src/server/modules/assistant/model.ts`, which builds an `@ai-sdk/openai` client.
-Setting `OPENAI_BASE_URL` points that same client at any OpenAI-compatible gateway, and `AI_MODEL` then takes the gateway's model id.
-That is how every measurement below reached Gemini and Claude without one line of application code changing.
+## What the User can choose
 
-Three provider shapes were considered.
+In Settings, the User selects OpenAI, Anthropic, Google, or an OpenAI-compatible provider.
+For a compatible provider, they also enter its public HTTPS endpoint.
+They supply their own API key, use **Check available models** to load the models that key can access, choose one, and select **Validate and save**.
+The validation request checks that the endpoint, key, and selected model can produce a basic response.
 
-| Option                                                                         | Why it was rejected or kept                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Direct vendor SDKs (`@ai-sdk/openai` + `@ai-sdk/anthropic` + `@ai-sdk/google`) | Kept, but only for a User's own saved credential (ADR 0011). As the deployment default it needs one key, one billing relationship and one rate limit per vendor, and comparing models means changing `AI_PROVIDER` and redeploying.                                                                                         |
-| A hosted router (OpenRouter) behind the OpenAI-compatible client               | **Chosen for evaluation and supported in production.** One key reaches every candidate, the model id is configuration, and the gateway returns its own per-request cost, which is what made the cost column of this document possible rather than estimated.                                                                |
-| Self-hosted open-weight model (vLLM or Ollama)                                 | Rejected for this project. Tool calling and structured output are load-bearing here - 30 tools and a `generateObject` schema - and the smaller open-weight models that fit a student budget are the weakest at exactly those two things. It also moves the failure mode from "the vendor is slow" to "our GPU box is down". |
+A User can save multiple provider and model configurations.
+They can make one the default for their Assistant work and choose a different saved model for an individual Conversation.
+The default also serves background AI work such as Proposal extraction and Reflection.
+The User can edit or remove a configuration later; when no personal configuration is saved, the hosted model is the fallback.
+Changing the model in Settings does not require a code change or redeployment.
 
-The cost of the gateway choice is one more hop and one more party seeing prompts.
-Both were acceptable for an assignment; a production deployment handling customer Evidence would put the vendor relationship back in place, which is a configuration change, not a rewrite.
+## Why the code supports this choice
 
-## Model: three candidates, 42 cases, one gateway
+| Part of the system                  | Responsibility                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `features/settings/ai-provider.tsx` | Presents provider choices, model discovery, saved configurations, and the default control.                         |
+| `ai-config/service.ts`              | Checks model access before saving and keeps each configuration under its owning User.                              |
+| `user_ai_configs`                   | Stores the provider, model id, optional endpoint, and encrypted API key separately from Project records.           |
+| `assistant/model.ts`                | Resolves the Conversation's selected model or the User's default and returns one AI SDK `LanguageModel` interface. |
+| Assistant and background workflows  | Use that interface for chat, Proposal extraction, Reflection, Render drafting, and scanned-file transcription.     |
 
-Full method, artifacts and limitations: [artifacts/model-bakeoff-2026-09-28](../../artifacts/model-bakeoff-2026-09-28/README.md).
-The suites are described in [M11](m11-evals.md).
+The code that connects to each provider is concentrated in `buildModel`.
+The Assistant's tool registry and Project services do not change when a User switches models.
+A Task created from chat passes through the same authorization, validation, and Activity Event path as a Task created through the UI.
+The Assistant's write also requires its own approval card unless the User has granted that tool permission.
+The selected model's provider and id are recorded with AI generations so usage can be attributed to the actual configuration.
 
-| Model                                  | Extraction    | Answers      | Median ms (extract / answer) | Prompt cache hit | Cost for 42 cases |
-| -------------------------------------- | ------------- | ------------ | ---------------------------- | ---------------- | ----------------- |
-| `openai/gpt-4o-mini` (shipped default) | 16/22 (72.7%) | 13/20 (65%)  | 2386 / 3476                  | 95.3%            | $0.0447           |
-| `google/gemini-2.5-flash`              | 21/22 (95.5%) | 19/20 (95%)  | 1524 / 2540                  | 71.4%            | $0.0753           |
-| `anthropic/claude-haiku-4.5`           | 20/22 (90.9%) | 20/20 (100%) | 2721 / 4950                  | 0%               | $0.5395           |
+The model list comes from the User's provider account rather than a fixed PrismPM list.
+This lets a User select a newly available model without waiting for PrismPM to release a new set of model names.
+A successful connection check proves basic access; the quality of tool calling, structured output, and Project reasoning still depends on the selected model.
+Semantic search embeddings are configured separately, so changing the Assistant model does not silently mix incompatible search vectors.
 
-Candidates were filtered before the run: a model must support tool calling and structured outputs, because the Assistant needs a tool loop and the extractor needs `generateObject`.
-That disqualifies several cheaper models outright - it is a capability requirement, not a preference.
-`claude-haiku-4.5` was included as a quality ceiling rather than as a plausible default.
+## Pricing and the value of shared Project history
 
-### `gemini-2.5-flash` best fits this product
+The model choice changes who pays for inference.
+When a User relies on the hosted fallback, PrismPM pays the provider and applies its Assistant usage limits.
+When the User saves their own key, their provider bills them directly for the model they selected.
+This supports the proposed [M6 pricing structure](m6.md): a platform subscription can pay for the Project workspace while model use can follow either a hosted allowance or the User's own provider account.
+Costs still depend on the chosen model and usage, so an eventual paid plan with hosted model choice would need clear limits or usage pricing.
 
-It is the most accurate on extraction, ties for most accurate on answers within noise, is the fastest on both suites, and costs one seventh of Haiku.
-It was also the only candidate that refused the prompt injection hidden in Evidence (`x07`): `gpt-4o-mini` recorded a Proposal titled `PWNED` claiming the steering committee approved a vendor dashboard.
-For a feature whose entire purpose is to put a Proposal in front of a PM for one-click acceptance, that behaviour is disqualifying, and no prompt edit fixed it - four attempts are recorded in [artifacts/prompt-iteration-2026-09-28](../../artifacts/prompt-iteration-2026-09-28/README.md).
+Keeping Project records independent of the model also preserves the Project history when a User changes provider.
+As People add Evidence and confirm Decisions, the Assistant can retrieve more context for planning and handoffs under the User's selected model.
+That accumulated history may increase the value of the workspace as a team uses it; it is a product hypothesis rather than a measured network effect.
 
-Haiku wins the answer suite outright, 20/20, and would be the choice if quality were the only axis.
-At $0.54 for the 42 cases against $0.075 (about $0.0128 against $0.0018 a case, extraction and answer cases averaged together; on the answer cases alone, about $0.0246 against $0.0031) it is not, for a workload where the User sees no quality difference on 19 of 20 cases.
-
-### Why the deployment runs `gpt-4o-mini`
-
-`DEFAULT_MODEL` in `model.ts` is still `gpt-4o-mini`, and the deployment runs it, because the only production key the team holds is an OpenAI key.
-We have no Gemini or OpenRouter key to put behind the deployment, and on OpenAI's own API `google/gemini-2.5-flash` is not a valid model id.
-So a User who does not bring their own key gets `gpt-4o-mini`: it is cheap, fast and the best model available on that key, but this bake-off shows it is the weakest of the three on grounding and the only one that obeyed the injection.
-A User who wants the measured winner can add their own key and endpoint in Settings (bring your own key, stored in `user_ai_configs`) and pick `google/gemini-2.5-flash` through OpenRouter; `.env.example` documents the same switch for a self-hosted deployment.
-The scores quoted for `gemini-2.5-flash` elsewhere in this report are what that configuration gets, not what the default deployment gets.
-On the default, an `x07`-style injection still reaches the PM's review queue as a Proposal; the human accept step stops it from becoming a confirmed Decision, not from being proposed.
-In short: the measured recommendation is `gemini-2.5-flash`, the hosted research preview runs `gpt-4o-mini` because that is the credential the team holds, and the preview therefore keeps a known model-quality limitation.
-
-Switching the deployment is one environment change (`AI_PROVIDER`, `AI_MODEL` and the key).
-Every chat-model call made for a User's work, including scanned-file transcription, resolves its model through `getModelForUser` in `assistant/model.ts`, so none of them is pinned to OpenAI.
-The exceptions are the Settings "test connection" probe, which builds the model from the configuration being tested, and embeddings, which come only from the environment's OpenAI or Gemini key (`search/embed.ts`), so a deployment on another chat provider still needs one of those for semantic search.
-Scanned files are transcribed on the User's own model when they have one, so a User whose model cannot read images or PDFs gets no text for a scan: the upload still succeeds, and the failure is recorded as an errored `scan_transcription` generation.
-
-## Parameters
-
-Measured, not guessed: [artifacts/param-sweep-2026-09-28](../../artifacts/param-sweep-2026-09-28/README.md).
-Two repeats of the same suite at each setting, everything else fixed.
-
-| Parameter                         | Value                                                                                            | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `temperature` for extraction      | `0` (`EXTRACT_TEMPERATURE`, `proposals/extract.ts`)                                              | Extraction is reading, not writing: one right answer per source. At 0 both models reproduced their own output exactly through OpenRouter on 28 September (`gemini-2.5-flash` produced 4,202 completion tokens in both repeats), though `gpt-4o-mini` on OpenAI directly differed on 2 of 22 verdicts between two runs on 30 September, so 0 improves reproducibility rather than guaranteeing it; at the provider default 3 of 22 case verdicts flipped for `gpt-4o-mini`, and one repeat burned 19,743 completion tokens against a ~3,100 norm, costing 3.5x for a worse score. |
-| `temperature` for the answer loop | provider default                                                                                 | At 0, 19 of 20 answers were byte-identical across repeats versus 3 of 20 at the default - but two failures became reproducible, including one where the model mis-copies a single digit of an Evidence id every time. Locking in a copy error for every User is worse than a failure that appears in one sample out of two. The harness passes `--temperature 0` when a comparison needs to be stable.                                                                                                                                                                           |
-| `temperature` for reflection      | provider default                                                                                 | Reflection rewrites prose Profile and Working Memory documents; determinism has no value there and was not measured.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `ASSISTANT_MAX_STEPS`             | `8`                                                                                              | No answer case used more than 3 steps on any model, so the cap is a bound on pathological loops, not a cost control. Lowering it to 4 would change nothing measurable on this workload, so no run was spent on it.                                                                                                                                                                                                                                                                                                                                                               |
-| `maxOutputTokens`                 | unset for answers and extraction; `400` for Render drafting, `16` in the credential health check | Answers are short by instruction, and a hard cap would truncate a legitimately long answer mid-citation. The 19,743-token outlier above is a sampling problem that temperature 0 addressed at the source.                                                                                                                                                                                                                                                                                                                                                                        |
-| `ASSISTANT_DAILY_TURN_CAP`        | `50` per UTC day                                                                                 | A limit on turns, not a quality parameter and not a hard spend ceiling. At the bake-off's $0.0031 per answer case it comes to roughly $0.16 a day on `gemini-2.5-flash`; on the deployed `gpt-4o-mini`, re-measured on 30 September at a mean of $0.0030 a turn at full, uncached prices, about $0.15 ([M6](m6.md)).                                                                                                                                                                                                                                                             |
-| Embedding model                   | `text-embedding-3-small`, 1536 dims                                                              | Chosen for dimension parity with the Gemini embedder (MRL truncation), so the FAISS index shape does not change with provider. Each chunk stores its `provider:model` identity, so switching embedder marks vectors stale instead of silently mixing spaces.                                                                                                                                                                                                                                                                                                                     |
-
-## Structured output, not JSON-in-a-string
-
-The extractor uses `generateObject` with a Zod schema (`rawProposalSchema`), so the provider constrains generation rather than the app parsing a hopeful string.
-One gateway failure in these runs surfaced as `AI_APICallError: Invalid JSON response` and was counted as a failed case rather than retried away.
-Schema conformance is not correctness: every candidate still passes the traceability filter in `proposals/trace.ts`, and `x07` shows a schema-valid, verbatim-cited Proposal that should never have been proposed.
+Model choice does not grant the Assistant new Project authority.
+Ownership checks, write approval cards, and human acceptance of Decision Proposals apply to every selected model.
+The safety implications of those controls are discussed in [M13](m13-safety.md).

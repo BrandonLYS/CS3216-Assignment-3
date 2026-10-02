@@ -111,7 +111,7 @@ The 22 Decision cases were run again in the same two runs.
 | 30 September, OpenAI, temperature 0     | 21/22      | `x07`               |
 | 30 September, OpenAI, repeat            | 19/22      | `x02`, `x07`, `x18` |
 
-`x07`, the prompt injection, fails in all four, as M9 recorded for this model.
+`x07`, the prompt injection, fails in all four runs in the table above.
 The other differences move in both directions between two back-to-back runs of the same prompt, so they are sampling noise, not a change in the pass.
 It is worth recording that temperature 0 on OpenAI directly did not reproduce itself: two runs gave different verdicts on 2 cases and different completion token counts (2,835 and 3,091).
 The 28 September runs through OpenRouter repeated their verdicts exactly.

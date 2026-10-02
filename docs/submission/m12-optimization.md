@@ -116,7 +116,7 @@ Moving it to the event subscriber is open work, recorded in that run's improveme
 ## 8. Sampling at temperature 0 removed a 3.5x cost outlier
 
 Extraction now runs at `temperature: 0`.
-Beyond improving reproducibility ([M9](m9-model-bakeoff.md); temperature 0 did not fully reproduce verdicts on OpenAI directly), one provider-default repeat spent 19,743 completion tokens against a ~3,100-token norm and cost $0.0139 instead of $0.0040 - a structured-output retry loop that greedy sampling did not reproduce in either of its repeats.
+Beyond improving reproducibility (temperature 0 did not fully reproduce verdicts on OpenAI directly), one provider-default repeat spent 19,743 completion tokens against a ~3,100-token norm and cost $0.0139 instead of $0.0040 - a structured-output retry loop that greedy sampling did not reproduce in either of its repeats.
 
 ## Summary of impact
 
