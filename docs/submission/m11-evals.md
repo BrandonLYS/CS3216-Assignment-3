@@ -83,7 +83,7 @@ Consolidated tables: [artifacts/eval-tables-2026-09-28.md](../../artifacts/eval-
 | `google/gemini-2.5-flash`    | 21/22      | 19/20   | $0.0753           |
 | `anthropic/claude-haiku-4.5` | 20/22      | 20/20   | $0.5395           |
 
-After the prompt work below, on the same cases: `gpt-4o-mini` 20/22 extraction, `gemini-2.5-flash` 21/22 extraction and 20/20 answers.
+After the prompt work below, on the same cases: `gpt-4o-mini` 20/22 extraction and 14/20 answers (answers re-run on 30 September through OpenAI directly, [artifacts/cost-2026-09-30-answers](../../artifacts/cost-2026-09-30-answers/why-gpt-4o-mini.json)), `gemini-2.5-flash` 21/22 extraction and 20/20 answers.
 
 Task and Milestone extraction has its own 12 cases and baseline: [M11 addendum](m11-item-evals.md).
 
