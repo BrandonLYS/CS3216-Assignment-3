@@ -129,7 +129,7 @@ Closing that needs connecting to the checked address directly, which is not done
 
 ## Verification
 
-Each row names its evidence: a Vitest test that runs in CI (`npm test`, 696 tests in 65 files passing on 1 October 2026), an eval case, an on-demand end-to-end spec, or a check against the live deployment.
+Each row names its evidence: a Vitest test that runs in CI (`npm test`, 708 tests in 66 files passing on 3 October 2026), an eval case, an on-demand end-to-end spec, or a check against the live deployment.
 
 | Threat                        | Attack                                                      | Result                                       | Evidence                                                                                                          |
 | ----------------------------- | ----------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
