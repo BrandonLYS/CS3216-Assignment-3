@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "./auth";
 
-export const getSession = cache(async () => auth.api.getSession({ headers: await headers() }));
+export const getSession = cache(async () =>
+  auth.api.getSession({ headers: await headers(), query: { disableCookieCache: true } }),
+);
 
 /** For server components / actions that require a signed-in user. */
 export async function requireUser() {
